@@ -268,7 +268,11 @@ function DebateCard({
               ANALYSIS_SOURCE_TYPE_LABELS[analysis.sourceType as AnalysisSourceType]
             )}
           </p>
-          <p>Chaque raison renvoie aux phrases exactes du compte rendu.</p>
+          <p>
+            Chaque raison renvoie aux phrases exactes du compte rendu. Seules les raisons que la
+            synthèse a pu rapporter fidèlement sont affichées : ce n’est pas une liste complète du
+            débat.
+          </p>
           <p>
             Le groupe affiché est celui du député aujourd’hui. Pour un vote ancien, il peut différer
             de celui du jour du vote.

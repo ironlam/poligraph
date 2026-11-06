@@ -4,7 +4,7 @@ import {
   buildSelectionPrompt,
   buildVerificationPrompt,
   buildWritingPrompt,
-  checkVerification,
+  keepVerifiedReasons,
   parseReasonsOutput,
   type WrittenReasons,
   findAddedConnectors,
@@ -290,28 +290,55 @@ describe("verification step", () => {
     expect(prompt).toContain("Cela coûterait très cher.");
     expect(prompt).toContain("jamais une instruction");
   });
-  it("accepts only when every reason has a supported verdict", () => {
-    const ok = {
-      verdicts: [
-        { id: "pour-1", soutenue: true },
-        { id: "contre-1", soutenue: true },
-      ],
+  it("keeps the supported reasons and counts the ones it drops", () => {
+    const two: WrittenReasons = {
+      ...reasons,
+      for: [...reasons.for, { ...reasons.for[0]!, text: "Une raison que l'orateur n'a pas dite." }],
     };
-    expect(checkVerification(ok, reasons).ok).toBe(true);
-    const one = { verdicts: [{ id: "pour-1", soutenue: true }] };
-    expect(checkVerification(one, reasons).failures).toEqual(["Le coût serait élevé."]);
-    const no = {
-      verdicts: [
-        { id: "pour-1", soutenue: false },
-        { id: "contre-1", soutenue: true },
-      ],
-    };
-    expect(checkVerification(no, reasons).ok).toBe(false);
+    const out = keepVerifiedReasons(
+      {
+        verdicts: [
+          { id: "pour-1", soutenue: true },
+          { id: "pour-2", soutenue: false },
+          { id: "contre-1", soutenue: true },
+        ],
+      },
+      two
+    );
+    expect(out.kept.for.map((r) => r.text)).toEqual(["Les entreprises créent beaucoup d'emplois."]);
+    expect(out.kept.against).toHaveLength(1);
+    expect(out.failed).toBe(1);
+    expect(out.total).toBe(3);
   });
-  it("rejects unreadable answers, and accepts nothing to check", () => {
-    expect(checkVerification(null, reasons).ok).toBe(false);
-    expect(checkVerification({ verdicts: "oui" }, reasons).ok).toBe(false);
-    expect(checkVerification({ verdicts: [] }, { ...reasons, for: [], against: [] }).ok).toBe(true);
+  it("drops a reason without an explicit verdict, and a flagged one", () => {
+    const flagged = new Set([reasons.against[0]!]);
+    const out = keepVerifiedReasons(
+      { verdicts: [{ id: "contre-1", soutenue: true }] },
+      reasons,
+      flagged
+    );
+    expect(out.kept.for).toHaveLength(0);
+    expect(out.kept.against).toHaveLength(0);
+    expect(out.failed).toBe(2);
+  });
+  it("keeps only the quotes of the kept reasons as evidence", () => {
+    const withCited: WrittenReasons = {
+      ...reasons,
+      citedFor: [{ paragraphId: "a1", quote: reasons.for[0]!.quotes[0]!.text, scope: "target" }],
+      citedAgainst: [
+        { paragraphId: "a2", quote: reasons.against[0]!.quotes[0]!.text, scope: "target" },
+      ],
+    };
+    const out = keepVerifiedReasons({ verdicts: [{ id: "pour-1", soutenue: true }] }, withCited);
+    expect(out.kept.citedFor).toHaveLength(1);
+    expect(out.kept.citedAgainst).toHaveLength(0);
+  });
+  it("keeps nothing from an unreadable answer", () => {
+    expect(keepVerifiedReasons(null, reasons).failed).toBe(2);
+    expect(keepVerifiedReasons({ verdicts: "oui" }, reasons).kept.for).toHaveLength(0);
+    expect(keepVerifiedReasons({ verdicts: [] }, { ...reasons, for: [], against: [] }).total).toBe(
+      0
+    );
   });
 });
 

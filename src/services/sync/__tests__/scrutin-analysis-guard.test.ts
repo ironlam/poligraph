@@ -480,6 +480,53 @@ describe("evidence and bounded scan", () => {
     expect(callMistral).toHaveBeenCalledTimes(1);
     expect(result.errors).toContain("s1: a speaker appears on both sides");
   });
+  function setReasons(verdicts: Record<string, boolean>, texts: string[] = ["A.", "B."]) {
+    callMistral.mockResolvedValue({});
+    extractMistralText.mockReturnValue("{}");
+    let call = 0;
+    parseMistralJSON.mockImplementation(() => {
+      const step = call++ % 3;
+      if (step === 0)
+        return { pour: [{ id: "p1", phrases: [1] }], contre: [{ id: "p2", phrases: [1] }] };
+      if (step === 1)
+        return {
+          pour: texts.map((t) => ({ raison: t, citations: ["P1"] })),
+          contre: [{ raison: "C.", citations: ["C1"] }],
+        };
+      return {
+        verdicts: Object.entries(verdicts).map(([id, soutenue]) => ({ id, soutenue })),
+      };
+    });
+  }
+  it("keeps the verified reasons and drops the unsupported one", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+    setReasons({ "pour-1": true, "pour-2": false, "contre-1": true });
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(1);
+    const saved = analysisUpsert.mock.calls[0]![0].create;
+    expect(saved.reasons.for.map((r: { text: string }) => r.text)).toEqual(["A."]);
+    expect(saved.argumentsFor).toBe("A.");
+    expect(saved.reasons.against).toHaveLength(1);
+  });
+  it("refuses the analysis when more than half of the reasons fail", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+    setReasons({ "pour-1": false, "pour-2": false, "contre-1": true });
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(0);
+    expect(result.errors).toContain("s1: sentences not supported by their citations");
+    expect(analysisUpsert).not.toHaveBeenCalled();
+  });
+  it("drops a reason that adds a logical link absent from its quote", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+    setReasons({ "pour-1": true, "pour-2": true, "contre-1": true }, [
+      "A.",
+      "Le coût baisse, donc la mesure est utile.",
+    ]);
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(1);
+    const saved = analysisUpsert.mock.calls[0]![0].create;
+    expect(saved.reasons.for.map((r: { text: string }) => r.text)).toEqual(["A."]);
+  });
   it("allows one documented side without inventing an opposing argument", async () => {
     scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
     setMistral({ argumentsFor: COHERENT_ARGS.argumentsFor, argumentsAgainst: "" });

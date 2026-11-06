@@ -13,7 +13,7 @@ import {
   buildSelectionPrompt,
   buildVerificationPrompt,
   buildWritingPrompt,
-  checkVerification,
+  keepVerifiedReasons,
   findAddedConnectors,
   parseReasonsOutput,
   parseSelection,
@@ -301,46 +301,16 @@ export async function generateScrutinAnalysis(
           errors.push(`${s.id}: unreadable reasons`);
           continue;
         }
-        // The plain-text fields stay filled for older readers: the reasons, end to end.
-        const parsed: AnalysisOutput = {
-          argumentsFor: written.for.map((r) => r.text).join(" "),
-          argumentsAgainst: written.against.map((r) => r.text).join(" "),
-        };
-
-        const validation = validateAnalysisOutput(parsed);
-        if (!validation.valid) {
-          errors.push(`${s.id}: validation failed (${validation.errors.join(", ")})`);
-          skipped++;
-          continue;
-        }
-
-        const evidenceFor = validateArgumentCitations(
-          parsed.argumentsFor,
-          written.citedFor,
-          discussion
-        );
-        const evidenceAgainst = validateArgumentCitations(
-          parsed.argumentsAgainst,
-          written.citedAgainst,
-          discussion
-        );
-        if (!evidenceFor || !evidenceAgainst) {
-          skipped++;
-          errors.push(`${s.id}: missing or invalid paragraph citations`);
-          continue;
-        }
-        // A logical link ("donc", "mais"...) the speakers did not use changes the argument.
-        const addedConnectors = [...written.for, ...written.against].flatMap((r) =>
-          findAddedConnectors(
-            r.text,
-            r.quotes.map((q) => ({ quote: q.text }))
+        // A logical link ("donc", "mais"...) the speakers did not use changes the reason.
+        const flagged = new Set(
+          [...written.for, ...written.against].filter(
+            (r) =>
+              findAddedConnectors(
+                r.text,
+                r.quotes.map((q) => ({ quote: q.text }))
+              ).length > 0
           )
         );
-        if (addedConnectors.length > 0) {
-          skipped++;
-          errors.push(`${s.id}: logical link not in the quotes (${addedConnectors.join(", ")})`);
-          continue;
-        }
         // Step 3: a second call checks every reason against the quotes it cites.
         const verificationPrompt = buildVerificationPrompt({ reasons: written });
         const verificationResponse = await callMistral(
@@ -352,13 +322,44 @@ export async function generateScrutinAnalysis(
             responseFormat: { type: "json_object" },
           }
         );
-        const verification = checkVerification(
+        // Each reason stands or falls on its own. Too many failures mean the model
+        // misread the debate: refuse the whole analysis instead of publishing the rest.
+        const { kept, failed, total } = keepVerifiedReasons(
           parseMistralJSON<Record<string, unknown>>(extractMistralText(verificationResponse)),
-          written
+          written,
+          flagged
         );
-        if (!verification.ok) {
+        if (kept.for.length + kept.against.length === 0 || failed * 2 > total) {
           skipped++;
           errors.push(`${s.id}: sentences not supported by their citations`);
+          continue;
+        }
+        // The plain-text fields stay filled for older readers: the kept reasons, end to end.
+        const parsed: AnalysisOutput = {
+          argumentsFor: kept.for.map((r) => r.text).join(" "),
+          argumentsAgainst: kept.against.map((r) => r.text).join(" "),
+        };
+
+        const validation = validateAnalysisOutput(parsed);
+        if (!validation.valid) {
+          errors.push(`${s.id}: validation failed (${validation.errors.join(", ")})`);
+          skipped++;
+          continue;
+        }
+
+        const evidenceFor = validateArgumentCitations(
+          parsed.argumentsFor,
+          kept.citedFor,
+          discussion
+        );
+        const evidenceAgainst = validateArgumentCitations(
+          parsed.argumentsAgainst,
+          kept.citedAgainst,
+          discussion
+        );
+        if (!evidenceFor || !evidenceAgainst) {
+          skipped++;
+          errors.push(`${s.id}: missing or invalid paragraph citations`);
           continue;
         }
         // A visible qualification survives even if the model omits it.
@@ -368,8 +369,8 @@ export async function generateScrutinAnalysis(
           parsed.argumentsAgainst = `Dans la discussion commune : ${parsed.argumentsAgainst}`;
         const reasons = {
           v: 1,
-          for: written.for,
-          against: written.against,
+          for: kept.for,
+          against: kept.against,
         } as unknown as Prisma.InputJsonValue;
         const evidence = {
           version: DEBATE_PROMPT_VERSION,
