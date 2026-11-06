@@ -304,7 +304,33 @@ describe("generateScrutinAnalysis — substance anchoring", () => {
 });
 
 describe("generateScrutinAnalysis — coherence guard (scrutin 2084 regression)", () => {
-  it("does NOT persist arguments incoherent with the amendment (import-ban vs cooperatives)", async () => {
+  it("does not call the model when the debate is not about the official measure", async () => {
+    resolveDebate.mockResolvedValue({
+      usableForGeneration: true,
+      discussion: {
+        ...discussion,
+        paragraphs: discussion.paragraphs.map((p) => ({
+          ...p,
+          text: "Les importations de produits à bas prix ne respectent pas les normes sociales et environnementales.",
+        })),
+      },
+      sourceHash: "hash",
+      sourceUrl: "https://www.assemblee-nationale.fr/source",
+      transcriptSeanceRef: "RU1",
+      reinforced: true,
+      context: "x",
+    });
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("Débat de séance, sujets variés.")]);
+    setMistral(COHERENT_ARGS);
+
+    const res = await generateScrutinAnalysis({ limit: 10 });
+
+    expect(callMistral).not.toHaveBeenCalled();
+    expect(analysisUpsert).not.toHaveBeenCalled();
+    expect(res.skippedIncoherent).toBe(1);
+  });
+
+  it("does NOT persist arguments that drift from the cited quotes (import-ban vs cooperatives)", async () => {
     scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("Débat de séance, sujets variés.")]);
     setMistral(INCOHERENT_ARGS);
 
@@ -312,7 +338,20 @@ describe("generateScrutinAnalysis — coherence guard (scrutin 2084 regression)"
 
     expect(analysisUpsert).not.toHaveBeenCalled();
     expect(res.generated).toBe(0);
-    expect(res.skippedIncoherent).toBe(1);
+    expect(res.errors.some((e) => e.includes("not covered by their citations"))).toBe(true);
+  });
+
+  it("persists a faithful summary that does not repeat the measure's vocabulary", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("Débat de séance, sujets variés.")]);
+    setMistral({
+      argumentsFor: "Mme Léchon estime que cela donne plus de transparence.",
+      argumentsAgainst: "",
+    });
+
+    const res = await generateScrutinAnalysis({ limit: 10 });
+
+    expect(res.generated).toBe(1);
+    expect(res.skippedIncoherent).toBe(0);
   });
 
   it("dryRun never writes", async () => {
