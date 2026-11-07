@@ -7,7 +7,8 @@ export type SenateVoteSourceCode = (typeof SENATE_VOTE_SOURCE_CODES)[number];
 export interface SenateSourceVote {
   matricule: string;
   vote: string;
-  siege: number;
+  /** Absent for the one senator who holds no seat (the president), always with code "n". */
+  siege?: number;
 }
 
 export interface SenateOfficialVoteTotals {
@@ -67,15 +68,19 @@ export function assessSenateVoteSource(
     return { status: "INVALID", expectedCount, observedCount, reason: "official_totals_invalid" };
   }
 
+  // Since the 2026 session the source lists the president without a seat number. That is
+  // accepted for one row, and only for a non-voter: any other seatless row stays invalid.
+  const seatless = votes.filter((vote) => vote.siege === undefined);
   const malformedVote = votes.find(
     (vote) =>
       typeof vote.matricule !== "string" ||
       vote.matricule.trim() === "" ||
-      !Number.isInteger(vote.siege) ||
-      vote.siege <= 0 ||
-      typeof vote.vote !== "string"
+      typeof vote.vote !== "string" ||
+      (vote.siege === undefined
+        ? vote.vote.toLowerCase() !== "n"
+        : !Number.isInteger(vote.siege) || vote.siege <= 0)
   );
-  if (malformedVote) {
+  if (malformedVote || seatless.length > 1) {
     return { status: "INVALID", expectedCount, observedCount, reason: "vote_row_invalid" };
   }
 
@@ -90,24 +95,34 @@ export function assessSenateVoteSource(
   }
 
   const uniqueMatricules = new Set(votes.map((vote) => vote.matricule));
-  const uniqueSeats = new Set(votes.map((vote) => vote.siege));
-  if (uniqueMatricules.size !== observedCount || uniqueSeats.size !== observedCount) {
+  const uniqueSeats = new Set(
+    votes.flatMap((vote) => (vote.siege === undefined ? [] : [vote.siege]))
+  );
+  if (
+    uniqueMatricules.size !== observedCount ||
+    uniqueSeats.size !== observedCount - seatless.length
+  ) {
     return { status: "INVALID", expectedCount, observedCount, reason: "duplicate_identity" };
-  }
-
-  if (observedCount !== expectedCount) {
-    return { status: "INCOMPLETE", expectedCount, observedCount, reason: "row_count_mismatch" };
   }
 
   const counts = { p: 0, c: 0, a: 0, n: 0 };
   for (const vote of votes) counts[vote.vote.toLowerCase() as SenateVoteSourceCode]++;
+
+  // The president is sometimes left out of the list altogether. One missing non-voter is
+  // tolerated when every other total matches: that senator simply has no row for this
+  // scrutin, and his participation stays unknown instead of being computed on a gap.
+  const oneNonVoterMissing =
+    observedCount === expectedCount - 1 && counts.n === official.nonVoters - 1;
+  if (observedCount !== expectedCount && !oneNonVoterMissing) {
+    return { status: "INCOMPLETE", expectedCount, observedCount, reason: "row_count_mismatch" };
+  }
 
   if (
     counts.p !== official.votesFor ||
     counts.c !== official.votesAgainst ||
     counts.a !== official.votesAbstain ||
     counts.p + counts.c + counts.a !== official.voters ||
-    counts.n !== official.nonVoters
+    counts.n !== official.nonVoters - (oneNonVoterMissing ? 1 : 0)
   ) {
     return { status: "INCOMPLETE", expectedCount, observedCount, reason: "totals_mismatch" };
   }
