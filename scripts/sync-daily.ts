@@ -54,8 +54,10 @@ const steps: SyncStep[] = [
     command: `npx tsx scripts/sync-scrutins-an.ts --since-days=${AN_RECENT_DAYS}${dryRunFlag}`,
   },
   {
-    name: "Votes Sénat (today)",
-    command: `npx tsx scripts/sync-scrutins-senat.ts --today${dryRunFlag}`,
+    // Current session, cursor-based: picks up every scrutin published since the last
+    // run, even one senat.fr posts a day late.
+    name: "Votes Sénat (session en cours)",
+    command: `npx tsx scripts/sync-scrutins-senat.ts${dryRunFlag}`,
   },
   ...(!DRY_RUN
     ? [

@@ -30,10 +30,27 @@ import {
 
 const BASE_URL = "https://www.senat.fr";
 
-export const AVAILABLE_SESSIONS = [
-  2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010, 2009,
-  2008, 2007, 2006,
-];
+const FIRST_SESSION = 2006;
+
+/**
+ * Session year in progress at `now`. The ordinary session opens on the first working
+ * day of October (Constitution, art. 28): "2026" is the 2026-2027 session.
+ */
+export function currentSenateSession(now: Date = new Date()): number {
+  return now.getUTCMonth() >= 9 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+}
+
+/**
+ * Sessions from the current one down to 2006. Computed from the date so that a new
+ * session is read from its first day, with no code change.
+ */
+export function availableSenateSessions(now: Date = new Date()): number[] {
+  const sessions: number[] = [];
+  for (let year = currentSenateSession(now); year >= FIRST_SESSION; year--) sessions.push(year);
+  return sessions;
+}
+
+export const AVAILABLE_SESSIONS = availableSenateSessions();
 
 const senatClient = new HTTPClient({
   baseUrl: BASE_URL,
@@ -280,7 +297,8 @@ async function generateUniqueScrutinSlug(date: Date, title: string): Promise<str
 /**
  * Determine legislature from session year
  */
-function sessionToLegislature(session: number): number {
+export function sessionToLegislature(session: number): number {
+  if (session >= 2026) return 2026;
   if (session >= 2023) return 2023;
   if (session >= 2020) return 2020;
   if (session >= 2017) return 2017;

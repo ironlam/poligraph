@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import {
+  availableSenateSessions,
+  currentSenateSession,
+  sessionToLegislature,
   getNextSenateCursor,
   parseScrutinMetadata,
   shouldSaveSenateCursor,
@@ -83,5 +86,25 @@ describe("import des scrutins publics du Sénat", () => {
       officialVoters: null,
       officialNonVoters: null,
     });
+  });
+});
+
+describe("sessions du Sénat", () => {
+  it("bascule sur la nouvelle session au 1er octobre", () => {
+    expect(currentSenateSession(new Date("2026-09-30T12:00:00Z"))).toBe(2025);
+    expect(currentSenateSession(new Date("2026-10-01T12:00:00Z"))).toBe(2026);
+    expect(currentSenateSession(new Date("2027-01-15T12:00:00Z"))).toBe(2026);
+  });
+
+  it("liste toutes les sessions de la session en cours jusqu'à 2006, sans trou", () => {
+    const sessions = availableSenateSessions(new Date("2026-11-07T12:00:00Z"));
+    expect(sessions[0]).toBe(2026);
+    expect(sessions.at(-1)).toBe(2006);
+    expect(sessions).toHaveLength(21);
+  });
+
+  it("rattache les sessions après le renouvellement de 2026 à la série 2026", () => {
+    expect(sessionToLegislature(2025)).toBe(2023);
+    expect(sessionToLegislature(2026)).toBe(2026);
   });
 });

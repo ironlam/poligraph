@@ -4,7 +4,7 @@
  * Usage:
  *   npm run sync:scrutins-senat              # Sync current session
  *   npm run sync:scrutins-senat -- --all     # Sync all sessions
- *   npm run sync:scrutins-senat -- --session=2024  # Specific session
+ *   npm run sync:scrutins-senat -- --session=2025  # Specific session
  *   npm run sync:scrutins-senat -- --today   # Only process today's scrutins
  *   npm run sync:scrutins-senat -- --stats   # Show current stats
  *
@@ -17,9 +17,10 @@ import {
   syncScrutinsSenat,
   getScrutinsSenatStats,
   AVAILABLE_SESSIONS,
+  currentSenateSession,
 } from "../src/services/sync/scrutins-senat";
 
-const DEFAULT_SESSION = 2024;
+const DEFAULT_SESSION = currentSenateSession();
 
 const handler: SyncHandler = {
   name: "Politic Tracker - Senate Votes Sync",

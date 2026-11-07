@@ -38,7 +38,7 @@ describe("architecture d'invalidation du cache des votes", () => {
       "runVoteSyncWithCacheInvalidation(() => syncScrutinsAN(undefined, false, false, false, false, 7) )"
     );
     expect(normalized(grouped)).toContain(
-      "runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(null, false, true))"
+      "runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(currentSenateSession(), false, false) )"
     );
   });
 
@@ -47,7 +47,7 @@ describe("architecture d'invalidation du cache des votes", () => {
       "runVoteSyncWithCacheInvalidation(() => syncScrutinsAN(undefined, false, false, false, false, 7) )"
     );
     expect(normalized(dailyInngest)).toContain(
-      "runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(null, false, true))"
+      "runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(currentSenateSession(), false, false) )"
     );
   });
 
@@ -64,7 +64,7 @@ describe("architecture d'invalidation du cache des votes", () => {
     expect(anWrapper).toContain("runVoteSyncWithCacheInvalidation");
     expect(anWrapper).toContain("syncScrutinsAN(undefined, false, false, false, false, sinceDays)");
     expect(senatWrapper).toContain("runVoteSyncWithCacheInvalidation");
-    expect(senatWrapper).toContain("syncScrutinsSenat(null, false, todayOnly)");
+    expect(senatWrapper).toContain("syncScrutinsSenat(session, false, false)");
   });
 
   it("invalide seulement après la résolution réussie du service Inngest", () => {
@@ -81,7 +81,7 @@ describe("architecture d'invalidation du cache des votes", () => {
     expect(dailyWorkflow).toContain("run: npm run sync:daily");
     expectInOrder(dailyScript, [
       "scripts/sync-scrutins-an.ts --since-days=",
-      "scripts/sync-scrutins-senat.ts --today",
+      "scripts/sync-scrutins-senat.ts",
       'name: "Votes cache revalidation"',
       'revalidateRemoteCache(["votes"])',
       'name: "Législation (active, 3j)"',

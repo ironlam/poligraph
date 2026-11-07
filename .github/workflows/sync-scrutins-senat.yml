@@ -1,0 +1,68 @@
+name: Sync Scrutins (Sénat)
+
+# Manual catch-up only: the Daily already reads the current session, cursor-based.
+# Use it to backfill a past session (e.g. 2025) or replay one with force.
+on:
+  workflow_dispatch:
+    inputs:
+      session:
+        description: "Session year (2025 = session 2025-2026). Empty = current session"
+        required: false
+        type: string
+      force:
+        description: "Ignore the cursor and re-read the whole session"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  CRON_SECRET: ${{ secrets.CRON_SECRET }}
+  NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL || 'https://poligraph.fr' }}
+
+jobs:
+  sync-scrutins-senat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Sync Scrutins from senat.fr
+        id: sync
+        continue-on-error: true
+        env:
+          SESSION: ${{ github.event.inputs.session }}
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          ARGS=""
+          if [ -n "$SESSION" ]; then ARGS="$ARGS --session=$SESSION"; fi
+          if [ "$FORCE" = "true" ]; then ARGS="$ARGS --force"; fi
+          npm run sync:scrutins-senat -- $ARGS
+
+      - name: Revalidate votes cache
+        if: ${{ !cancelled() && (steps.sync.outcome == 'success' || steps.sync.outcome == 'failure') }}
+        run: npm run cache:revalidate -- votes
+
+      - name: Preserve sync failure after cache revalidation
+        if: ${{ always() && steps.sync.outcome == 'failure' }}
+        run: |
+          echo "::error::Senate scrutin sync failed after cache revalidation."
+          exit 1

@@ -24,8 +24,11 @@ export const syncScrutins = inngest.createFunction(
       });
 
       const senatStats = await step.run("scrutins-senat", async () => {
-        const { syncScrutinsSenat } = await import("@/services/sync/scrutins-senat");
-        return runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(null, false, true));
+        const { syncScrutinsSenat, currentSenateSession } =
+          await import("@/services/sync/scrutins-senat");
+        return runVoteSyncWithCacheInvalidation(() =>
+          syncScrutinsSenat(currentSenateSession(), false, false)
+        );
       });
 
       if (jobId)
