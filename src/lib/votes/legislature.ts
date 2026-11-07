@@ -16,7 +16,8 @@ const AN_LEGISLATURE_YEARS: Record<number, { start: number; end?: number }> = {
 const SENAT_BUCKET_YEARS: Record<number, { end?: number }> = {
   2017: { end: 2020 },
   2020: { end: 2023 },
-  2023: {},
+  2023: { end: 2026 },
+  2026: {},
 };
 
 function formatAnLegislature(value: number): string {
