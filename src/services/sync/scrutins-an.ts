@@ -454,7 +454,7 @@ export function isWithinLastDays(
  * A run that reads only part of the archive (today, last N days) must never mark the
  * full-archive key as done: the AN publishes a day's votes one or two days late, so a
  * partial run would record the new ETag while skipping those votes, and the weekly full
- * sync would then get an HTTP 304 and skip them too (gap of Nov. 2026, scrutins 9492+).
+ * sync would then get an HTTP 304 and skip them too.
  */
 export function anArchiveSourceKey(
   legislature: number,
