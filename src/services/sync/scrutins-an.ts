@@ -449,6 +449,23 @@ export function isWithinLastDays(
 }
 
 /**
+ * Archive cache key (ETag + content hash) of one AN sync mode.
+ *
+ * A run that reads only part of the archive (today, last N days) must never mark the
+ * full-archive key as done: the AN publishes a day's votes one or two days late, so a
+ * partial run would record the new ETag while skipping those votes, and the weekly full
+ * sync would then get an HTTP 304 and skip them too (gap of Nov. 2026, scrutins 9492+).
+ */
+export function anArchiveSourceKey(
+  legislature: number,
+  mode: { officialGroupsOnly: boolean; partial: boolean }
+): string {
+  if (mode.officialGroupsOnly) return `official-groups-an-zip:${legislature}`;
+  if (mode.partial) return `votes-an-zip:${legislature}:recent`;
+  return `votes-an-zip:${legislature}`;
+}
+
+/**
  * `sinceDays` keeps only the scrutins of the last N days: the daily run refreshes the
  * official group counts of recent votes without reading the whole archive again.
  */
@@ -474,9 +491,10 @@ export async function syncScrutinsAN(
   // Keep the additive metadata backfill independent from the regular vote
   // archive state. Marking the latter from this mode could make a subsequent
   // normal sync skip new nominative votes.
-  const SOURCE_KEY = officialGroupsOnly
-    ? `official-groups-an-zip:${legislature}`
-    : `votes-an-zip:${legislature}`;
+  const SOURCE_KEY = anArchiveSourceKey(legislature, {
+    officialGroupsOnly,
+    partial: todayOnly || sinceDays !== undefined,
+  });
 
   const tempDir = mkdtempSync(path.join(tmpdir(), TEMP_DIR_PREFIX));
 

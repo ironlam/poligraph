@@ -5,6 +5,7 @@
  *   npm run sync:scrutins-an              # Full sync (17th legislature)
  *   npm run sync:scrutins-an -- --leg=17  # Sync specific legislature
  *   npm run sync:scrutins-an -- --today   # Only process today's scrutins
+ *   npm run sync:scrutins-an -- --since-days=7  # Only the last 7 days (daily run)
  *   npm run sync:scrutins-an -- --stats   # Show current stats
  *
  * Data source: data.assemblee-nationale.fr (official Open Data)
@@ -30,6 +31,11 @@ const handler: SyncHandler = {
       name: "--today",
       type: "boolean",
       description: "Only process scrutins from today's date",
+    },
+    {
+      name: "--since-days",
+      type: "string",
+      description: "Only process scrutins of the last N days (catches the AN publication lag)",
     },
     {
       name: "--official-groups-only",
@@ -75,12 +81,14 @@ Features:
       force = false,
       leg,
       today = false,
+      sinceDays: sinceDaysArg,
       officialGroupsOnly = false,
     } = options as {
       dryRun?: boolean;
       force?: boolean;
       leg?: string;
       today?: boolean;
+      sinceDays?: string;
       officialGroupsOnly?: boolean;
     };
 
@@ -94,12 +102,30 @@ Features:
       };
     }
 
+    const sinceDays = sinceDaysArg !== undefined ? parseInt(sinceDaysArg, 10) : undefined;
+    if (sinceDays !== undefined && (isNaN(sinceDays) || sinceDays < 0)) {
+      return {
+        success: false,
+        duration: 0,
+        stats: {},
+        errors: ["Invalid --since-days value"],
+      };
+    }
+
     console.log(`Legislature: ${legislature}e`);
+    if (sinceDays !== undefined) console.log(`Filter: last ${sinceDays} days`);
     if (today) console.log("Filter: Today's scrutins only");
     if (force) console.log("Mode: Full sync (--force)");
     if (officialGroupsOnly) console.log("Mode: Official group counts only");
 
-    const result = await syncScrutinsAN(legislature, dryRun, today, force, officialGroupsOnly);
+    const result = await syncScrutinsAN(
+      legislature,
+      dryRun,
+      today,
+      force,
+      officialGroupsOnly,
+      sinceDays
+    );
 
     return {
       success: result.errors.length === 0,

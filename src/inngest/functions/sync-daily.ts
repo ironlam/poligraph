@@ -32,7 +32,10 @@ const DAILY_STEPS: DailyStep[] = [
     name: "scrutins-an",
     run: async () => {
       const { syncScrutinsAN } = await import("@/services/sync/scrutins-an");
-      return runVoteSyncWithCacheInvalidation(() => syncScrutinsAN(undefined, false, true));
+      // 7-day window: the AN publishes a day's votes one or two days late.
+      return runVoteSyncWithCacheInvalidation(() =>
+        syncScrutinsAN(undefined, false, false, false, false, 7)
+      );
     },
   },
   {
