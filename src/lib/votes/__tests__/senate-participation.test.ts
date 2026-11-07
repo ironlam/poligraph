@@ -49,11 +49,39 @@ describe("source nominative des scrutins publics du Sénat", () => {
   });
 
   it.each([
-    [[...votes.slice(0, 3)], "row_count_mismatch"],
+    [[...votes.slice(0, 2)], "row_count_mismatch"],
     [[...votes, { matricule: "A", vote: "p", siege: 5 }], "duplicate_identity"],
     [[...votes, { matricule: "E", vote: "p", siege: 4 }], "duplicate_identity"],
   ] as const)("neutralise une liste incomplète ou ambiguë", (sourceVotes, reason) => {
     expect(assessSenateVoteSource([...sourceVotes], official)).toMatchObject({ reason });
+  });
+
+  it("accepte le président listé sans siège, seulement comme non-votant", () => {
+    const withPresident = [...votes.slice(0, 3), { matricule: "P", vote: "n" }];
+    expect(assessSenateVoteSource(withPresident, official)).toMatchObject({ status: "COMPLETE" });
+    expect(
+      assessSenateVoteSource([...votes.slice(0, 3), { matricule: "P", vote: "p" }], official)
+    ).toMatchObject({ status: "INVALID", reason: "vote_row_invalid" });
+    expect(
+      assessSenateVoteSource(
+        [...votes.slice(0, 2), { matricule: "P", vote: "n" }, { matricule: "Q", vote: "n" }],
+        official
+      )
+    ).toMatchObject({ status: "INVALID", reason: "vote_row_invalid" });
+  });
+
+  it("tolère un seul non-votant absent de la liste si les autres totaux concordent", () => {
+    const withoutNonVoter = votes.slice(0, 3);
+    expect(assessSenateVoteSource(withoutNonVoter, { ...official, nonVoters: 1 })).toMatchObject({
+      status: "COMPLETE",
+      expectedCount: 4,
+      observedCount: 3,
+    });
+    // une ligne POUR manquante n'est jamais tolérée
+    expect(assessSenateVoteSource([votes[1]!, votes[2]!, votes[3]!], official)).toMatchObject({
+      status: "INCOMPLETE",
+      reason: "row_count_mismatch",
+    });
   });
 
   it("contrôle aussi la parité de chaque position avec la page officielle", () => {
