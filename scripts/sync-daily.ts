@@ -44,10 +44,14 @@ interface SyncStep {
   retries?: number;
 }
 
+const AN_RECENT_DAYS = 7;
+
 const steps: SyncStep[] = [
   {
-    name: "Votes AN (today)",
-    command: `npx tsx scripts/sync-scrutins-an.ts --today${dryRunFlag}`,
+    // A 7-day window, not today only: the AN open data publishes a day's votes one or
+    // two days late, and a today-only run never sees them once they land.
+    name: "Votes AN (7 derniers jours)",
+    command: `npx tsx scripts/sync-scrutins-an.ts --since-days=${AN_RECENT_DAYS}${dryRunFlag}`,
   },
   {
     name: "Votes Sénat (today)",

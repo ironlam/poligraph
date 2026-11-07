@@ -58,8 +58,10 @@ const groupedFunctions = [
 const migratedFunctions = [
   createSyncFunction("sync-scrutins-an", async (data) => {
     const { syncScrutinsAN } = await import("@/services/sync/scrutins-an");
-    const todayOnly = !data.flags || !(data.flags as string).includes("--all");
-    return runVoteSyncWithCacheInvalidation(() => syncScrutinsAN(undefined, false, todayOnly));
+    const sinceDays = data.flags && (data.flags as string).includes("--all") ? undefined : 7;
+    return runVoteSyncWithCacheInvalidation(() =>
+      syncScrutinsAN(undefined, false, false, false, false, sinceDays)
+    );
   }),
   createSyncFunction("sync-scrutins-senat", async (data) => {
     const { syncScrutinsSenat } = await import("@/services/sync/scrutins-senat");

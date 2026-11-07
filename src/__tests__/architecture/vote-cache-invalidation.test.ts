@@ -35,7 +35,7 @@ describe("architecture d'invalidation du cache des votes", () => {
 
   it("lie les deux writes du sync Inngest groupé à l'invalidation", () => {
     expect(normalized(grouped)).toContain(
-      "runVoteSyncWithCacheInvalidation(() => syncScrutinsAN(undefined, false, true) )"
+      "runVoteSyncWithCacheInvalidation(() => syncScrutinsAN(undefined, false, false, false, false, 7) )"
     );
     expect(normalized(grouped)).toContain(
       "runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(null, false, true))"
@@ -44,7 +44,7 @@ describe("architecture d'invalidation du cache des votes", () => {
 
   it("lie les étapes AN et Sénat du daily Inngest à l'invalidation", () => {
     expect(normalized(dailyInngest)).toContain(
-      "runVoteSyncWithCacheInvalidation(() => syncScrutinsAN(undefined, false, true))"
+      "runVoteSyncWithCacheInvalidation(() => syncScrutinsAN(undefined, false, false, false, false, 7) )"
     );
     expect(normalized(dailyInngest)).toContain(
       "runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(null, false, true))"
@@ -62,7 +62,7 @@ describe("architecture d'invalidation du cache des votes", () => {
     );
 
     expect(anWrapper).toContain("runVoteSyncWithCacheInvalidation");
-    expect(anWrapper).toContain("syncScrutinsAN(undefined, false, todayOnly)");
+    expect(anWrapper).toContain("syncScrutinsAN(undefined, false, false, false, false, sinceDays)");
     expect(senatWrapper).toContain("runVoteSyncWithCacheInvalidation");
     expect(senatWrapper).toContain("syncScrutinsSenat(null, false, todayOnly)");
   });
@@ -80,7 +80,7 @@ describe("architecture d'invalidation du cache des votes", () => {
     expect(dailyWorkflow).toContain("NEXT_PUBLIC_BASE_URL:");
     expect(dailyWorkflow).toContain("run: npm run sync:daily");
     expectInOrder(dailyScript, [
-      "scripts/sync-scrutins-an.ts --today",
+      "scripts/sync-scrutins-an.ts --since-days=",
       "scripts/sync-scrutins-senat.ts --today",
       'name: "Votes cache revalidation"',
       'revalidateRemoteCache(["votes"])',

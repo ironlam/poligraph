@@ -17,7 +17,7 @@ export const syncScrutins = inngest.createFunction(
       const anStats = await step.run("scrutins-an", async () => {
         const { syncScrutinsAN } = await import("@/services/sync/scrutins-an");
         const stats = await runVoteSyncWithCacheInvalidation(() =>
-          syncScrutinsAN(undefined, false, true)
+          syncScrutinsAN(undefined, false, false, false, false, 7)
         );
         if (jobId) await updateJobProgress(jobId, 50);
         return stats;

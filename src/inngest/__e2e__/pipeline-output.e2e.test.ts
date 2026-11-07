@@ -10,7 +10,12 @@ interface PipelineExpectation {
 
 const EXPECTATIONS: PipelineExpectation[] = [
   { name: "press-analysis", sourceKey: "press-analysis", maxStaleHours: 30, minItemCount: 1 },
-  { name: "votes-an-zip", sourceKey: "votes-an-zip:17", maxStaleHours: 30, minItemCount: 0 },
+  {
+    name: "votes-an-zip",
+    sourceKey: "votes-an-zip:17:recent",
+    maxStaleHours: 30,
+    minItemCount: 0,
+  },
   {
     name: "embeddings-factcheck",
     sourceKey: "embeddings:FACTCHECK",
