@@ -166,7 +166,7 @@ const GOVERNMENT_ROLE = /ministre|secr[ée]taire d['’]état|garde des sceaux|p
 
 /** Find the public politician sheet and current group of each speaker, by the official
  * actor id. A speaker without a public sheet stays listed, without a link. */
-async function resolveReasons(payload: ReasonsPayload): Promise<ReasonsView> {
+async function resolveReasons(payload: ReasonsPayload, votingDate: Date): Promise<ReasonsView> {
   const refs = [...payload.for, ...payload.against].flatMap((r) =>
     r.speakers.flatMap((sp) => (sp.actorRef ? [sp.actorRef] : []))
   );
@@ -183,6 +183,17 @@ async function resolveReasons(payload: ReasonsPayload): Promise<ReasonsView> {
             select: {
               slug: true,
               participation: { select: { groupCode: true, groupName: true } },
+              // The transcript rarely states a minister's role: the mandate in force on the
+              // day of the vote is the reliable source.
+              mandates: {
+                where: {
+                  type: "MINISTRE",
+                  startDate: { lte: votingDate },
+                  OR: [{ endDate: null }, { endDate: { gte: votingDate } }],
+                },
+                select: { title: true },
+                take: 1,
+              },
             },
           },
         },
@@ -195,14 +206,15 @@ async function resolveReasons(payload: ReasonsPayload): Promise<ReasonsView> {
     quotes: r.quotes,
     speakers: r.speakers.map((sp) => {
       const pol = sp.actorRef ? byRef.get(sp.actorRef) : undefined;
-      const government = !!sp.role && GOVERNMENT_ROLE.test(sp.role);
+      const ministry = pol?.mandates?.[0]?.title ?? null;
+      const government = (!!sp.role && GOVERNMENT_ROLE.test(sp.role)) || ministry !== null;
       return {
         name: sp.name,
         slug: pol?.slug ?? null,
         groupCode: government ? null : (pol?.participation?.groupCode ?? null),
         groupName: government ? null : (pol?.participation?.groupName ?? null),
         government,
-        role: sp.role,
+        role: sp.role ?? ministry,
       };
     }),
   });
@@ -224,7 +236,7 @@ export async function getScrutinAnalysis(scrutinId: string): Promise<ScrutinAnal
       modelVersion: true,
       sourceUrl: true,
       commonDiscussion: true,
-      scrutin: { select: { chamber: true, legislature: true } },
+      scrutin: { select: { chamber: true, legislature: true, votingDate: true } },
     },
   });
   if (!row) return null;
@@ -235,7 +247,10 @@ export async function getScrutinAnalysis(scrutinId: string): Promise<ScrutinAnal
   if (scrutin.chamber === "AN" && !analysis.sourceUrl) return null;
   if (!isAnalysisPublishable(scrutin, CURRENT_LEGISLATURE)) return null;
   const parsed = parseReasons(storedReasons);
-  return { ...analysis, reasons: parsed ? await resolveReasons(parsed) : null };
+  return {
+    ...analysis,
+    reasons: parsed ? await resolveReasons(parsed, scrutin.votingDate) : null,
+  };
 }
 
 export interface GroupListingItem {

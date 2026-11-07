@@ -198,6 +198,46 @@ describe("positions de groupe : pas d'attribution anachronique", () => {
         })
       );
     });
+    it("repère un ministre par son mandat à la date du vote, sans rôle dans le compte rendu", async () => {
+      const votingDate = new Date("2026-10-28T00:00:00Z");
+      dbMock.scrutinAnalysis.findUnique.mockResolvedValue({
+        ...base,
+        scrutin: { chamber: "AN", legislature: 17, votingDate },
+        reasons: {
+          ...reasons,
+          against: [
+            {
+              ...reasons.against[0]!,
+              speakers: [{ name: "M. Roland Lescure", actorRef: "PA2", role: null }],
+            },
+          ],
+        },
+      });
+      dbMock.externalId.findMany.mockResolvedValue([
+        {
+          externalId: "PA2",
+          politician: {
+            slug: "roland-lescure",
+            participation: { groupCode: "EPR", groupName: "EPR" },
+            mandates: [{ title: "Ministre de l'Économie" }],
+          },
+        },
+      ]);
+
+      const analysis = await getScrutinAnalysis("s17-minister");
+
+      expect(analysis!.reasons!.against[0]!.speakers[0]).toMatchObject({
+        slug: "roland-lescure",
+        government: true,
+        groupCode: null,
+        role: "Ministre de l'Économie",
+      });
+      const query = dbMock.externalId.findMany.mock.calls.at(-1)![0];
+      expect(query.select.politician.select.mandates.where).toMatchObject({
+        type: "MINISTRE",
+        startDate: { lte: votingDate },
+      });
+    });
     it("ignore un JSON de raisons mal formé et garde le texte", async () => {
       dbMock.scrutinAnalysis.findUnique.mockResolvedValue({ ...base, reasons: { v: 2 } });
       const analysis = await getScrutinAnalysis("s17-bad");
