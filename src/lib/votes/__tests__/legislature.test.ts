@@ -9,7 +9,8 @@ describe("formatLegislature", () => {
   });
 
   it("libelle les buckets Sénat (années) sans ordinal", () => {
-    expect(formatLegislature(2023)).toBe("Sénat, depuis 2023");
+    expect(formatLegislature(2026)).toBe("Sénat, depuis 2026");
+    expect(formatLegislature(2023)).toBe("Sénat, 2023-2026");
     expect(formatLegislature(2020)).toBe("Sénat, 2020-2023");
     expect(formatLegislature(2017)).toBe("Sénat, 2017-2020");
   });

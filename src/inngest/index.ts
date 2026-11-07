@@ -64,9 +64,12 @@ const migratedFunctions = [
     );
   }),
   createSyncFunction("sync-scrutins-senat", async (data) => {
-    const { syncScrutinsSenat } = await import("@/services/sync/scrutins-senat");
-    const todayOnly = !data.flags || !(data.flags as string).includes("--all");
-    return runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(null, false, todayOnly));
+    const { syncScrutinsSenat, currentSenateSession } =
+      await import("@/services/sync/scrutins-senat");
+    // --all walks every session; by default only the current one, cursor-based.
+    const session =
+      data.flags && (data.flags as string).includes("--all") ? null : currentSenateSession();
+    return runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(session, false, false));
   }),
   createSyncFunction("sync-press-analysis", async (data) => {
     const { syncPressAnalysis } = await import("@/services/sync/press-analysis");

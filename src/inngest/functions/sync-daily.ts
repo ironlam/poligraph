@@ -52,8 +52,11 @@ const DAILY_STEPS: DailyStep[] = [
   {
     name: "scrutins-senat",
     run: async () => {
-      const { syncScrutinsSenat } = await import("@/services/sync/scrutins-senat");
-      return runVoteSyncWithCacheInvalidation(() => syncScrutinsSenat(null, false, true));
+      const { syncScrutinsSenat, currentSenateSession } =
+        await import("@/services/sync/scrutins-senat");
+      return runVoteSyncWithCacheInvalidation(() =>
+        syncScrutinsSenat(currentSenateSession(), false, false)
+      );
     },
   },
   {
