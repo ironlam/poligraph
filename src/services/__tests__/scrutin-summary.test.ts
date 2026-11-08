@@ -23,6 +23,24 @@ describe("portée du vote dans le résumé", () => {
     expect(buildSummaryPrompt(PART)).toContain("PARTIE du texte");
   });
 
+  it("interdit de présenter la partie comme indépendante du reste du texte", () => {
+    // Dry-run du scrutin 9759 : « sans lien avec le reste de la loi », faux pour une loi de finances.
+    expect(buildSummaryPrompt(PART)).toContain("indépendante du reste du texte");
+  });
+
+  it("transmet la suite officielle quand elle est connue", () => {
+    const prompt = buildSummaryPrompt({
+      ...PART,
+      procedureFact: "Le texte initial du Gouvernement est transmis au Sénat.",
+    });
+    expect(prompt).toContain("Suite (donnée officielle)");
+    expect(prompt).toContain("transmis au Sénat");
+  });
+
+  it("le prompt système impose de nommer la chambre", () => {
+    expect(SYSTEM_PROMPT).toContain("jamais « le Parlement »");
+  });
+
   it("n'ajoute rien pour un amendement", () => {
     expect(buildSummaryPrompt({ ...BASE, amendmentBlocks: [] })).not.toContain("Portée");
   });
