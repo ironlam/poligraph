@@ -48,6 +48,7 @@ import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
 import { toPublicTitleView } from "@/lib/votes/to-public-title-view";
 import { formatLegislature } from "@/lib/votes/legislature";
+import { extractScrutinNumber } from "@/lib/votes/scrutin-number";
 import { isVoteDateArchiveSlug, voteDateArchiveRobotsMetadata } from "@/lib/seo/parliament-robots";
 import { scrutinRobotsMetadata } from "@/lib/seo/scrutin-robots";
 import { getScrutinVideoId } from "@/config/youtube";
@@ -62,15 +63,6 @@ function formatExternalId(externalId: string, chamber: string): string {
   const senatMatch = externalId.match(/-(\d+)$/);
   if (senatMatch) return `Vote n°${senatMatch[1]}`;
   return `Scrutin ${chamber === "AN" ? "AN" : "Sénat"} ${externalId}`;
-}
-
-/** Extract scrutin number for the kicker label: "VTANR5L17V5729" → "5729" */
-function extractScrutinNumber(externalId: string): string | null {
-  const anMatch = externalId.match(/V(\d+)$/);
-  if (anMatch?.[1]) return anMatch[1];
-  const senatMatch = externalId.match(/-(\d+)$/);
-  if (senatMatch?.[1]) return senatMatch[1];
-  return null;
 }
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
