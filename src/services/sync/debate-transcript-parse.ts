@@ -30,6 +30,8 @@ export interface DebateParagraph {
   subAmendments: string[];
   textNumber: string | null;
   budgetPart?: "I" | "II" | null;
+  /** The text heading says « rectifié » (e.g. « n° 3291 rectifié »). */
+  textRectified?: boolean;
   text: string;
 }
 
@@ -112,12 +114,14 @@ export function extractSeanceFromXml(xml: string): ParsedSeance | null {
   const paragraphs: DebateParagraph[] = [];
   let textNumber: string | null = null;
   let budgetPart: "I" | "II" | null = null;
+  let textRectified = false;
   for (const match of body.matchAll(
     /<point\b([^>]*)>|<paragraphe\b([^>]*)>([\s\S]*?)<\/paragraphe>/g
   )) {
     if (match[1] !== undefined) {
       if (/\bnivpoint=["']1["']/.test(match[1])) {
         budgetPart = null;
+        textRectified = /\bvaleur=["'][^"']*rectifi/i.test(match[1]);
         textNumber = match[1].match(/\bvaleur=["'][^"']*?n\[\[os?\]\]\s*(\d+)/)?.[1] ?? null;
       }
       if (/\bnivpoint=["']2["']/.test(match[1])) {
@@ -148,6 +152,7 @@ export function extractSeanceFromXml(xml: string): ParsedSeance | null {
       subAmendments: (attr("ssadt") ?? "").split(/[,;\s]+/).filter(Boolean),
       textNumber: attr("bibard") ? parseTextNumber(attr("bibard")!) : textNumber,
       budgetPart,
+      ...(textRectified && !attr("bibard") ? { textRectified: true } : {}),
       text,
     });
   }
