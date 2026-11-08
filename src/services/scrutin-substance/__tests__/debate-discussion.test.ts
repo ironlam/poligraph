@@ -152,3 +152,45 @@ it("preserves the real suspension and resumed speech of amendment 3 on 20 Februa
   expect(paragraphs.at(-1)?.text).toMatch(/amendement.*3.*adopté/);
   expect(renderDiscussionContext(result.discussion!)).not.toContain("La séance est suspendue");
 });
+
+describe("text re-issued as « rectifié »", () => {
+  const reissued = (n: string, rectified = true) =>
+    seance.paragraphs.map((p) => ({ ...p, textNumber: n, textRectified: rectified || undefined }));
+  const ownText = { ...target, texteRef: "PRJLANR5L17B3210" };
+
+  it("accepts the rectified number when the séance carries no paragraph of the amendment's text", () => {
+    const inspected = inspectAmendmentDiscussion(reissued("3291"), ownText);
+    expect(inspected.exclusion).toBeNull();
+    expect(inspected.discussion?.amendmentNumbers).toEqual(["2697", "3652"]);
+  });
+  it("still refuses a different number that is not marked rectified", () => {
+    expect(inspectAmendmentDiscussion(reissued("3291", false), ownText).exclusion).toBe(
+      "no_discussion"
+    );
+  });
+  it("refuses when two different rectified numbers are present", () => {
+    const rows = reissued("3291").map((p, i) => (i % 2 ? { ...p, textNumber: "3292" } : p));
+    expect(inspectAmendmentDiscussion(rows, ownText).exclusion).not.toBeNull();
+  });
+  it("refuses when the séance also carries the amendment's own text", () => {
+    const rows = [
+      ...reissued("3291"),
+      { ...seance.paragraphs[0]!, id: "own", textNumber: "3210", textRectified: undefined },
+    ];
+    expect(inspectAmendmentDiscussion(rows, ownText).discussion).toBeNull();
+  });
+});
+
+describe("parser: heading marked rectifié", () => {
+  it("flags the paragraphs under a rectified text heading only", () => {
+    const point = (valeur: string) => `<point nivpoint="1" valeur="${valeur}"></point>`;
+    const para = (id: string) =>
+      `<paragraphe id_syceron="${id}" roledebat="president"><texte>Je suis saisie de l'amendement n° 5.</texte></paragraphe>`;
+    const doc = `<compteRendu><uid>CRSANR5L17S2027O1N900</uid><seanceRef>RUANR5L17S2027IDS1</seanceRef><dateSeance>20261104090000</dateSeance><contenu>${point(" (n[[o]] 3291 rectifié)")}${para("1")}${point(" (n[[o]] 3210)")}${para("2")}</contenu></compteRendu>`;
+    const parsed = extractSeanceFromXml(doc)!;
+    const byId = Object.fromEntries(parsed.paragraphs.map((p) => [p.id, p]));
+    expect(byId["1"]).toMatchObject({ textNumber: "3291", textRectified: true });
+    expect(byId["2"]!.textNumber).toBe("3210");
+    expect(byId["2"]!.textRectified).toBeUndefined();
+  });
+});

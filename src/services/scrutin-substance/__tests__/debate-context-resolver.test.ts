@@ -181,6 +181,28 @@ describe("official séance and examined text", () => {
     expect(transcriptFindMany.mock.calls[0]![0].where).toEqual({ seanceRef: transcript.seanceRef });
     expect(transcriptFindMany.mock.calls[0]![0].select.content).toBe(false);
   });
+  it("uses a rectified text number kept in the stored paragraphs", async () => {
+    const reissued = {
+      ...transcript,
+      paragraphs: transcript.paragraphs.map((p) => ({
+        ...p,
+        textNumber: "999",
+        textRectified: true,
+      })),
+    };
+    transcriptFindMany.mockResolvedValue([reissued]);
+    const r = await resolveDebateContextForScrutin("s1");
+    expect(r.usableForGeneration).toBe(true);
+    // Without the marker the same paragraphs are refused: the alias needs the flag.
+    transcriptFindMany.mockResolvedValue([
+      {
+        ...reissued,
+        paragraphs: reissued.paragraphs.map((p) => ({ ...p, textRectified: undefined })),
+      },
+    ]);
+    const refused = await resolveDebateContextForScrutin("s1");
+    expect(refused.usableForGeneration).toBe(false);
+  });
   it("does not mistake an AN debate for a Senate amendment with the same number", async () => {
     scrutinFindUnique.mockResolvedValue({ ...vote, chamber: "SENAT" });
     expect((await resolveDebateContextForScrutin("s1")).usableForGeneration).toBe(false);

@@ -103,6 +103,21 @@ export function inspectAmendmentDiscussion(
   if (new Set(paragraphs.map((p) => p.id)).size !== paragraphs.length)
     return { discussion: null, exclusion: "duplicate_paragraphs" };
   const budgetPart = /^(II?)-/.exec(target.number)?.[1];
+  const wanted = textNumber.replace(/^0+/, "");
+  // A text re-issued as « rectifié » gets a new number while its amendments stay on the
+  // original one. Accept that number only when the séance carries no paragraph of the
+  // amendment's own text and exactly one rectified number for this budget part.
+  const sameText = (n: string | null | undefined) => n?.replace(/^0+/, "") === wanted;
+  const inPart = (p: DebateParagraph) => !budgetPart || p.budgetPart === budgetPart;
+  const rectified = new Set(
+    paragraphs
+      .filter((p) => p.textRectified && p.textNumber && inPart(p))
+      .map((p) => p.textNumber!.replace(/^0+/, ""))
+  );
+  const alias =
+    rectified.size === 1 && !paragraphs.some((p) => sameText(p.textNumber) && inPart(p))
+      ? [...rectified][0]!
+      : null;
   const episodes: AmendmentDiscussion[] = [];
   let episodeCount = 0;
   let incomplete = false;
@@ -140,7 +155,7 @@ export function inspectAmendmentDiscussion(
   };
   for (const p of paragraphs) {
     if (
-      p.textNumber?.replace(/^0+/, "") !== textNumber.replace(/^0+/, "") ||
+      !(sameText(p.textNumber) || (alias !== null && p.textNumber?.replace(/^0+/, "") === alias)) ||
       (budgetPart && p.budgetPart !== budgetPart)
     ) {
       finish(Boolean(p.textNumber) && (!budgetPart || Boolean(p.budgetPart)));

@@ -53,6 +53,7 @@ const paragraphSchema = z.array(
     subAmendments: z.array(z.string()),
     textNumber: z.string().nullable(),
     budgetPart: z.enum(["I", "II"]).nullable().optional(),
+    textRectified: z.boolean().optional(),
     text: z.string(),
   })
 );
