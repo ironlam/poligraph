@@ -38,3 +38,36 @@ curl -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, li
 ```
 
 Un agent utilisateur ancien renvoie du TTF, bien plus lourd, sans que rien ne le signale.
+
+## Polices des images Open Graph (`og/`)
+
+Satori, qui dessine les images `opengraph-image`, ne lit ni le WOFF2 ni une police variable. Le
+dossier `og/` contient donc des instances TTF statiques dérivées des fichiers ci-dessus, chargées
+par `src/lib/og/fonts.ts`. Une route qui les lit doit les déclarer dans `outputFileTracingIncludes`
+(`next.config.ts`), sinon elles manquent à la fonction déployée.
+
+Les tables `GPOS` et `GDEF` sont retirées. Satori applique le crénage au dessin d'un mot mais pas à
+sa mesure : chaque paire crénée (« Vo », « L'A ») laissait une espace élargie après le mot.
+
+Régénération (fonttools 4.68) :
+
+```python
+from fontTools.ttLib import TTFont
+from fontTools.varLib.instancer import instantiateVariableFont
+
+def save(font, path):
+    for table in ("GPOS", "GDEF"):
+        if table in font:
+            del font[table]
+    font.flavor = None
+    font.save(path)
+
+for weight in (700, 800):
+    variable = TTFont("src/fonts/Outfit-latin-variable.woff2")
+    save(instantiateVariableFont(variable, {"wght": weight}), f"src/fonts/og/Outfit-latin-{weight}.ttf")
+for weight in (400, 700):
+    save(
+        TTFont(f"src/fonts/AtkinsonHyperlegible-latin-{weight}.woff2"),
+        f"src/fonts/og/AtkinsonHyperlegible-latin-{weight}.ttf",
+    )
+```

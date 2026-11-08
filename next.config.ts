@@ -37,6 +37,7 @@ const nextConfig: NextConfig = {
     "/elections/municipales-2026/communes/[inseeCode]/opengraph-image": [
       "./public/data/departements.geojson",
     ],
+    "/parlement/votes/[slug]/opengraph-image": ["./src/fonts/og/*.ttf"],
   },
   experimental: {
     // Next 16.3 enables its TypeScript CLI subprocess by default. Its output capture is empty on
