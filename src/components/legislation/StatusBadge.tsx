@@ -16,6 +16,7 @@ const STATUS_ICONS: Record<DossierStatus, string> = {
   CONSEIL_CONSTITUTIONNEL: "⚖️",
   ADOPTE: "✅",
   REJETE: "❌",
+  REJETE_NAVETTE: "↩️",
   RETIRE: "⏸️",
   CADUQUE: "🕐",
 };

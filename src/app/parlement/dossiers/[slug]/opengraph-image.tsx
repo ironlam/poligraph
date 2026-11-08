@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<DossierStatus, string> = {
   CONSEIL_CONSTITUTIONNEL: "Conseil constitutionnel",
   ADOPTE: "Adopté",
   REJETE: "Rejeté",
+  REJETE_NAVETTE: "Rejeté, procédure poursuivie",
   RETIRE: "Retiré",
   CADUQUE: "Caduc",
 };
@@ -21,6 +22,7 @@ const STATUS_LABELS: Record<DossierStatus, string> = {
 const STATUS_COLORS: Partial<Record<DossierStatus, string>> = {
   ADOPTE: "#22c55e",
   REJETE: "#ef4444",
+  REJETE_NAVETTE: "#f97316",
   RETIRE: "#6b7280",
   CADUQUE: "#6b7280",
   EN_COMMISSION: "#f59e0b",

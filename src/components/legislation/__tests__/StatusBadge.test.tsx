@@ -17,6 +17,7 @@ describe("StatusBadge", () => {
       ["CONSEIL_CONSTITUTIONNEL", "Conseil constitutionnel"],
       ["ADOPTE", "Adopté"],
       ["REJETE", "Rejeté"],
+      ["REJETE_NAVETTE", "Rejeté, procédure poursuivie"],
       ["RETIRE", "Retiré"],
       ["CADUQUE", "Caduc"],
     ];

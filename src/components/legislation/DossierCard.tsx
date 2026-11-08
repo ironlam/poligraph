@@ -32,6 +32,7 @@ const STATUS_BORDER_COLORS: Record<DossierStatus, string> = {
   CONSEIL_CONSTITUTIONNEL: "border-l-purple-400 dark:border-l-purple-600",
   ADOPTE: "border-l-green-500 dark:border-l-green-600",
   REJETE: "border-l-red-400 dark:border-l-red-600",
+  REJETE_NAVETTE: "border-l-orange-400 dark:border-l-orange-600",
   RETIRE: "border-l-gray-400 dark:border-l-gray-500",
   CADUQUE: "border-l-gray-300 dark:border-l-gray-600",
 };

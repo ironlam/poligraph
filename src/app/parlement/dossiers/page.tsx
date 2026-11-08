@@ -150,6 +150,7 @@ export default async function AssembleePage({ searchParams }: PageProps) {
     "DEPOSE",
     "EN_COMMISSION",
     "EN_COURS",
+    "REJETE_NAVETTE",
     "CONSEIL_CONSTITUTIONNEL",
   ];
   const openCount = openStatuses.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
