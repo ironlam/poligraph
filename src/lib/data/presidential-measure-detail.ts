@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import type {
   Chamber,
@@ -102,11 +103,11 @@ export type PublicPresidentialMeasureDetail = {
   }>;
 };
 
-async function loadPublicPresidentialMeasureDetail(electionSlug: string, measureSlug: string) {
+async function loadPublicPresidentialMeasureDetail(electionId: string, measureSlug: string) {
   const row = await db.measure.findFirst({
     where: {
       slug: measureSlug,
-      election: { slug: electionSlug },
+      electionId,
       ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
     },
     select: {
@@ -398,7 +399,28 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
   };
 }
 
-export const getPublicPresidentialMeasureDetail = cache(loadPublicPresidentialMeasureDetail);
+// A cache miss fans out into some twenty queries, which a pool of four serves in waves: uncached,
+// every crawler hit queued on pg-pool.connect for seconds (POLIGRAPH-24, 26 to 29). Every measure
+// write calls invalidateMeasureTags, which busts `election-measures`; candidacy publication busts
+// `election-candidacies`. The election is resolved first so that a not-found answer carries the
+// tags too, and a measure published later under that slug is not hidden until the timer expires.
+async function getCachedPublicPresidentialMeasureDetail(
+  electionSlug: string,
+  measureSlug: string
+): Promise<PublicPresidentialMeasureDetail | null> {
+  "use cache";
+  cacheLife("synced");
+  const election = await db.election.findUnique({
+    where: { slug: electionSlug },
+    select: { id: true },
+  });
+  if (!election) return null;
+  cacheTag(`election-measures:${election.id}`);
+  cacheTag(`election-candidacies:${election.id}`);
+  return loadPublicPresidentialMeasureDetail(election.id, measureSlug);
+}
+
+export const getPublicPresidentialMeasureDetail = cache(getCachedPublicPresidentialMeasureDetail);
 
 export async function getPublicPresidentialMeasureSlugByLegacyId(
   electionSlug: string,
