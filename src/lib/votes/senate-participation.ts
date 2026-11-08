@@ -26,6 +26,8 @@ export interface SenateVoteSourceAssessment {
   reason: string | null;
 }
 
+export const PRESIDENT_ROW_MISSING_REASON = "president_row_missing";
+
 const POSITION_BY_CODE: Record<SenateVoteSourceCode, VotePosition> = {
   p: "POUR",
   c: "CONTRE",
@@ -127,7 +129,13 @@ export function assessSenateVoteSource(
     return { status: "INCOMPLETE", expectedCount, observedCount, reason: "totals_mismatch" };
   }
 
-  return { status: "COMPLETE", expectedCount, observedCount, reason: null };
+  // The DB check ScrutinVoteImport_complete_check only accepts this gap with this exact reason.
+  return {
+    status: "COMPLETE",
+    expectedCount,
+    observedCount,
+    reason: oneNonVoterMissing ? PRESIDENT_ROW_MISSING_REASON : null,
+  };
 }
 
 export interface SenateParticipationCounts {
