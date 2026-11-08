@@ -15,6 +15,11 @@ import { generateCitizenImpact, type CitizenImpactInput } from "@/services/scrut
 import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-substance/coherence";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
 import { findUngroundedNames } from "@/services/scrutin-substance/grounding";
+import {
+  buildProcedureFact,
+  findProceduralOverclaims,
+} from "@/services/scrutin-substance/procedure-claims";
+import { classifyVoteScope } from "@/lib/scrutin-scope";
 import { resolveDebateContextForScrutin } from "@/services/scrutin-substance/debate-context-resolver";
 import type { SubstanceDepth } from "@/services/scrutin-policy-title/types";
 import { fetchScrutinContext } from "@/services/scrutin-context-fetcher";
@@ -30,6 +35,7 @@ export type CitizenImpactOutcome =
   | "low_confidence"
   | "incoherent"
   | "ungrounded"
+  | "overclaim"
   | "no_substance"
   | "missing"
   | "error";
@@ -53,6 +59,8 @@ export interface ScrutinCitizenImpactsResult {
   skippedIncoherent: number;
   /** Texts citing a proper name found in none of the sources given to the model. */
   skippedUngrounded: number;
+  /** Texts claiming a sequel, a promulgation or a wrong scope that no source states. */
+  skippedOverclaim: number;
   /** Amendment votes not generated: no amendment-level official text. */
   skippedNoSubstance: number;
   contextHits: number;
@@ -105,6 +113,7 @@ export async function prepareCitizenImpactInput(
       votingDate: true,
       sourceUrl: true,
       dossierLegislatifId: true,
+      dossierLegislatif: { select: { status: true } },
       type: true,
       policyTitle: { select: { policyTitle: true, policySubtitle: true } },
       amendmentLinks: { select: { amendmentId: true } },
@@ -205,6 +214,12 @@ export async function prepareCitizenImpactInput(
     substanceBlocks: resolved.blocks,
     substanceDepth: resolved.substanceDepth,
     hasLinkedAmendment: scrutin.amendmentLinks.length > 0,
+    procedureFact: buildProcedureFact({
+      scope: classifyVoteScope(scrutin.title),
+      result: scrutin.result as "ADOPTED" | "REJECTED",
+      chamber: scrutin.chamber as "AN" | "SENAT",
+      dossierStatus: scrutin.dossierLegislatif?.status ?? null,
+    }),
     links,
   };
 
@@ -236,6 +251,7 @@ export function citizenImpactSources(prepared: PreparedCitizenImpact): string[] 
     i.dossierSummary,
     i.sourcePageText,
     i.debateExcerpt,
+    i.procedureFact,
     ...i.substanceBlocks.map((b) => b.text),
     i.links.dossierLabel,
     ...i.links.relatedVotes.map((v) => v.label),
@@ -273,6 +289,7 @@ export async function generateScrutinCitizenImpacts(options?: {
     skipped: 0,
     skippedIncoherent: 0,
     skippedUngrounded: 0,
+    skippedOverclaim: 0,
     skippedNoSubstance: 0,
     contextHits: 0,
     errors: [],
@@ -347,6 +364,20 @@ export async function generateScrutinCitizenImpacts(options?: {
           detail: `confiance ${result.confidence}`,
           text: result.citizenImpact,
         });
+        continue;
+      }
+
+      // Sequel, promulgation and scope claims the sources do not carry are refused, not
+      // repaired: the row stays null and a later run regenerates it.
+      const overclaims = findProceduralOverclaims(result.citizenImpact, {
+        scope: classifyVoteScope(prepared.title),
+        hasProcedureFact: Boolean(prepared.input.procedureFact),
+      });
+      if (overclaims.length > 0) {
+        const detail = overclaims.map((o) => `${o.code} « ${o.excerpt} »`).join(" ; ");
+        stats.skippedOverclaim++;
+        stats.outcomes.push({ ...row, outcome: "overclaim", detail, text: result.citizenImpact });
+        console.warn(`[citizen-impacts] NOT PERSISTED for ${prepared.slug ?? id} (${detail})`);
         continue;
       }
 

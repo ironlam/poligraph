@@ -9,6 +9,7 @@ import { MAX_DISCUSSION_CHARS } from "@/services/scrutin-substance/debate-discus
 
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
 import { escapeXmlText } from "@/lib/text/escape-xml";
+import { classifyVoteScope } from "@/lib/scrutin-scope";
 import type { SubstanceTextBlock, SubstanceDepth } from "@/services/scrutin-policy-title/types";
 
 const MISTRAL_MODEL = "mistral-large-latest";
@@ -45,6 +46,11 @@ export interface CitizenImpactInput {
   substanceBlocks: SubstanceTextBlock[];
   substanceDepth: SubstanceDepth | null;
   hasLinkedAmendment: boolean;
+  /**
+   * Official fact about what follows this vote, built in code from the dossier
+   * data (never by the model). Null means nothing may be said about the sequel.
+   */
+  procedureFact?: string | null;
   links: {
     dossierUrl: string | null;
     dossierLabel: string | null;
@@ -128,6 +134,12 @@ SOURCES OFFICIELLES - RÈGLES PRIORITAIRES :
 22. Si <sources-officielles> ne permet pas d'identifier une mesure concrète, ne l'invente pas à partir du contexte général : confidence < 40.
 24. Dans <debat>, les arguments marqués « Argument commun à la discussion » concernent plusieurs amendements : présente-les explicitement comme communs, sans les attribuer au seul amendement cible. Les raisons d’un vote ne se déduisent jamais des seuls compteurs.
 23. Une source type="parentAmendment" est l'amendement que le sous-amendement voté modifie : elle sert UNIQUEMENT à expliquer ce qui est modifié. Le vote porte sur la modification (type="subAmendment"). Ne présente jamais le résultat du vote comme l'adoption ou le rejet de l'amendement modifié.
+
+PORTÉE ET SUITE DE LA PROCÉDURE - RÈGLES CRITIQUES :
+25. Si la ligne PORTÉE DU VOTE indique une partie du texte ou un article, le vote porte UNIQUEMENT là-dessus. JAMAIS "le projet de loi dans son intégralité", "le texte entier", "en bloc", sauf si la ligne SUITE DE LA PROCÉDURE l'établit. Nommer la partie concernée.
+26. Une source type="dossier" est l'exposé des motifs du texte ENTIER, jamais le contenu précis d'un vote. Pour un vote sur une partie ou un article, décrire la partie par son intitulé seulement : ne lister AUCUNE mesure, aucun impôt, aucun secteur particulier.
+27. Sur la suite de la procédure, n'écrire que ce que la ligne SUITE DE LA PROCÉDURE (donnée officielle) indique. Sans cette ligne, RIEN sur la suite : ni "le gouvernement devra...", ni renvoi, ni Sénat, ni blocage, ni retard, ni délai.
+28. JAMAIS « en vigueur », "appliqué" ou "applicable" : aucun texte voté ici n'est présenté comme promulgué.
 
 RÉPONSE : Tu DOIS répondre en JSON avec exactement deux champs :
 - "citizen_impact" : l'explication en markdown structuré
@@ -331,6 +343,26 @@ export function buildUserMessage(input: CitizenImpactInput): string {
   sections.push(`Date : ${input.votingDate}`);
   if (input.theme) sections.push(`Thème : ${input.theme}`);
 
+  // Un vote sur une partie ou un article n'est pas un vote sur le texte entier : le titre
+  // officiel seul ne suffit pas, le modèle lisait « projet de loi » et parlait de tout le texte.
+  const scope = classifyVoteScope(input.title);
+  if (scope === "PART") {
+    sections.push(
+      "PORTÉE DU VOTE : ce scrutin porte UNIQUEMENT sur une PARTIE du texte, pas sur le texte entier. Ne jamais le présenter comme un vote sur l'ensemble du projet de loi."
+    );
+  } else if (scope === "ARTICLE") {
+    sections.push(
+      "PORTÉE DU VOTE : ce scrutin porte UNIQUEMENT sur un article du texte, pas sur le texte entier."
+    );
+  } else if (scope === "WHOLE") {
+    sections.push("PORTÉE DU VOTE : ce scrutin porte sur l'ensemble du texte.");
+  }
+  sections.push(
+    input.procedureFact
+      ? `SUITE DE LA PROCÉDURE (donnée officielle, SEULE source sur la suite) : ${input.procedureFact}`
+      : "SUITE DE LA PROCÉDURE : aucune donnée fournie. N'affirmer RIEN sur ce qui se passera ensuite (renvoi, nouvelle version, Sénat, délais, blocage)."
+  );
+
   if (input.debateExcerpt && input.debateExcerpt.length <= MAX_DISCUSSION_CHARS) {
     sections.push("");
     sections.push(
@@ -347,8 +379,13 @@ export function buildUserMessage(input: CitizenImpactInput): string {
   if (hasOfficial) {
     // OFFICIAL amendment text — the only basis for "Ce qui était proposé".
     sections.push("");
+    // L'exposé des motifs du dossier couvre le texte entier : l'annoncer comme « texte exact
+    // de l'amendement voté » lui faisait décrire tout le projet de loi.
+    const dossierOnly = input.substanceBlocks.every((b) => b.sourceType === "dossier");
     sections.push(
-      'SOURCES OFFICIELLES (texte exact de l\'amendement voté — SEULE base pour décrire la mesure dans "Ce qui était proposé") :'
+      dossierOnly
+        ? "EXPOSÉ DES MOTIFS DU DOSSIER (document officiel sur l'ENSEMBLE du texte, PAS le contenu précis de ce vote) :"
+        : 'SOURCES OFFICIELLES (texte exact de l\'amendement voté — SEULE base pour décrire la mesure dans "Ce qui était proposé") :'
     );
     sections.push("<sources-officielles>");
     sections.push(buildOfficialSourcesXml(input.substanceBlocks));
