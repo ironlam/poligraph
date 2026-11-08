@@ -135,6 +135,16 @@ describe("parseSelection", () => {
   });
 });
 
+describe("buildVerificationPrompt, why and not what", () => {
+  it("asks the verifier to refuse a reason that only describes the measure", () => {
+    const prompt = buildVerificationPrompt({
+      reasons: { for: [], against: [], citedFor: [], citedAgainst: [] },
+    });
+    expect(prompt).toContain("POURQUOI approuver ou refuser");
+    expect(prompt).toContain("décrit la mesure");
+  });
+});
+
 describe("buildSelectionPrompt", () => {
   const prompt = buildSelectionPrompt({
     title: "l'amendement n° 1486 de M. Loubet",
