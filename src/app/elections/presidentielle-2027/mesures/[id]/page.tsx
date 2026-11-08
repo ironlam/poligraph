@@ -157,9 +157,9 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href={comparisonUrl}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] bg-primary px-5 font-bold text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-5 font-bold text-primary hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              Comparer avec un autre candidat
+              Comparer les programmes sur {themeLabel.toLocaleLowerCase("fr")}
               <ArrowRight aria-hidden="true" className="h-4 w-4" />
             </Link>
           </div>
