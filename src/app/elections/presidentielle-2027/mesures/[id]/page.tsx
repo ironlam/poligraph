@@ -38,6 +38,17 @@ const ELECTION_SLUG = "presidentielle-2027";
 
 type PageProps = { params: Promise<{ id: string }> };
 
+// Le titre d'une mesure est une phrase à lire, pas un nom : au-delà de 100 signes, il descend à
+// l'échelle d'un titre de section, en graisse 700, pour tenir en trois lignes environ.
+const LONG_MEASURE_TITLE_LENGTH = 100;
+
+function measureTitleClass(text: string): string {
+  if (text.length > LONG_MEASURE_TITLE_LENGTH) {
+    return "max-w-[52ch] text-xl font-bold leading-[1.3] sm:text-2xl";
+  }
+  return "max-w-[36ch] text-3xl font-extrabold leading-[1.15] sm:text-4xl";
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const measure = await getPublicPresidentialMeasureDetail(ELECTION_SLUG, id);
@@ -83,8 +94,7 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
     text: measure.text,
     details: measure.details,
   });
-  const titleClass =
-    measure.text.length > 100 ? "text-[1.375rem] sm:text-3xl" : "text-3xl sm:text-4xl";
+  const titleClass = measureTitleClass(measure.text);
 
   return (
     <main className="pb-14">
@@ -140,11 +150,7 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
           >
             {themeLabel}
           </Link>
-          <h1
-            className={`max-w-[36ch] font-display font-extrabold leading-[1.15] tracking-tight ${titleClass}`}
-          >
-            {measure.text}
-          </h1>
+          <h1 className={`font-display tracking-tight ${titleClass}`}>{measure.text}</h1>
           <p className="mt-3 text-sm text-muted-foreground">
             Revue par Poligraph le {formatDate(measure.reviewedAt)}.{" "}
             <Link
