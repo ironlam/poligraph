@@ -20,9 +20,12 @@ export interface ProceduralOverclaim {
 // `\b` ne marche pas autour d'une lettre accentuée en JavaScript : lookarounds Unicode.
 const L = String.raw`\p{L}`;
 
-// Aucun décryptage ne reçoit d'information de promulgation : « en vigueur » est toujours inventé.
+// Aucun décryptage ne reçoit d'information de promulgation : dire qu'une mesure « entre en
+// vigueur » est toujours inventé. Seule la forme affirmative est visée : « le droit en vigueur »,
+// « reste en vigueur », « avant d'entrer en vigueur » et « n'entrera pas en vigueur » sont
+// courants en base et justes (relevé sur 1 112 décryptages).
 const EN_VIGUEUR = new RegExp(
-  String.raw`(?<!${L})(?:en\s+vigueur|entr(?:e|era|ent|erait)\s+en\s+application)(?!${L})`,
+  String.raw`(?<!n['’])(?<!${L})(?:entr(?:e|era|ent|erait)(?:\s+(?:donc|désormais|alors|immédiatement|aussitôt))?\s+en\s+(?:vigueur|application)|sera\s+en\s+vigueur)(?!${L})`,
   "iu"
 );
 
@@ -37,12 +40,17 @@ const anyOf = (patterns: string[]) =>
 // Jugements de valeur déguisés en fait ; la neutralité les interdit déjà dans le prompt.
 const JUGEMENT = anyOf([String.raw`indispensables?`, String.raw`essentiel(?:le)?s?`]);
 
-// Spéculation sur les conséquences : aucune donnée officielle ne la porte, jamais.
-const SUITE_SPECULATION = anyOf([
+// Spéculation propre à la procédure : aucune donnée officielle ne la porte, pour aucun vote.
+const SUITE_STRICT = anyOf([
   String.raw`devra\s+(?:le\s+|la\s+|ce\s+|cette\s+)?(?:modifier|représenter|réexaminer|revoir|redéposer|retravailler)`,
+  String.raw`doit\s+(?:maintenant|désormais)`,
+]);
+
+// Vocabulaire qui décrit aussi légitimement une mesure d'amendement (« blocage des loyers »,
+// « négociations commerciales ») : il n'est suspect que dans un texte sur le vote d'un texte.
+const SUITE_WIDE = anyOf([
   String.raw`bloqu(?:e|er|era|ent|age)`,
   String.raw`retarde(?:r|ra)?`,
-  String.raw`doit\s+(?:maintenant|désormais)`,
   String.raw`suspen(?:d|dent|dra|du|dre)`,
   String.raw`temporairement`,
   String.raw`négociations?`,
@@ -102,9 +110,11 @@ export function findProceduralOverclaims(
   if ((opts.scope === "PART" || opts.scope === "ARTICLE") && !opts.hasProcedureFact) {
     check("PORTEE", PORTEE);
   }
-  check("JUGEMENT", JUGEMENT);
-  const speculation = text.match(SUITE_SPECULATION);
-  const deroulement = opts.hasProcedureFact ? null : text.match(SUITE_DEROULEMENT);
+  const aboutTextVote = opts.scope !== "OTHER";
+  if (aboutTextVote) check("JUGEMENT", JUGEMENT);
+  const speculation = text.match(SUITE_STRICT) ?? (aboutTextVote ? text.match(SUITE_WIDE) : null);
+  const deroulement =
+    opts.hasProcedureFact || !aboutTextVote ? null : text.match(SUITE_DEROULEMENT);
   const suite = speculation ?? deroulement;
   if (suite) found.push({ code: "SUITE", excerpt: excerptAround(text, suite) });
   return found;

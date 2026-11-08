@@ -41,6 +41,34 @@ describe("findProceduralOverclaims", () => {
     ).toEqual(["SUITE"]);
   });
 
+  it("refuse « entre en vigueur » sous ses formes réellement observées en base", () => {
+    const opts = { scope: "OTHER", hasProcedureFact: false } as const;
+    expect(codes("Cela signifie que cette mesure entre en vigueur.", opts)).toEqual(["EN_VIGUEUR"]);
+    expect(codes("La taxe entrera donc en vigueur dès 2027.", opts)).toEqual(["EN_VIGUEUR"]);
+    expect(codes("L'obligation entre désormais en vigueur.", opts)).toEqual(["EN_VIGUEUR"]);
+  });
+
+  it("ne prend pas le vocabulaire d'une mesure d'amendement pour une spéculation de procédure", () => {
+    const opts = { scope: "OTHER", hasProcedureFact: false } as const;
+    expect(codes("L'amendement propose un blocage temporaire des loyers.", opts)).toEqual([]);
+    expect(codes("Il bloque les prix pendant les négociations commerciales.", opts)).toEqual([]);
+    expect(codes("Ce dispositif est essentiel pour les agriculteurs, dit l'auteur.", opts)).toEqual(
+      []
+    );
+    expect(codes("Le produit sera soumis à une taxe de 2 %.", opts)).toEqual([]);
+    // La spéculation propre à la procédure reste refusée pour tout vote.
+    expect(codes("Le gouvernement devra le modifier ou le représenter.", opts)).toEqual(["SUITE"]);
+  });
+
+  it("laisse passer le droit existant et les formes neutres ou négatives", () => {
+    const opts = { scope: "OTHER", hasProcedureFact: false } as const;
+    expect(codes("Les règles actuellement en vigueur restent identiques.", opts)).toEqual([]);
+    expect(codes("Le texte doit être promulgué avant d'entrer en vigueur.", opts)).toEqual([]);
+    expect(codes("La mesure rejetée n'entrera pas en vigueur.", opts)).toEqual([]);
+    expect(codes("Le débat porte sur la date d'entrée en vigueur.", opts)).toEqual([]);
+    expect(codes("Le taux de 20 % reste donc en vigueur.", opts)).toEqual([]);
+  });
+
   it("refuse « en vigueur » quel que soit le vote", () => {
     expect(
       codes("La mesure entre en vigueur dès le 1er janvier.", {
