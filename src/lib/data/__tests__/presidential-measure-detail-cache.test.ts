@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   cacheTag: vi.fn(),
+  revalidateTags: vi.fn(),
   electionFindUnique: vi.fn(),
   measureFindFirst: vi.fn(),
   measureFindMany: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ cacheTag: mocks.cacheTag, cacheLife: vi.fn() }));
+vi.mock("@/lib/cache", () => ({ revalidateTags: mocks.revalidateTags }));
 vi.mock("@/lib/db", () => ({
   db: {
     election: { findUnique: mocks.electionFindUnique },
@@ -22,6 +24,7 @@ vi.mock("@/lib/data/measure-parliament-links", () => ({
 }));
 
 import { getPublicPresidentialMeasureDetail } from "@/lib/data/presidential-measure-detail";
+import { invalidateMeasureTags } from "@/lib/measures/cache";
 
 const publishedRow = {
   id: "measure-1",
@@ -71,8 +74,40 @@ describe("page mesure : tags de cache", () => {
 
     expect(detail?.id).toBe("measure-1");
     expect(tags()).toContain("measure:measure-1");
+    expect(tags()).toContain("candidacy-measure-visibility:candidacy-1");
     expect(tags()).toContain("election-candidacies:election-1");
     expect(tags()).not.toContain("election-measures:election-1");
+  });
+
+  it("invalide les fiches liées lors d'un retrait uniquement", async () => {
+    mocks.measureFindFirst.mockResolvedValue(publishedRow);
+    mocks.measureFindMany.mockResolvedValue([
+      {
+        slug: "une-mesure-liee",
+        publishedRevision: { text: "Une mesure liée", subtopics: [] },
+        candidacy: {
+          id: "candidacy-2",
+          candidateName: "Autre Personne",
+          party: null,
+          politician: { slug: "autre-personne" },
+        },
+      },
+    ]);
+    await getPublicPresidentialMeasureDetail("presidentielle-2027", "une-mesure");
+
+    invalidateMeasureTags("measure-2", "election-1");
+    invalidateMeasureTags("measure-2", "election-1", {
+      visibilityReduced: true,
+      candidacyId: "candidacy-2",
+    });
+
+    const publicationTags = ["measure:measure-2", "election-measures:election-1"];
+    const removalTag = "candidacy-measure-visibility:candidacy-2";
+    expect(tags()).toContain(removalTag);
+    expect(mocks.revalidateTags).toHaveBeenNthCalledWith(1, publicationTags, undefined);
+    expect(mocks.revalidateTags).toHaveBeenNthCalledWith(2, [...publicationTags, removalTag], {
+      expire: 0,
+    });
   });
 
   it("une mesure introuvable reste invalidée par toute publication de l'élection", async () => {

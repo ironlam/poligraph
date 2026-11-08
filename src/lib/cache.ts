@@ -317,7 +317,10 @@ const EXPORT_TAGS_BY_CACHE_TAG: Record<string, readonly string[]> = {
  * Revalidate specific tags by name. Defaults to the "minutes" cacheLife
  * profile; pass `profile` to override for slow-changing data.
  */
-export function revalidateTags(tags: string[], profile: string = DEFAULT_PROFILE): void {
+export function revalidateTags(
+  tags: string[],
+  profile: Parameters<typeof revalidateTag>[1] = DEFAULT_PROFILE
+): void {
   for (const tag of tags) {
     revalidateTag(tag, profile);
   }

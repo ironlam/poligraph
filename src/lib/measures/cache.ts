@@ -14,16 +14,24 @@ import { revalidateTags } from "@/lib/cache";
  * Throwing here would be worse than logging: the transaction is already committed, so the
  * caller would believe the publication failed when it succeeded.
  */
-export function invalidateMeasureTags(measureId: string, electionId: string): void {
+export function invalidateMeasureTags(
+  measureId: string,
+  electionId: string,
+  {
+    visibilityReduced = false,
+    candidacyId = null,
+  }: {
+    visibilityReduced?: boolean;
+    candidacyId?: string | null;
+  } = {}
+): void {
   try {
-    // Two specific tags, never a mass revalidation and never the global tag: purging the
-    // global tag once blew through this project's hosting spend cap.
-    //
-    // Delegates to src/lib/cache.ts rather than calling revalidateTag directly: on this
-    // Next version the second `profile` argument is mandatory, and that module already
-    // owns the default. A second invalidation mechanism next to it would be one more
-    // thing to keep in sync.
-    revalidateTags([`measure:${measureId}`, `election-measures:${electionId}`]);
+    const tags = [`measure:${measureId}`, `election-measures:${electionId}`];
+    if (visibilityReduced && candidacyId) {
+      // Other fiches can display this candidacy's measures as related suggestions.
+      tags.push(`candidacy-measure-visibility:${candidacyId}`);
+    }
+    revalidateTags(tags, visibilityReduced ? { expire: 0 } : undefined);
   } catch (error) {
     // The only trace of a lost invalidation, which leaves a page stale until its
     // cacheLife profile expires.

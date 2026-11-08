@@ -285,6 +285,7 @@ async function loadPublicPresidentialMeasureDetail(electionId: string, measureSl
         },
         candidacy: {
           select: {
+            id: true,
             candidateName: true,
             party: { select: { name: true, shortName: true } },
             politician: { select: { slug: true } },
@@ -319,11 +320,12 @@ async function loadPublicPresidentialMeasureDetail(electionId: string, measureSl
 
   // One proposal per other personality keeps this a navigation aid rather than another long list.
   // Alphabetical sorting is explicit and carries no editorial ranking.
-  const relatedMeasures = relatedRows
+  const relatedMeasuresWithCandidacy = relatedRows
     .flatMap((related) => {
       if (!related.publishedRevision || !related.candidacy?.politician) return [];
       return [
         {
+          candidacyId: related.candidacy.id,
           slug: related.slug,
           text: related.publishedRevision.text,
           candidateName: related.candidacy.candidateName,
@@ -341,6 +343,11 @@ async function loadPublicPresidentialMeasureDetail(electionId: string, measureSl
         all.findIndex((candidate) => candidate.candidateSlug === related.candidateSlug) === index
     )
     .slice(0, 6);
+
+  cacheTag(`measure:${row.id}`, `candidacy-measure-visibility:${candidate.id}`);
+  for (const related of relatedMeasuresWithCandidacy) {
+    cacheTag(`candidacy-measure-visibility:${related.candidacyId}`);
+  }
 
   return {
     id: row.id,
@@ -395,20 +402,15 @@ async function loadPublicPresidentialMeasureDetail(electionId: string, measureSl
       institutionScope: link.institutionScope,
       scrutin: link.scrutin,
     })),
-    relatedMeasures,
+    relatedMeasures: relatedMeasuresWithCandidacy.map(
+      ({ candidacyId: _candidacyId, ...related }) => related
+    ),
   };
 }
 
-// A cache miss fans out into some twenty queries, which a pool of four serves in waves: uncached,
-// every crawler hit queued on pg-pool.connect for seconds (POLIGRAPH-24, 26 to 29). Every measure
-// write calls invalidateMeasureTags, which busts `measure:<id>` and `election-measures`.
-//
-// A found page carries `measure:<id>`, never `election-measures`: a batch publishes a thousand
-// revisions in a day, each one busting that tag, and every one of the 5,000 pages would then
-// regenerate (about 33 ISR write units each) on every visit. Accepted cost: the related-measures
-// block may show a neighbour withdrawn since, until the 24h backstop or a manual revalidation.
-// A not-found answer is rare and keeps `election-measures`, so a measure published later under
-// that slug appears at once.
+// The per-measure tag keeps publication batches from invalidating all fiches. Removals
+// also invalidate related measures shown on other fiches. A missing slug uses the
+// election-wide publication tag so a later publication can refresh the cached 404.
 async function getCachedPublicPresidentialMeasureDetail(
   electionSlug: string,
   measureSlug: string
@@ -424,8 +426,6 @@ async function getCachedPublicPresidentialMeasureDetail(
   const detail = await loadPublicPresidentialMeasureDetail(election.id, measureSlug);
   if (detail === null) {
     cacheTag(`election-measures:${election.id}`);
-  } else {
-    cacheTag(`measure:${detail.id}`);
   }
   return detail;
 }

@@ -811,7 +811,7 @@ export async function publishMeasureRevision(input: {
   expectedUpdatedAt?: Date;
   batchKind?: MeasureBatchKind;
 }): Promise<void> {
-  const { electionId } = await db.$transaction(async (tx) => {
+  const { electionId, candidacyId, visibilityReduced } = await db.$transaction(async (tx) => {
     await lockMeasure(tx, input.measureId);
 
     const measure = await tx.measure.findUniqueOrThrow({
@@ -942,21 +942,21 @@ export async function publishMeasureRevision(input: {
     // In the same transaction: the database must never expose a new revision while the
     // index still holds the previous text. Called last, so it reads the pointers this
     // transaction has just written.
-    if (measure.candidacyId && ficheWasPublic !== ficheIsPublic) {
-      // A publication can only keep the fiche stable or open it. When it opens the fiche, no
-      // other qualifying published measure existed before this one, so every other measure keeps
-      // its visibility. Enumerating the whole programme would only lengthen the transaction and
-      // can exhaust Prisma's timeout on large corpora.
-      await syncCandidacySearchDocument(tx, measure.candidacyId);
-      await syncSearchDocument(tx, input.measureId);
+    const visibilityReduced = ficheWasPublic && !ficheIsPublic;
+    if (measure.candidacyId && visibilityReduced) {
+      // A revision can replace the last primary source and close the whole fiche.
+      await syncPresidentialSearchDocumentsForCandidacy(tx, measure.candidacyId);
     } else {
+      if (measure.candidacyId && !ficheWasPublic && ficheIsPublic) {
+        await syncCandidacySearchDocument(tx, measure.candidacyId);
+      }
       await syncSearchDocument(tx, input.measureId);
     }
 
-    return { electionId: measure.electionId };
+    return { electionId: measure.electionId, candidacyId: measure.candidacyId, visibilityReduced };
   });
 
-  invalidateMeasureTags(input.measureId, electionId);
+  invalidateMeasureTags(input.measureId, electionId, { visibilityReduced, candidacyId });
 }
 
 /**
@@ -984,7 +984,7 @@ export async function depublishMeasure(input: {
     throw new MeasureValidationError("Le responsable de la dépublication doit être identifié");
   }
 
-  const { electionId } = await db.$transaction(async (tx) => {
+  const { electionId, candidacyId } = await db.$transaction(async (tx) => {
     await lockMeasure(tx, input.measureId);
 
     const measure = await tx.measure.findUniqueOrThrow({
@@ -1030,10 +1030,10 @@ export async function depublishMeasure(input: {
       await syncSearchDocument(tx, input.measureId);
     }
 
-    return { electionId: measure.electionId };
+    return { electionId: measure.electionId, candidacyId: measure.candidacyId };
   });
 
-  invalidateMeasureTags(input.measureId, electionId);
+  invalidateMeasureTags(input.measureId, electionId, { visibilityReduced: true, candidacyId });
 }
 
 /**
@@ -1063,7 +1063,7 @@ export async function withdrawMeasure(input: {
     throw new MeasureValidationError("Un retrait exige une URL et un libellé de source, les deux");
   }
 
-  const { electionId } = await db.$transaction(async (tx) => {
+  const { electionId, candidacyId } = await db.$transaction(async (tx) => {
     await lockMeasure(tx, input.measureId);
 
     const measure = await tx.measure.findUniqueOrThrow({
@@ -1090,8 +1090,8 @@ export async function withdrawMeasure(input: {
       await syncSearchDocument(tx, input.measureId);
     }
 
-    return { electionId: measure.electionId };
+    return { electionId: measure.electionId, candidacyId: measure.candidacyId };
   });
 
-  invalidateMeasureTags(input.measureId, electionId);
+  invalidateMeasureTags(input.measureId, electionId, { visibilityReduced: true, candidacyId });
 }
