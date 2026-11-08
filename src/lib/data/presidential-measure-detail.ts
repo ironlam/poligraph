@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import type {
   Chamber,
@@ -102,11 +103,11 @@ export type PublicPresidentialMeasureDetail = {
   }>;
 };
 
-async function loadPublicPresidentialMeasureDetail(electionSlug: string, measureSlug: string) {
+async function loadPublicPresidentialMeasureDetail(electionId: string, measureSlug: string) {
   const row = await db.measure.findFirst({
     where: {
       slug: measureSlug,
-      election: { slug: electionSlug },
+      electionId,
       ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
     },
     select: {
@@ -284,6 +285,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
         },
         candidacy: {
           select: {
+            id: true,
             candidateName: true,
             party: { select: { name: true, shortName: true } },
             politician: { select: { slug: true } },
@@ -318,11 +320,12 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
 
   // One proposal per other personality keeps this a navigation aid rather than another long list.
   // Alphabetical sorting is explicit and carries no editorial ranking.
-  const relatedMeasures = relatedRows
+  const relatedMeasuresWithCandidacy = relatedRows
     .flatMap((related) => {
       if (!related.publishedRevision || !related.candidacy?.politician) return [];
       return [
         {
+          candidacyId: related.candidacy.id,
           slug: related.slug,
           text: related.publishedRevision.text,
           candidateName: related.candidacy.candidateName,
@@ -340,6 +343,11 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
         all.findIndex((candidate) => candidate.candidateSlug === related.candidateSlug) === index
     )
     .slice(0, 6);
+
+  cacheTag(`measure:${row.id}`, `candidacy-measure-visibility:${candidate.id}`);
+  for (const related of relatedMeasuresWithCandidacy) {
+    cacheTag(`candidacy-measure-visibility:${related.candidacyId}`);
+  }
 
   return {
     id: row.id,
@@ -394,11 +402,35 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
       institutionScope: link.institutionScope,
       scrutin: link.scrutin,
     })),
-    relatedMeasures,
+    relatedMeasures: relatedMeasuresWithCandidacy.map(
+      ({ candidacyId: _candidacyId, ...related }) => related
+    ),
   };
 }
 
-export const getPublicPresidentialMeasureDetail = cache(loadPublicPresidentialMeasureDetail);
+// The per-measure tag keeps publication batches from invalidating all fiches. Removals
+// also invalidate related measures shown on other fiches. A missing slug uses the
+// election-wide publication tag so a later publication can refresh the cached 404.
+async function getCachedPublicPresidentialMeasureDetail(
+  electionSlug: string,
+  measureSlug: string
+): Promise<PublicPresidentialMeasureDetail | null> {
+  "use cache";
+  cacheLife("synced");
+  const election = await db.election.findUnique({
+    where: { slug: electionSlug },
+    select: { id: true },
+  });
+  if (!election) return null;
+  cacheTag(`election-candidacies:${election.id}`);
+  const detail = await loadPublicPresidentialMeasureDetail(election.id, measureSlug);
+  if (detail === null) {
+    cacheTag(`election-measures:${election.id}`);
+  }
+  return detail;
+}
+
+export const getPublicPresidentialMeasureDetail = cache(getCachedPublicPresidentialMeasureDetail);
 
 export async function getPublicPresidentialMeasureSlugByLegacyId(
   electionSlug: string,
