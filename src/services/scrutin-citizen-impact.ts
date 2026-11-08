@@ -138,7 +138,8 @@ SOURCES OFFICIELLES - RÈGLES PRIORITAIRES :
 PORTÉE ET SUITE DE LA PROCÉDURE - RÈGLES CRITIQUES :
 25. Si la ligne PORTÉE DU VOTE indique une partie du texte ou un article, le vote porte UNIQUEMENT là-dessus. JAMAIS "le projet de loi dans son intégralité", "le texte entier", "en bloc", sauf si la ligne SUITE DE LA PROCÉDURE l'établit. Nommer la partie concernée.
 26. Une source type="dossier" est l'exposé des motifs du texte ENTIER, jamais le contenu précis d'un vote. Pour un vote sur une partie ou un article, décrire la partie par son intitulé seulement : ne lister AUCUNE mesure, aucun impôt, aucun secteur particulier.
-27. Sur la suite de la procédure, n'écrire que ce que la ligne SUITE DE LA PROCÉDURE (donnée officielle) indique. Sans cette ligne, RIEN sur la suite : ni "le gouvernement devra...", ni renvoi, ni Sénat, ni blocage, ni retard, ni délai.
+27. Sur la suite de la procédure, n'écrire que ce que la ligne SUITE DE LA PROCÉDURE (donnée officielle) indique. Sans cette ligne, RIEN sur la suite : ni "le gouvernement devra...", ni renvoi, ni Sénat, ni blocage, ni retard, ni délai. Ne jamais écrire qu'un rejet "bloque" quoi que ce soit, ni qu'une partie du texte est "indispensable" ou "essentielle".
+29. Pour un vote sur une partie du texte ou un article : "Ce qui était proposé" et "Qui est concerné ?" tiennent chacun en UNE phrase, tirée du titre et de la ligne PORTÉE DU VOTE. Aucune conséquence, aucun effet à venir, aucune explication du rôle de cette partie dans le texte.
 28. JAMAIS « en vigueur », "appliqué" ou "applicable" : aucun texte voté ici n'est présenté comme promulgué.
 
 RÉPONSE : Tu DOIS répondre en JSON avec exactement deux champs :

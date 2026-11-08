@@ -10,7 +10,7 @@
 
 import type { VoteScope } from "@/lib/scrutin-scope";
 
-export type ProceduralOverclaimCode = "EN_VIGUEUR" | "PORTEE" | "SUITE";
+export type ProceduralOverclaimCode = "EN_VIGUEUR" | "PORTEE" | "SUITE" | "JUGEMENT";
 
 export interface ProceduralOverclaim {
   code: ProceduralOverclaimCode;
@@ -31,21 +31,33 @@ const PORTEE = new RegExp(
   "iu"
 );
 
-const SUITE = new RegExp(
-  [
-    String.raw`devra\s+(?:le\s+|la\s+|ce\s+|cette\s+)?(?:modifier|représenter|réexaminer|revoir|redéposer|retravailler)`,
-    String.raw`(?:sera|va\s+être)\s+(?:transmis|renvoyé|examiné|soumis|repris|réexaminé)`,
-    String.raw`bloqu(?:e|er|era|ent|age)`,
-    String.raw`réexamin`,
-    String.raw`prochaine\s+(?:étape|lecture)`,
-    String.raw`la\s+suite\s+de\s+la\s+procédure`,
-    String.raw`doit\s+(?:maintenant|désormais)`,
-    String.raw`retarde(?:r|ra)?`,
-  ]
-    .map((p) => `(?<!${L})${p}`)
-    .join("|"),
-  "iu"
-);
+const anyOf = (patterns: string[]) =>
+  new RegExp(patterns.map((p) => `(?<!${L})${p}`).join("|"), "iu");
+
+// Jugements de valeur déguisés en fait ; la neutralité les interdit déjà dans le prompt.
+const JUGEMENT = anyOf([String.raw`indispensables?`, String.raw`essentiel(?:le)?s?`]);
+
+// Spéculation sur les conséquences : aucune donnée officielle ne la porte, jamais.
+const SUITE_SPECULATION = anyOf([
+  String.raw`devra\s+(?:le\s+|la\s+|ce\s+|cette\s+)?(?:modifier|représenter|réexaminer|revoir|redéposer|retravailler)`,
+  String.raw`bloqu(?:e|er|era|ent|age)`,
+  String.raw`retarde(?:r|ra)?`,
+  String.raw`doit\s+(?:maintenant|désormais)`,
+  String.raw`suspen(?:d|dent|dra|du|dre)`,
+  String.raw`temporairement`,
+  String.raw`négociations?`,
+  String.raw`pourr(?:ait|aient)\s+(?:évoluer|changer|être\s+modifié)`,
+  String.raw`conditionne`,
+  String.raw`restent?\s+en\s+discussion`,
+]);
+
+// Déroulement de la procédure : permis seulement quand une donnée officielle le fournit.
+const SUITE_DEROULEMENT = anyOf([
+  String.raw`(?:sera|va\s+être)\s+(?:transmis|renvoyé|examiné|soumis|repris|réexaminé)`,
+  String.raw`réexamin`,
+  String.raw`prochaine\s+(?:étape|lecture)`,
+  String.raw`la\s+suite\s+de\s+la\s+procédure`,
+]);
 
 /**
  * Seule suite de procédure que le décryptage a le droit d'énoncer : le rejet de la
@@ -90,6 +102,10 @@ export function findProceduralOverclaims(
   if ((opts.scope === "PART" || opts.scope === "ARTICLE") && !opts.hasProcedureFact) {
     check("PORTEE", PORTEE);
   }
-  if (!opts.hasProcedureFact) check("SUITE", SUITE);
+  check("JUGEMENT", JUGEMENT);
+  const speculation = text.match(SUITE_SPECULATION);
+  const deroulement = opts.hasProcedureFact ? null : text.match(SUITE_DEROULEMENT);
+  const suite = speculation ?? deroulement;
+  if (suite) found.push({ code: "SUITE", excerpt: excerptAround(text, suite) });
   return found;
 }

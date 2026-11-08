@@ -73,6 +73,32 @@ describe("findProceduralOverclaims", () => {
     ]);
   });
 
+  it("même avec une donnée officielle, une spéculation au-delà de cette donnée reste refusée", () => {
+    // Sorti tel quel du dry-run du scrutin 9759, après ajout de la donnée de transmission.
+    const text =
+      "Le rejet de cette partie bloque pour l'instant l'adoption du budget 2027, qui doit encore être examiné par le Sénat.";
+    expect(codes(text, { scope: "PART", hasProcedureFact: true })).toEqual(["SUITE"]);
+  });
+
+  it.each([
+    "Ce rejet suspend temporairement l'adoption du budget 2027.",
+    "Les règles pourraient évoluer selon les négociations entre l'Assemblée nationale et le Sénat.",
+    "Cette partie conditionne le reste du texte.",
+    "Les règles budgétaires restent en discussion.",
+  ])("refuse la spéculation laissée passer par le dry-run : %s", (text) => {
+    expect(codes(text, { scope: "PART", hasProcedureFact: true })).toEqual(["SUITE"]);
+  });
+
+  it("refuse les jugements que le dry-run du scrutin 9759 a laissé passer", () => {
+    const opts = { scope: "PART", hasProcedureFact: true } as const;
+    expect(codes("Cette partie est indispensable à l'examen du reste du texte.", opts)).toEqual([
+      "JUGEMENT",
+    ]);
+    expect(codes("Ce texte est essentiel car il détermine les impôts.", opts)).toEqual([
+      "JUGEMENT",
+    ]);
+  });
+
   it("laisse passer un texte qui s'en tient au résultat du vote", () => {
     expect(
       codes(

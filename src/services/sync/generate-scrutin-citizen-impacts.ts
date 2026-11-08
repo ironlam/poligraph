@@ -123,7 +123,13 @@ export async function prepareCitizenImpactInput(
   if (!scrutin) return null;
 
   // OFFICIAL substance — the only measure-bearing source when present.
-  const resolved = await resolveSubstanceSources(scrutinId);
+  const resolvedAll = await resolveSubstanceSources(scrutinId);
+
+  // Un vote sur une partie du texte n'a que l'exposé des motifs du dossier entier comme
+  // source : le modèle le prenait pour le contenu du vote et listait les mesures de tout
+  // le texte, malgré la consigne. Il ne les reçoit donc pas.
+  const isPartVote = classifyVoteScope(scrutin.title) === "PART";
+  const resolved = isPartVote ? { ...resolvedAll, blocks: [], substanceDepth: null } : resolvedAll;
 
   const context = await fetchScrutinContext(scrutin.title, scrutin.sourceUrl, db, {
     skipScrape,
@@ -208,7 +214,8 @@ export async function prepareCitizenImpactInput(
     chamber: scrutin.chamber as "AN" | "SENAT",
     votingDate: scrutin.votingDate.toISOString().split("T")[0]!,
     dossierTitle: context.dossierTitle,
-    dossierSummary: context.dossierSummary,
+    // Le résumé du dossier décrit le texte entier, pas la partie votée.
+    dossierSummary: isPartVote ? null : context.dossierSummary,
     sourcePageText: context.sourcePageText,
     debateExcerpt,
     substanceBlocks: resolved.blocks,
