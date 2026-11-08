@@ -123,14 +123,7 @@ describe("page publique d'une mesure présidentielle", () => {
       "href",
       "/methodologie/mesures-presidentielle-2027"
     );
-    expect(
-      screen.getByRole("link", {
-        name: /^Comparer les programmes sur /,
-      })
-    ).toHaveAttribute(
-      "href",
-      "/elections/presidentielle-2027/comparer?candidat=camille-riviere&theme=logement-urbanisme"
-    );
+    expect(screen.queryByRole("link", { name: /^Comparer les programmes sur / })).toBeNull();
   });
 
   it("propose des mesures factuelles d'autres personnalités quand elles existent", async () => {
@@ -160,6 +153,14 @@ describe("page publique d'une mesure présidentielle", () => {
     expect(screen.getByRole("link", { name: /Alex Martin/ })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/mesures/alex-martin-encadrer-les-loyers"
+    );
+    expect(
+      screen.getByRole("link", {
+        name: /^Comparer les programmes sur /,
+      })
+    ).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/comparer?candidat=camille-riviere&theme=logement-urbanisme"
     );
     expect(screen.getByText("Encadrement des loyers")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Encadrement des loyers" })).toHaveAttribute(

@@ -154,15 +154,6 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
               Voir la méthode
             </Link>
           </p>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Link
-              href={comparisonUrl}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-5 font-bold text-primary hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
-              Comparer les programmes sur {themeLabel.toLocaleLowerCase("fr")}
-              <ArrowRight aria-hidden="true" className="h-4 w-4" />
-            </Link>
-          </div>
         </header>
 
         <aside
@@ -304,15 +295,17 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
 
           {measure.relatedMeasures.length > 0 && (
             <section aria-labelledby="related-title" className="py-6">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+              {/* La comparaison porte sur tout le thème, pas sur cette mesure : elle se propose une
+                  fois la mesure lue, à côté des mesures voisines qu'elle élargit. */}
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <h2 id="related-title" className="title-card font-display">
                   Ce que proposent d&apos;autres candidates et candidats
                 </h2>
                 <Link
-                  href={themeUrl}
-                  className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  href={comparisonUrl}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-4 text-sm font-bold text-primary hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:w-auto"
                 >
-                  Voir toute la comparaison
+                  Comparer les programmes sur {themeLabel.toLocaleLowerCase("fr")}
                   <ArrowRight aria-hidden="true" className="h-4 w-4" />
                 </Link>
               </div>
