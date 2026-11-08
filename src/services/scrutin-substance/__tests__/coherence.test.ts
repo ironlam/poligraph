@@ -72,3 +72,39 @@ describe("assessCoherence — scrutin 2084 regression (shared guard)", () => {
     expect(verdict.coherent).toBe(false);
   });
 });
+
+describe("assessCoherence, debate anchored by the amendment number", () => {
+  const legalBlocks: SubstanceTextBlock[] = [
+    {
+      sourceType: "amendment",
+      sourceId: "amd-685",
+      field: "Amendment.content",
+      text: "À la première phrase du quatrième alinéa de l’article 1519 B du code général des impôts, le montant : « 20 511 € » est remplacé par le montant : « 82 044 € ».",
+      trust: "official",
+      meta: { amendmentNumber: "685", articleRef: "APRÈS L'ARTICLE 26" },
+    },
+  ];
+  // Plain speech about the same measure: shares little with the legal wording.
+  const plainDebate =
+    "Nous proposons de quadrupler le montant de la taxe sur les éoliennes en mer, un impôt trop faible pour les mégaprojets.";
+
+  it("blocks that debate with the default threshold", () => {
+    const v = assessCoherence({ text: plainDebate, blocks: legalBlocks });
+    expect(v.coherent).toBe(false);
+    expect(v.coverage).toBeLessThan(0.3);
+    expect(v.coverage).toBeGreaterThanOrEqual(0.1);
+  });
+  it("lets it through when the discussion is anchored", () => {
+    expect(
+      assessCoherence({ text: plainDebate, blocks: legalBlocks, anchored: true }).coherent
+    ).toBe(true);
+  });
+  it("still blocks a passage with no shared vocabulary, even when anchored", () => {
+    const v = assessCoherence({
+      text: "Avis défavorable. Quel est l’avis du gouvernement ? Même avis.",
+      blocks: legalBlocks,
+      anchored: true,
+    });
+    expect(v.coherent).toBe(false);
+  });
+});
