@@ -578,7 +578,7 @@ export async function syncScrutinsSenat(
               data: {
                 resolvedCount: votesToCreate.length,
                 status: "COMPLETE",
-                statusReason: null,
+                statusReason: sourceAssessment.reason,
               },
             });
             await db.scrutin.update({

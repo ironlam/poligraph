@@ -155,6 +155,11 @@ describe("buildSelectionPrompt", () => {
     expect(prompt).toContain('"phrases"');
   });
 
+  it("puts a speaker in one camp only and ignores concessions", () => {
+    expect(prompt).toContain("n'est que dans UN camp");
+    expect(prompt).toContain("Une concession");
+  });
+
   it("escapes the debate so it cannot inject tags", () => {
     const evil = {
       ...discussion,

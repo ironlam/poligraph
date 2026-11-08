@@ -78,6 +78,7 @@ const optText = (max: number) =>
 
 const optUrl = z
   .union([httpUrl, z.literal("").transform(() => null), z.null(), z.undefined()])
+  .optional()
   .transform((v) => v ?? null);
 
 const dateString = z.string().trim().min(1);
