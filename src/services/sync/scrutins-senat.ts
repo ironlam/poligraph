@@ -16,6 +16,7 @@ import { removeTags } from "@/lib/parsing/html-utils";
 import { generateDateSlug, generateUniqueSlug } from "@/lib/utils";
 import { VotePosition, VotingResult, DataSource, Chamber } from "@/generated/prisma";
 import { classifyScrutinTitle } from "@/lib/scrutin-type";
+import { applySenateVoteCorrections } from "@/lib/votes/senate-corrections";
 import { scrutinSequence } from "@/lib/votes/scrutin-order";
 import { SENAT_RATE_LIMIT_MS } from "@/config/rate-limits";
 import {
@@ -424,8 +425,10 @@ export async function syncScrutinsSenat(
             }
           }
 
-          // Fetch votes JSON
-          const votes = await fetchVotesJson(currentSession, number!);
+          // Fetch votes JSON, then apply the corrections read from the official page
+          const externalId = `SENAT-${currentSession}-${number}`;
+          const sourceVotes = await fetchVotesJson(currentSession, number!);
+          const votes = applySenateVoteCorrections(externalId, sourceVotes);
           const officialTotals =
             metadata.officialVoters == null || metadata.officialNonVoters == null
               ? null
@@ -445,10 +448,8 @@ export async function syncScrutinsSenat(
                 reason: "official_totals_missing",
               };
           const sourceUrl = senateVotesSourceUrl(currentSession, number!);
-          const sourceHash = hashSenateSourceVotes(votes);
+          const sourceHash = hashSenateSourceVotes(sourceVotes);
           const fetchedAt = new Date();
-
-          const externalId = `SENAT-${currentSession}-${number}`;
 
           if (!dryRun) {
             const existing = await db.scrutin.findUnique({
