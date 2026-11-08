@@ -56,15 +56,28 @@ describe("source nominative des scrutins publics du Sénat", () => {
     expect(assessSenateVoteSource([...sourceVotes], official)).toMatchObject({ reason });
   });
 
-  it("accepte le président listé sans siège, seulement comme non-votant", () => {
+  it("accepte une ligne sans siège, pour le président comme pour un votant", () => {
     const withPresident = [...votes.slice(0, 3), { matricule: "P", vote: "n" }];
     expect(assessSenateVoteSource(withPresident, official)).toMatchObject({ status: "COMPLETE" });
+    // un votant dont le siège manque dans la source (scrutins de novembre 2025)
+    const voterWithoutSeat = [votes[0]!, { matricule: "B", vote: "c" }, votes[2]!, votes[3]!];
+    expect(assessSenateVoteSource(voterWithoutSeat, official)).toEqual({
+      status: "COMPLETE",
+      expectedCount: 4,
+      observedCount: 4,
+      reason: null,
+    });
+  });
+
+  it("contrôle les totaux même quand le siège manque", () => {
+    // un « pour » sans siège de trop ne passe pas, les totaux officiels restent le garde-fou
     expect(
       assessSenateVoteSource([...votes.slice(0, 3), { matricule: "P", vote: "p" }], official)
-    ).toMatchObject({ status: "INVALID", reason: "vote_row_invalid" });
+    ).toMatchObject({ status: "INCOMPLETE", reason: "totals_mismatch" });
+    // un siège présent mais invalide reste refusé
     expect(
       assessSenateVoteSource(
-        [...votes.slice(0, 2), { matricule: "P", vote: "n" }, { matricule: "Q", vote: "n" }],
+        [...votes.slice(0, 3), { matricule: "P", vote: "n", siege: 0 }],
         official
       )
     ).toMatchObject({ status: "INVALID", reason: "vote_row_invalid" });
