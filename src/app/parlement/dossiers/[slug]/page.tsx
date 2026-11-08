@@ -113,6 +113,15 @@ const getDossierWithRedirect = cache(async function getDossierWithRedirect(slugO
     return { dossier, redirect: null };
   }
 
+  // 1b. Ancien slug (le slug a été recalculé) : 301 vers le slug courant pour garder le SEO
+  dossier = await db.legislativeDossier.findFirst({
+    where: { previousSlugs: { has: slugOrId } },
+    include: includeOptions,
+  });
+  if (dossier) {
+    return { dossier, redirect: dossier.slug };
+  }
+
   // 2. Try by internal ID (CUID) - legacy URL
   dossier = await db.legislativeDossier.findUnique({
     where: { id: slugOrId },
