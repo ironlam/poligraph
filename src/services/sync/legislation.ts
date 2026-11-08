@@ -16,6 +16,8 @@ import { extractZip } from "@/lib/parsing/unzip";
 import { downloadFileWithRetry } from "@/lib/download-file";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import { classifyDossierOrigin } from "@/lib/legislation/origine";
+import { resolveFilingDate } from "@/lib/legislation/dossier-dates";
+import { rejectionStatus } from "@/lib/legislation/dossier-decision";
 import { extractDossierVoteRefs } from "@/lib/legislation/timeline-vote-refs";
 
 const DEFAULT_LEGISLATURE = 17;
@@ -95,6 +97,8 @@ interface ANActe {
   texteAssocie?: string;
   texteAdopte?: string;
   voteRefs?: unknown;
+  /** Conclusion d'un acte de décision : seule source de l'adoption ou du rejet. */
+  statutConclusion?: { fam_code?: string; libelle?: string | null } | null;
 }
 
 function findAllCodes(actes: ANActe | ANActe[] | undefined | null): string[] {
@@ -220,12 +224,21 @@ async function resolveAuthors(
   }
 }
 
-function determineStatus(codes: string[], legislature?: number): DossierStatus {
+export function determineStatus(
+  codes: string[],
+  legislature?: number,
+  decision?: { actes: ANActe | ANActe[] | undefined | null; procedure: string }
+): DossierStatus {
   if (codes.some((c) => c === "PROM" || c === "PROM-PUB")) return "ADOPTE";
   if (codes.some((c) => c.includes("REJET"))) return "REJETE";
   if (codes.some((c) => c.includes("RETRAIT") || c.includes("RETIRE"))) return "RETIRE";
   if (codes.some((c) => c.startsWith("CC-SAISIE"))) return "CONSEIL_CONSTITUTIONNEL";
   if (legislature && legislature < DEFAULT_LEGISLATURE) return "CADUQUE";
+
+  // Avant le test des débats : un acte DEBATS-SEANCE précède toujours la décision
+  // et classerait un texte rejeté « en discussion ».
+  const rejection = decision ? rejectionStatus(decision.actes, decision.procedure) : null;
+  if (rejection) return rejection;
 
   const hasDebates = codes.some(
     (c) =>
@@ -250,7 +263,12 @@ function determineStatus(codes: string[], legislature?: number): DossierStatus {
   return "DEPOSE";
 }
 
-function generateShortTitle(title: string): string {
+export function generateShortTitle(title: string): string {
+  // « Projet de loi de finances pour 2027 » : retirer le préfixe laisserait « De finances
+  // pour 2027 ». Quand la suite commence par une préposition, le titre complet reste lisible.
+  if (/^(?:projet|proposition) de loi (?:d[eu]s?|d['’])(?![\p{L}])/iu.test(title)) {
+    return title.charAt(0).toUpperCase() + title.slice(1);
+  }
   let short = title
     .replace(/^Projet de loi /i, "")
     .replace(/^Proposition de loi /i, "")
@@ -386,12 +404,16 @@ export async function syncLegislation(options?: {
         const documentExternalId = findFirstDocumentRef(dp.actesLegislatifs?.acteLegislatif);
 
         const allCodes = findAllCodes(dp.actesLegislatifs?.acteLegislatif);
-        const status = determineStatus(allCodes, dossierLeg);
+        const status = determineStatus(allCodes, dossierLeg, {
+          actes: dp.actesLegislatifs?.acteLegislatif,
+          procedure,
+        });
 
         const activeStatuses: DossierStatus[] = [
           "DEPOSE",
           "EN_COMMISSION",
           "EN_COURS",
+          "REJETE_NAVETTE",
           "CONSEIL_CONSTITUTIONNEL",
         ];
         if (!originOnly && activeOnly && !activeStatuses.includes(status)) {
@@ -420,7 +442,11 @@ export async function syncLegislation(options?: {
           }
         }
 
-        const filingDate = allDates.length > 0 ? allDates[0] : null;
+        // allDates sert au filtrage ci-dessus ; la date de dépôt vient du dépôt initial.
+        const { filingDate, slugDate } = resolveFilingDate(
+          origin.originEvidence?.dateActe ?? null,
+          allDates
+        );
         const adoptionDate =
           status === "ADOPTE" && allDates.length > 0 ? allDates[allDates.length - 1] : null;
 
@@ -520,7 +546,7 @@ export async function syncLegislation(options?: {
             ...dossierData,
           };
           if (!existing.slug) {
-            updateData.slug = await generateUniqueDossierSlug(filingDate!, shortTitle || title);
+            updateData.slug = await generateUniqueDossierSlug(slugDate, shortTitle || title);
           }
           await db.legislativeDossier.update({
             where: { id: existing.id },
@@ -529,7 +555,7 @@ export async function syncLegislation(options?: {
           dossierId = existing.id;
           stats.dossiersUpdated++;
         } else {
-          const slug = await generateUniqueDossierSlug(filingDate!, shortTitle || title);
+          const slug = await generateUniqueDossierSlug(slugDate, shortTitle || title);
           const created = await db.legislativeDossier.create({
             data: { ...dossierData, ...originData, slug },
           });

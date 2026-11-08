@@ -925,6 +925,7 @@ export const DOSSIER_STATUS_LABELS: Record<DossierStatus, string> = {
   CONSEIL_CONSTITUTIONNEL: "Conseil constitutionnel",
   ADOPTE: "Adopté",
   REJETE: "Rejeté",
+  REJETE_NAVETTE: "Rejeté, procédure poursuivie",
   RETIRE: "Retiré",
   CADUQUE: "Caduc",
 };
@@ -942,6 +943,8 @@ export const DOSSIER_STATUS_COLORS: Record<DossierStatus, string> = {
     "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700",
   REJETE:
     "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700",
+  REJETE_NAVETTE:
+    "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700",
   RETIRE:
     "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-800/40 dark:text-gray-300 dark:border-gray-700",
   CADUQUE:
@@ -955,6 +958,7 @@ export const DOSSIER_STATUS_ICONS: Record<DossierStatus, string> = {
   CONSEIL_CONSTITUTIONNEL: "⚖️",
   ADOPTE: "✅",
   REJETE: "❌",
+  REJETE_NAVETTE: "↩️",
   RETIRE: "⏸️",
   CADUQUE: "🕐",
 };
@@ -966,6 +970,8 @@ export const DOSSIER_STATUS_DESCRIPTIONS: Record<DossierStatus, string> = {
   CONSEIL_CONSTITUTIONNEL: "Texte soumis au Conseil constitutionnel.",
   ADOPTE: "Texte adopté définitivement par le Parlement, lorsque cette information est disponible.",
   REJETE: "Texte rejeté par le Parlement.",
+  REJETE_NAVETTE:
+    "Texte rejeté par une assemblée, mais dont la procédure se poursuit (par exemple une loi de finances dont le texte initial est transmis au Sénat).",
   RETIRE: "Texte retiré par son auteur.",
   CADUQUE: "Texte devenu caduc à la fin de la législature précédente.",
 };
@@ -981,6 +987,8 @@ export const DOSSIER_STATUS_SITUATIONS: Record<DossierStatus, string> = {
     "Au Conseil constitutionnel : le texte fait l'objet d'un contrôle avant promulgation éventuelle.",
   ADOPTE: "Adopté : les données indiquent que le Parlement a terminé l'examen du texte.",
   REJETE: "Rejeté : le texte n'a pas été adopté.",
+  REJETE_NAVETTE:
+    "Rejeté par une assemblée : le texte n'a pas été adopté à ce stade, mais son parcours parlementaire se poursuit.",
   RETIRE: "Retiré : le texte a été retiré par son auteur ou son initiateur.",
   CADUQUE: "Caduc : le texte n'est plus poursuivi dans la procédure actuelle.",
 };

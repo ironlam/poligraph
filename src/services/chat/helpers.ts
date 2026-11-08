@@ -89,6 +89,7 @@ export const DOSSIER_STATUS_LABELS: Record<string, string> = {
   CONSEIL_CONSTITUTIONNEL: "Conseil constitutionnel",
   ADOPTE: "Adopté",
   REJETE: "Rejeté",
+  REJETE_NAVETTE: "Rejeté, procédure poursuivie",
   RETIRE: "Retiré",
   CADUQUE: "Caduc",
 };

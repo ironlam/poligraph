@@ -316,3 +316,72 @@ describe("complete debate input", () => {
     expect(msg).not.toContain("<debat>");
   });
 });
+
+describe("portée du vote et suite de la procédure", () => {
+  const PART_TITLE =
+    "la première partie du projet de loi de finances pour 2027 (première lecture).";
+  const exposeBlock: SubstanceTextBlock = {
+    sourceType: "dossier",
+    sourceId: "dossier-plf",
+    field: "LegislativeDossier.exposeDesMotifs",
+    text: "ARTICLE 2 : revaloriser le barème de l'impôt sur le revenu",
+    trust: "official",
+  };
+
+  it("annonce un vote sur une partie du texte, pas sur le texte entier", () => {
+    const msg = buildUserMessage(baseInput({ title: PART_TITLE }));
+    expect(msg).toContain("PORTÉE DU VOTE");
+    expect(msg).toContain("UNIQUEMENT sur une PARTIE du texte");
+  });
+
+  it("annonce un vote sur l'ensemble du texte", () => {
+    const msg = buildUserMessage(
+      baseInput({ title: "l'ensemble du projet de loi de finances pour 2027" })
+    );
+    expect(msg).toContain("porte sur l'ensemble du texte");
+    expect(msg).not.toContain("UNIQUEMENT sur une PARTIE");
+  });
+
+  it("n'ajoute pas de ligne de portée pour un amendement", () => {
+    expect(buildUserMessage(baseInput())).not.toContain("PORTÉE DU VOTE");
+  });
+
+  it("sans donnée officielle sur la suite, interdit explicitement d'en parler", () => {
+    const msg = buildUserMessage(baseInput({ title: PART_TITLE }));
+    expect(msg).toContain("SUITE DE LA PROCÉDURE : aucune donnée fournie");
+  });
+
+  it("avec une donnée officielle, la transmet comme seule source sur la suite", () => {
+    const msg = buildUserMessage(
+      baseInput({
+        title: PART_TITLE,
+        procedureFact: "Le texte initial du Gouvernement est transmis au Sénat.",
+      })
+    );
+    expect(msg).toContain("SUITE DE LA PROCÉDURE (donnée officielle");
+    expect(msg).toContain("transmis au Sénat");
+    expect(msg).not.toContain("aucune donnée fournie");
+  });
+
+  it("présente l'exposé des motifs du dossier comme une vue d'ensemble, pas comme le texte voté", () => {
+    const msg = buildUserMessage(
+      baseInput({
+        title: PART_TITLE,
+        substanceBlocks: [exposeBlock],
+        substanceDepth: "exposeDesMotifs",
+      })
+    );
+    expect(msg).toContain("EXPOSÉ DES MOTIFS DU DOSSIER");
+    expect(msg).not.toContain("texte exact de l'amendement voté");
+  });
+
+  it("garde l'en-tête « texte exact de l'amendement voté » pour un vrai amendement", () => {
+    const msg = buildUserMessage(baseInput({ substanceBlocks: amendmentBlocks }));
+    expect(msg).toContain("texte exact de l'amendement voté");
+  });
+
+  it("le prompt système interdit la spéculation sur la suite et « en vigueur »", () => {
+    expect(SYSTEM_PROMPT).toContain("SUITE DE LA PROCÉDURE");
+    expect(SYSTEM_PROMPT).toMatch(/JAMAIS « en vigueur »/);
+  });
+});

@@ -589,7 +589,7 @@ async function computeLegislativeKpi(verbose = false): Promise<LegislativeKpi> {
       where: { chamber: "AN" },
     }),
     db.legislativeDossier.count({
-      where: { status: { in: ["EN_COMMISSION", "EN_COURS"] } },
+      where: { status: { in: ["EN_COMMISSION", "EN_COURS", "REJETE_NAVETTE"] } },
     }),
     db.legislativeDossier.count({
       where: { status: "ADOPTE" },
@@ -663,6 +663,7 @@ async function computePipeline(verbose = false): Promise<PipelineRow[]> {
         entry.enCommission += count;
         break;
       case "EN_COURS":
+      case "REJETE_NAVETTE":
       case "CONSEIL_CONSTITUTIONNEL":
         entry.enCours += count;
         break;

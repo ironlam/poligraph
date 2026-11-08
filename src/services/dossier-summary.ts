@@ -50,7 +50,8 @@ FORMAT OBLIGATOIRE :
 - Chaque point commence par "- " (tiret + espace)
 - Chaque point fait 1-2 phrases maximum
 - Le premier point décrit CE QUE le texte propose concrètement
-- Les points suivants couvrent : le contexte, les acteurs concernés, l'avancement du dossier
+- Les points suivants couvrent : le contexte et les acteurs concernés
+- JAMAIS l'état d'avancement (déposé, en attente d'examen, examiné, adopté, rejeté) : il change après la génération du résumé et la page l'affiche déjà à part
 - Pas de titre, pas de numérotation, pas de markdown enrichi : uniquement des tirets
 
 NEUTRALITÉ - RÈGLES :

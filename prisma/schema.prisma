@@ -1684,6 +1684,7 @@ model LegislativeDossier {
   id         String         @id @default(cuid())
   externalId String         @unique // DLR5L17N12345
   slug       String?        @unique // SEO-friendly URL slug (e.g., "2024-12-03-reforme-retraites")
+  previousSlugs String[]    @default([]) // anciens slugs, redirigés en 301 vers le slug courant
   publicId   String?        @unique // "DO-000542" — stable public identifier (poligraphId, see /docs/api)
   title      String         @db.Text
   shortTitle String? // Titre court pour affichage
@@ -1785,6 +1786,7 @@ enum DossierStatus {
   CONSEIL_CONSTITUTIONNEL // Saisi au Conseil constitutionnel
   ADOPTE // Promulgué
   REJETE // Rejeté
+  REJETE_NAVETTE // Rejeté par une assemblée, procédure poursuivie (ex. 1re partie d'un PLF rejetée, texte initial transmis au Sénat)
   RETIRE // Retiré
   CADUQUE // Caduc (fin de législature sans adoption)
 }

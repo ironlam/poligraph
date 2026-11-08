@@ -334,9 +334,13 @@ function DossiersContent({ dossiers }: { dossiers: DossierItem[] }) {
               </div>
               <Badge
                 variant={
-                  ["DEPOSE", "EN_COMMISSION", "EN_COURS", "CONSEIL_CONSTITUTIONNEL"].includes(
-                    dossier.status
-                  )
+                  [
+                    "DEPOSE",
+                    "EN_COMMISSION",
+                    "EN_COURS",
+                    "REJETE_NAVETTE",
+                    "CONSEIL_CONSTITUTIONNEL",
+                  ].includes(dossier.status)
                     ? "default"
                     : "secondary"
                 }

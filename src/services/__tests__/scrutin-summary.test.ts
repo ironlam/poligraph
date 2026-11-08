@@ -11,6 +11,45 @@ const BASE = {
   chamber: "AN" as const,
 };
 
+describe("portée du vote dans le résumé", () => {
+  const PART = {
+    ...BASE,
+    title: "la première partie du projet de loi de finances pour 2027 (première lecture).",
+    result: "REJECTED" as const,
+    amendmentBlocks: [],
+  };
+
+  it("précise qu'un vote sur une partie ne porte pas sur le texte entier", () => {
+    expect(buildSummaryPrompt(PART)).toContain("PARTIE du texte");
+  });
+
+  it("interdit de présenter la partie comme indépendante du reste du texte", () => {
+    // Dry-run du scrutin 9759 : « sans lien avec le reste de la loi », faux pour une loi de finances.
+    expect(buildSummaryPrompt(PART)).toContain("indépendante du reste du texte");
+  });
+
+  it("transmet la suite officielle quand elle est connue", () => {
+    const prompt = buildSummaryPrompt({
+      ...PART,
+      procedureFact: "Le texte initial du Gouvernement est transmis au Sénat.",
+    });
+    expect(prompt).toContain("Suite (donnée officielle)");
+    expect(prompt).toContain("transmis au Sénat");
+  });
+
+  it("le prompt système impose de nommer la chambre", () => {
+    expect(SYSTEM_PROMPT).toContain("jamais « le Parlement »");
+  });
+
+  it("n'ajoute rien pour un amendement", () => {
+    expect(buildSummaryPrompt({ ...BASE, amendmentBlocks: [] })).not.toContain("Portée");
+  });
+
+  it("le prompt système interdit de parler de la suite de la procédure", () => {
+    expect(SYSTEM_PROMPT).toContain("suite de la procédure");
+  });
+});
+
 describe("buildSummaryPrompt", () => {
   it("carries the official amendment text when one is resolved", () => {
     const prompt = buildSummaryPrompt({

@@ -163,7 +163,7 @@ describe("AFFAIR_EVENT_TYPE_LABELS", () => {
 });
 
 describe("DOSSIER_STATUS_LABELS", () => {
-  it("should have labels for all 8 dossier statuses", () => {
+  it("should have labels for all 9 dossier statuses", () => {
     const statuses = [
       "DEPOSE",
       "EN_COMMISSION",
@@ -171,6 +171,7 @@ describe("DOSSIER_STATUS_LABELS", () => {
       "CONSEIL_CONSTITUTIONNEL",
       "ADOPTE",
       "REJETE",
+      "REJETE_NAVETTE",
       "RETIRE",
       "CADUQUE",
     ];
@@ -180,7 +181,7 @@ describe("DOSSIER_STATUS_LABELS", () => {
         "string"
       );
     });
-    expect(Object.keys(DOSSIER_STATUS_LABELS)).toHaveLength(8);
+    expect(Object.keys(DOSSIER_STATUS_LABELS)).toHaveLength(9);
   });
 
   it("should have matching colors for all dossier statuses", () => {
