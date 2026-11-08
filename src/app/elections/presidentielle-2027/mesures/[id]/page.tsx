@@ -38,6 +38,14 @@ const ELECTION_SLUG = "presidentielle-2027";
 
 type PageProps = { params: Promise<{ id: string }> };
 
+export const revalidate = 86400;
+
+// Empty on purpose, same pattern as /reperes/[slug]: its presence makes the route ISR-cacheable
+// instead of rendered on every request. Safe only while the page reads no searchParams.
+export async function generateStaticParams() {
+  return [];
+}
+
 // Le titre d'une mesure est une phrase à lire, pas un nom : au-delà de 100 signes, il descend à
 // l'échelle d'un titre de section, en graisse 700, pour tenir en trois lignes environ.
 const LONG_MEASURE_TITLE_LENGTH = 100;
