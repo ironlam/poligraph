@@ -17,6 +17,7 @@ import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substan
 import { findUngroundedNames } from "@/services/scrutin-substance/grounding";
 import {
   buildProcedureFact,
+  findDecisionCodeForVote,
   findProceduralOverclaims,
 } from "@/services/scrutin-substance/procedure-claims";
 import { classifyVoteScope } from "@/lib/scrutin-scope";
@@ -113,7 +114,8 @@ export async function prepareCitizenImpactInput(
       votingDate: true,
       sourceUrl: true,
       dossierLegislatifId: true,
-      dossierLegislatif: { select: { status: true } },
+      externalId: true,
+      dossierLegislatif: { select: { status: true, timeline: true } },
       type: true,
       policyTitle: { select: { policyTitle: true, policySubtitle: true } },
       amendmentLinks: { select: { amendmentId: true } },
@@ -226,6 +228,10 @@ export async function prepareCitizenImpactInput(
       result: scrutin.result as "ADOPTED" | "REJECTED",
       chamber: scrutin.chamber as "AN" | "SENAT",
       dossierStatus: scrutin.dossierLegislatif?.status ?? null,
+      decisionCode: findDecisionCodeForVote(
+        scrutin.dossierLegislatif?.timeline,
+        scrutin.externalId
+      ),
     }),
     links,
   };

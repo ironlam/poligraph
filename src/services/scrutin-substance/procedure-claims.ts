@@ -46,26 +46,56 @@ const SUITE_STRICT = anyOf([
   String.raw`doit\s+(?:maintenant|désormais)`,
 ]);
 
-// Vocabulaire qui décrit aussi légitimement une mesure d'amendement (« blocage des loyers »,
-// « négociations commerciales ») : il n'est suspect que dans un texte sur le vote d'un texte.
+// « bloque / suspend / retarde » décrivent aussi les mesures d'un texte (« suspendre la hausse
+// des loyers », « bloquer les prix ») : seul l'objet procédural trahit une spéculation sur la
+// suite (« bloque l'adoption du budget », « suspend temporairement l'adoption »).
+const PROCEDURE_OBJECT = String.raw`(?:\s+\S+){0,3}?\s+(?:l['’]|la\s+|le\s+)?(?:adoption|examen|procédure|suite|définition|discussion|vote|budget)(?!${L})`;
 const SUITE_WIDE = anyOf([
-  String.raw`bloqu(?:e|er|era|ent|age)`,
-  String.raw`retarde(?:r|ra)?`,
-  String.raw`suspen(?:d|dent|dra|du|dre)`,
-  String.raw`temporairement`,
-  String.raw`négociations?`,
-  String.raw`pourr(?:ait|aient)\s+(?:évoluer|changer|être\s+modifié)`,
-  String.raw`conditionne`,
+  String.raw`bloqu(?:e|er|era|ent)${PROCEDURE_OBJECT}`,
+  String.raw`retard(?:e|er|era|ent)${PROCEDURE_OBJECT}`,
+  String.raw`suspen(?:d|dent|dra|du|dre)${PROCEDURE_OBJECT}`,
+  String.raw`négociations?\s+entre\s+(?:l['’]Assemblée|le\s+Sénat|les\s+deux\s+chambres)`,
+  String.raw`conditionne\s+(?:le\s+reste|la\s+suite|l['’]examen)`,
   String.raw`restent?\s+en\s+discussion`,
 ]);
 
 // Déroulement de la procédure : permis seulement quand une donnée officielle le fournit.
+// Seul le déroulement d'une assemblée vers une autre est visé : « sera soumis à une taxe » ne l'est pas.
 const SUITE_DEROULEMENT = anyOf([
-  String.raw`(?:sera|va\s+être)\s+(?:transmis|renvoyé|examiné|soumis|repris|réexaminé)`,
-  String.raw`réexamin`,
+  String.raw`(?:sera|va\s+être)\s+(?:transmis|renvoyé|examiné|soumis|repris|réexaminé)\s+(?:à\s+l['’]Assemblée|au\s+Sénat|à\s+la\s+commission|en\s+commission|au\s+Gouvernement|devant\s+(?:l['’]Assemblée|le\s+Sénat)|à\s+une\s+(?:nouvelle|deuxième|seconde)\s+\p{L}+)`,
+  String.raw`réexamin(?:é|ée|er)\s+(?:par\s+(?:l['’]Assemblée|le\s+Sénat)|au\s+Sénat|en\s+commission)`,
   String.raw`prochaine\s+(?:étape|lecture)`,
   String.raw`la\s+suite\s+de\s+la\s+procédure`,
 ]);
+
+interface TimelineNode {
+  code?: unknown;
+  voteRefs?: unknown;
+  children?: unknown;
+}
+
+/**
+ * Code de l'acte de la timeline du dossier dont `voteRefs` cite ce scrutin (référence
+ * officielle AN), ou null. La timeline est un JSON libre en base : tout est vérifié.
+ */
+export function findDecisionCodeForVote(
+  timeline: unknown,
+  scrutinExternalId: string
+): string | null {
+  if (!Array.isArray(timeline)) return null;
+  for (const raw of timeline as TimelineNode[]) {
+    if (
+      typeof raw?.code === "string" &&
+      Array.isArray(raw.voteRefs) &&
+      raw.voteRefs.includes(scrutinExternalId)
+    ) {
+      return raw.code;
+    }
+    const inChildren = findDecisionCodeForVote(raw?.children, scrutinExternalId);
+    if (inChildren) return inChildren;
+  }
+  return null;
+}
 
 /**
  * Seule suite de procédure que le décryptage a le droit d'énoncer : le rejet de la
@@ -78,12 +108,17 @@ export function buildProcedureFact(input: {
   result: "ADOPTED" | "REJECTED";
   chamber: "AN" | "SENAT";
   dossierStatus: string | null;
+  /** Code de l'acte de décision du dossier qui cite CE scrutin (voir findDecisionCodeForVote). */
+  decisionCode: string | null;
 }): string | null {
   if (
     input.scope === "PART" &&
     input.result === "REJECTED" &&
     input.chamber === "AN" &&
-    input.dossierStatus === "REJETE_NAVETTE"
+    input.dossierStatus === "REJETE_NAVETTE" &&
+    // Le statut courant du dossier ne parle pas de ce vote : seule la décision de 1re
+    // lecture à l'AN qui cite ce scrutin établit « texte entier rejeté, transmis au Sénat ».
+    input.decisionCode === "AN1-DEBATS-DEC"
   ) {
     return "L'Assemblée nationale n'ayant pas adopté cette partie, le texte entier est considéré comme rejeté en première lecture. Le texte initial du Gouvernement est transmis au Sénat, sans les modifications votées par les députés.";
   }

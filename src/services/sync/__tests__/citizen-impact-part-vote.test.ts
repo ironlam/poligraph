@@ -41,8 +41,27 @@ vi.mock("@/services/scrutin-substance/debate-context-resolver", () => ({
 import { prepareCitizenImpactInput } from "../generate-scrutin-citizen-impacts";
 import { buildUserMessage } from "@/services/scrutin-citizen-impact";
 
+const DECISION_TIMELINE = [
+  {
+    code: "AN1-DEBATS",
+    label: "Discussion",
+    date: null,
+    chamber: "AN",
+    children: [
+      {
+        code: "AN1-DEBATS-DEC",
+        label: "Décision",
+        date: "2026-11-04",
+        chamber: "AN",
+        voteRefs: ["VTANR5L17V9759"],
+      },
+    ],
+  },
+];
+
 const PART = {
   id: "s1",
+  externalId: "VTANR5L17V9759",
   slug: "s1",
   title: "la première partie du projet de loi de finances pour 2027 (première lecture).",
   summary: "Le projet de loi de finances pour 2027 a été rejeté.",
@@ -56,7 +75,7 @@ const PART = {
   votingDate: new Date("2026-11-04T00:00:00.000Z"),
   sourceUrl: null,
   dossierLegislatifId: "d1",
-  dossierLegislatif: { status: "REJETE_NAVETTE" },
+  dossierLegislatif: { status: "REJETE_NAVETTE", timeline: DECISION_TIMELINE },
   policyTitle: null,
   amendmentLinks: [],
 };
@@ -83,7 +102,16 @@ describe("vote sur une partie du texte", () => {
   });
 
   it("ne transmet aucune suite quand le statut du dossier ne l'établit pas", async () => {
-    h.scrutin.mockResolvedValue({ ...PART, dossierLegislatif: { status: "EN_COURS" } });
+    h.scrutin.mockResolvedValue({
+      ...PART,
+      dossierLegislatif: { status: "EN_COURS", timeline: DECISION_TIMELINE },
+    });
+    const prepared = (await prepareCitizenImpactInput("s1"))!;
+    expect(prepared.input.procedureFact).toBeNull();
+  });
+
+  it("ne transmet aucune suite pour une autre partie du même dossier, que la décision ne cite pas (Codex P1)", async () => {
+    h.scrutin.mockResolvedValue({ ...PART, externalId: "VTANR5L17V9000" });
     const prepared = (await prepareCitizenImpactInput("s1"))!;
     expect(prepared.input.procedureFact).toBeNull();
   });

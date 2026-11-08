@@ -1,5 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { buildProcedureFact, findProceduralOverclaims } from "../procedure-claims";
+import {
+  buildProcedureFact,
+  findDecisionCodeForVote,
+  findProceduralOverclaims,
+} from "../procedure-claims";
+
+describe("findDecisionCodeForVote", () => {
+  const timeline = [
+    {
+      code: "AN1",
+      label: "1ère lecture",
+      date: null,
+      chamber: "AN",
+      children: [
+        {
+          code: "AN1-DEBATS",
+          label: "Discussion",
+          date: null,
+          chamber: "AN",
+          children: [
+            { code: "AN1-DEBATS-SEANCE", label: "Séance", date: "2026-11-04", chamber: "AN" },
+            {
+              code: "AN1-DEBATS-DEC",
+              label: "Décision",
+              date: "2026-11-04",
+              chamber: "AN",
+              voteRefs: ["VTANR5L17V9759"],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
+  it("retrouve le code de la décision qui cite ce scrutin, même imbriquée", () => {
+    expect(findDecisionCodeForVote(timeline, "VTANR5L17V9759")).toBe("AN1-DEBATS-DEC");
+  });
+
+  it("ne retrouve rien pour un autre scrutin du même dossier", () => {
+    expect(findDecisionCodeForVote(timeline, "VTANR5L17V9000")).toBeNull();
+  });
+
+  it("tolère une timeline absente ou invalide", () => {
+    expect(findDecisionCodeForVote(null, "VTANR5L17V9759")).toBeNull();
+    expect(findDecisionCodeForVote({ pas: "un tableau" }, "VTANR5L17V9759")).toBeNull();
+  });
+});
 
 describe("buildProcedureFact", () => {
   const base = {
@@ -7,6 +53,7 @@ describe("buildProcedureFact", () => {
     result: "REJECTED",
     chamber: "AN",
     dossierStatus: "REJETE_NAVETTE",
+    decisionCode: "AN1-DEBATS-DEC",
   } as const;
 
   it("rejet de la première partie d'une loi de finances : texte initial transmis au Sénat", () => {
@@ -21,6 +68,10 @@ describe("buildProcedureFact", () => {
     ["un vote du Sénat", { chamber: "SENAT" as const }],
     ["un dossier sans statut de navette", { dossierStatus: "EN_COURS" }],
     ["un dossier inconnu", { dossierStatus: null }],
+    // Codex P1 : le statut courant du dossier ne dit rien de CE vote.
+    ["un vote que la décision du dossier ne cite pas", { decisionCode: null }],
+    ["une partie votée en 2e lecture", { decisionCode: "AN2-DEBATS-DEC" }],
+    ["une décision du Sénat", { decisionCode: "SN1-DEBATS-DEC" }],
   ])("ne dit rien pour %s", (_label, override) => {
     expect(buildProcedureFact({ ...base, ...override })).toBeNull();
   });
@@ -58,6 +109,14 @@ describe("findProceduralOverclaims", () => {
     expect(codes("Le produit sera soumis à une taxe de 2 %.", opts)).toEqual([]);
     // La spéculation propre à la procédure reste refusée pour tout vote.
     expect(codes("Le gouvernement devra le modifier ou le représenter.", opts)).toEqual(["SUITE"]);
+  });
+
+  it("ne rejette pas la description des mesures d'un texte entier (Codex P2)", () => {
+    const opts = { scope: "WHOLE", hasProcedureFact: false } as const;
+    expect(codes("Le texte propose de suspendre la hausse des loyers.", opts)).toEqual([]);
+    expect(codes("Il prévoit de bloquer les prix de l'énergie jusqu'en 2028.", opts)).toEqual([]);
+    expect(codes("Des négociations commerciales annuelles sont encadrées.", opts)).toEqual([]);
+    expect(codes("La hausse est retardée d'un an pour les petites communes.", opts)).toEqual([]);
   });
 
   it("laisse passer le droit existant et les formes neutres ou négatives", () => {
