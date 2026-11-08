@@ -72,9 +72,16 @@ export function ParliamentThemeBridge({
                 className="block min-h-11 py-3 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 <span className="font-bold">{d.shortTitle ?? d.title}</span>
-                <span className="mt-1 block text-sm text-muted-foreground">
-                  {DOSSIER_STATUS_LABELS[d.status]}
-                  {d.filingDate ? `, déposé le ${formatDate(d.filingDate)}` : ""}
+                <span className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-bold text-foreground">
+                    {DOSSIER_STATUS_LABELS[d.status]}
+                  </span>
+                  {d.filingDate && (
+                    <span>
+                      {d.status === "DEPOSE" ? "le " : "déposé le "}
+                      {formatDate(d.filingDate)}
+                    </span>
+                  )}
                 </span>
               </Link>
             </li>
