@@ -11,6 +11,27 @@ const BASE = {
   chamber: "AN" as const,
 };
 
+describe("portée du vote dans le résumé", () => {
+  const PART = {
+    ...BASE,
+    title: "la première partie du projet de loi de finances pour 2027 (première lecture).",
+    result: "REJECTED" as const,
+    amendmentBlocks: [],
+  };
+
+  it("précise qu'un vote sur une partie ne porte pas sur le texte entier", () => {
+    expect(buildSummaryPrompt(PART)).toContain("PARTIE du texte");
+  });
+
+  it("n'ajoute rien pour un amendement", () => {
+    expect(buildSummaryPrompt({ ...BASE, amendmentBlocks: [] })).not.toContain("Portée");
+  });
+
+  it("le prompt système interdit de parler de la suite de la procédure", () => {
+    expect(SYSTEM_PROMPT).toContain("suite de la procédure");
+  });
+});
+
 describe("buildSummaryPrompt", () => {
   it("carries the official amendment text when one is resolved", () => {
     const prompt = buildSummaryPrompt({

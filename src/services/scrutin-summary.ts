@@ -4,6 +4,7 @@
  */
 
 import { escapeXmlText } from "@/lib/text/escape-xml";
+import { classifyVoteScope } from "@/lib/scrutin-scope";
 import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
 
 export const SYSTEM_PROMPT = `Tu es un assistant parlementaire expert. Résume ce scrutin en 2-3 phrases concises pour un citoyen français.
@@ -11,6 +12,7 @@ Inclus: le sujet du vote, le résultat (adopté/rejeté), et les principaux enje
 Écris en français courant, sans jargon technique. Ne mentionne pas les numéros d'articles.
 Si un bloc <texte-amendement> est fourni, c'est le texte officiel de l'amendement voté : décris UNIQUEMENT la mesure qu'il contient. N'ajoute aucune mesure, aucun chiffre ni aucun enjeu absent de ce bloc.
 N'invente jamais le contenu d'un amendement à partir de son numéro ou du sujet général de la loi.
+Si une ligne Portée indique une PARTIE du texte ou un article, le résumé ne porte que sur cette partie : n'écris jamais que le texte entier a été voté. N'écris rien sur la suite de la procédure (renvoi, Sénat, nouvelle version, délais) : aucune source ne la fournit.
 Une source role="contexte" est l'amendement qu'un sous-amendement modifie : elle explique ce qui est modifié, mais le vote porte UNIQUEMENT sur la modification (role="vote"). Ne présente jamais l'adoption ou le rejet du sous-amendement comme celui de l'amendement modifié.`;
 
 /** Official amendment text sent to the model, per block. */
@@ -35,6 +37,16 @@ export function buildSummaryPrompt(input: ScrutinSummaryPromptInput): string {
     `Chambre: ${chamberLabel}`,
     `Résultat: ${resultLabel} (Pour: ${input.votesFor}, Contre: ${input.votesAgainst}, Abstention: ${input.votesAbstain})`,
   ];
+  const scope = classifyVoteScope(input.title);
+  if (scope === "PART") {
+    lines.push(
+      "Portée: ce scrutin porte uniquement sur une PARTIE du texte, pas sur le texte entier."
+    );
+  } else if (scope === "ARTICLE") {
+    lines.push(
+      "Portée: ce scrutin porte uniquement sur un article du texte, pas sur le texte entier."
+    );
+  }
   if (input.amendmentBlocks.length > 0) {
     lines.push("", "<texte-amendement>");
     for (const b of input.amendmentBlocks) {
