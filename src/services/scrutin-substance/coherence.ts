@@ -16,6 +16,13 @@ import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
  * different measure than the official source).
  */
 export const MIN_REFERENCE_COVERAGE = 0.3;
+/**
+ * Threshold for a debate already anchored by the official séance, the examined text and the
+ * amendment number cited in the opening of its discussion. Such a passage cannot come from
+ * another measure, so only a near-total lack of shared vocabulary (a wrong passage) blocks it.
+ * Legal amendment text (articles, amounts) shares little vocabulary with plain speech.
+ */
+export const MIN_ANCHORED_REFERENCE_COVERAGE = 0.1;
 const COVERAGE_PREFIX_LEN = 6;
 
 /** Frequent French words (len >= 5) carrying no topical signal; excluded so
@@ -98,6 +105,8 @@ export function assessCoherence(args: {
   policyTitle?: string | null;
   policySubtitle?: string | null;
   blocks: SubstanceTextBlock[];
+  /** Lower threshold for a debate anchored by the amendment number (see above). */
+  anchored?: boolean;
 }): CoherenceVerdict {
   const titleRef = [args.policyTitle, args.policySubtitle].filter(Boolean).join(" ").trim();
   let referenceText = "";
@@ -115,5 +124,6 @@ export function assessCoherence(args: {
   }
 
   const coverage = computeReferenceCoverage(args.text, referenceText);
-  return { coherent: coverage >= MIN_REFERENCE_COVERAGE, coverage, referenceUsed };
+  const min = args.anchored ? MIN_ANCHORED_REFERENCE_COVERAGE : MIN_REFERENCE_COVERAGE;
+  return { coherent: coverage >= min, coverage, referenceUsed };
 }

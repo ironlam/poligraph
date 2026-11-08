@@ -232,6 +232,9 @@ export async function generateScrutinAnalysis(
             policyTitle: s.policyTitle?.policyTitle ?? null,
             policySubtitle: s.policyTitle?.policySubtitle ?? null,
             blocks: resolved.blocks,
+            // usableForGeneration already means: official séance + examined text + amendment
+            // number cited in the discussion's opening.
+            anchored: true,
           });
           if (!verdict.coherent) {
             skippedIncoherent++;
