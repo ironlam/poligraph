@@ -78,6 +78,7 @@ export function DossierAmendments({ dossierId, stats, sourceUrl, initial }: Prop
   const [, forceRender] = useState(0);
   const rerender = () => forceRender((n) => n + 1);
 
+  // eslint-disable-next-line react-hooks/refs -- cache par filtre, rerender() forcé après chaque écriture
   const current = cache.current.get(filter);
 
   const load = useCallback(

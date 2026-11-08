@@ -46,14 +46,14 @@ const extractedProposalSchema = z
     sourceText: z.string().min(1),
     // Validate optional model fields inside the proposal transform. One malformed item must
     // never discard valid siblings from the same payload.
-    normalizedText: z.unknown(),
+    normalizedText: z.unknown().optional(),
     classification: classificationSchema,
     // Keep theme validation local to the proposal. A model-generated theme must never
     // invalidate otherwise valid siblings from the same segment.
-    theme: z.unknown(),
+    theme: z.unknown().optional(),
     // Validate this field inside the proposal transform so one malformed confidence does not
     // invalidate valid siblings from the same model payload.
-    confidence: z.unknown(),
+    confidence: z.unknown().optional(),
     rationale: z.string().min(1).max(500),
   })
   .transform((proposal) => {
