@@ -7,8 +7,7 @@
  * them must list `./src/fonts/og/*` under `outputFileTracingIncludes` in next.config.ts, or the
  * files are missing from the deployed function.
  *
- * A read failure resolves to an empty list rather than throwing: next/og then falls back to its
- * bundled font, and a social crawler gets a slightly plainer card instead of a cached 500.
+ * A read failure leaves the fonts option undefined so next/og uses its bundled font.
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -32,9 +31,9 @@ const OG_FONT_FILES: ReadonlyArray<{ name: string; file: string; weight: OgFontW
   { name: OG_FONT_TEXT, file: "AtkinsonHyperlegible-latin-700.ttf", weight: 700 },
 ];
 
-let cached: Promise<OgFont[]> | null = null;
+let cached: Promise<OgFont[] | undefined> | null = null;
 
-async function readOgFonts(): Promise<OgFont[]> {
+async function readOgFonts(): Promise<OgFont[] | undefined> {
   try {
     return await Promise.all(
       OG_FONT_FILES.map(async ({ name, file, weight }) => {
@@ -50,11 +49,11 @@ async function readOgFonts(): Promise<OgFont[]> {
     // eslint-disable-next-line no-console -- deliberate ops signal: cards silently lose the brand
     console.error("[og] brand fonts unavailable, falling back to the default font", error);
     cached = null;
-    return [];
+    return undefined;
   }
 }
 
-export function loadOgFonts(): Promise<OgFont[]> {
+export function loadOgFonts(): Promise<OgFont[] | undefined> {
   cached ??= readOgFonts();
   return cached;
 }
