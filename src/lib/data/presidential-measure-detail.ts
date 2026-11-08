@@ -401,9 +401,14 @@ async function loadPublicPresidentialMeasureDetail(electionId: string, measureSl
 
 // A cache miss fans out into some twenty queries, which a pool of four serves in waves: uncached,
 // every crawler hit queued on pg-pool.connect for seconds (POLIGRAPH-24, 26 to 29). Every measure
-// write calls invalidateMeasureTags, which busts `election-measures`; candidacy publication busts
-// `election-candidacies`. The election is resolved first so that a not-found answer carries the
-// tags too, and a measure published later under that slug is not hidden until the timer expires.
+// write calls invalidateMeasureTags, which busts `measure:<id>` and `election-measures`.
+//
+// A found page carries `measure:<id>`, never `election-measures`: a batch publishes a thousand
+// revisions in a day, each one busting that tag, and every one of the 5,000 pages would then
+// regenerate (about 33 ISR write units each) on every visit. Accepted cost: the related-measures
+// block may show a neighbour withdrawn since, until the 24h backstop or a manual revalidation.
+// A not-found answer is rare and keeps `election-measures`, so a measure published later under
+// that slug appears at once.
 async function getCachedPublicPresidentialMeasureDetail(
   electionSlug: string,
   measureSlug: string
@@ -415,9 +420,14 @@ async function getCachedPublicPresidentialMeasureDetail(
     select: { id: true },
   });
   if (!election) return null;
-  cacheTag(`election-measures:${election.id}`);
   cacheTag(`election-candidacies:${election.id}`);
-  return loadPublicPresidentialMeasureDetail(election.id, measureSlug);
+  const detail = await loadPublicPresidentialMeasureDetail(election.id, measureSlug);
+  if (detail === null) {
+    cacheTag(`election-measures:${election.id}`);
+  } else {
+    cacheTag(`measure:${detail.id}`);
+  }
+  return detail;
 }
 
 export const getPublicPresidentialMeasureDetail = cache(getCachedPublicPresidentialMeasureDetail);
