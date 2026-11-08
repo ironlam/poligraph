@@ -10,7 +10,10 @@ export const feedbackSchema = z.object({
     .min(FEEDBACK_MESSAGE_MIN, "Le message est trop court")
     .max(FEEDBACK_MESSAGE_MAX, "Le message est trop long"),
   // Un chemin invalide est ignoré plutôt que refusé : le retour compte plus que sa provenance.
-  pagePath: z.unknown().transform((value) => sanitizePagePath(value)),
+  pagePath: z
+    .unknown()
+    .optional()
+    .transform((value) => sanitizePagePath(value)),
   contactEmail: z
     .union([z.literal(""), z.email("Adresse e-mail invalide").max(254)])
     .optional()
