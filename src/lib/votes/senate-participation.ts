@@ -70,19 +70,18 @@ export function assessSenateVoteSource(
     return { status: "INVALID", expectedCount, observedCount, reason: "official_totals_invalid" };
   }
 
-  // Since the 2026 session the source lists the president without a seat number. That is
-  // accepted for one row, and only for a non-voter: any other seatless row stays invalid.
+  // The source sometimes omits the seat number: the president, but also a few voting senators
+  // (autumn 2025). The matricule carries the identity and every position total is still
+  // checked against the official page, so a missing seat is accepted for any vote code.
   const seatless = votes.filter((vote) => vote.siege === undefined);
   const malformedVote = votes.find(
     (vote) =>
       typeof vote.matricule !== "string" ||
       vote.matricule.trim() === "" ||
       typeof vote.vote !== "string" ||
-      (vote.siege === undefined
-        ? vote.vote.toLowerCase() !== "n"
-        : !Number.isInteger(vote.siege) || vote.siege <= 0)
+      (vote.siege !== undefined && (!Number.isInteger(vote.siege) || vote.siege <= 0))
   );
-  if (malformedVote || seatless.length > 1) {
+  if (malformedVote) {
     return { status: "INVALID", expectedCount, observedCount, reason: "vote_row_invalid" };
   }
 
