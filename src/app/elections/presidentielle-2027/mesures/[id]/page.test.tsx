@@ -125,7 +125,7 @@ describe("page publique d'une mesure présidentielle", () => {
     );
     expect(
       screen.getByRole("link", {
-        name: "Comparer cette mesure avec celles d'un autre candidat",
+        name: "Comparer avec un autre candidat",
       })
     ).toHaveAttribute(
       "href",

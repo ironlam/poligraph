@@ -84,9 +84,7 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
     details: measure.details,
   });
   const titleClass =
-    measure.text.length > 100
-      ? "text-2xl sm:text-3xl lg:text-4xl"
-      : "text-3xl sm:text-4xl lg:text-5xl";
+    measure.text.length > 100 ? "text-[1.375rem] sm:text-3xl" : "text-3xl sm:text-4xl";
 
   return (
     <main className="pb-14">
@@ -113,174 +111,77 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
           { label: "Mesure", href: canonical },
         ]}
       />
-      <article className="container mx-auto max-w-6xl px-4">
-        <header className="border-b border-border pb-8 pt-3">
+      {/* L'ordre du DOM suit les questions du lecteur (qui, quoi, d'où, et les autres) : sur mobile,
+          la colonne « En bref » passe juste sous l'en-tête, avant le détail. */}
+      <article className="container mx-auto grid max-w-6xl gap-x-10 px-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <header className="pb-6 pt-2 lg:col-start-1">
+          <Link
+            href={candidateUrl}
+            className="inline-flex min-h-11 items-center gap-3 rounded-lg hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <PoliticianAvatar
+              photoUrl={measure.candidate.photoUrl}
+              blobPhotoUrl={measure.candidate.blobPhotoUrl}
+              fullName={measure.candidate.name}
+              size="sm"
+            />
+            <span className="min-w-0">
+              <span className="block font-bold">{measure.candidate.name}</span>
+              {measure.candidate.party && (
+                <span className="block text-sm text-muted-foreground">
+                  {measure.candidate.party}
+                </span>
+              )}
+            </span>
+          </Link>
           <Link
             href={themeUrl}
-            className="inline-flex min-h-11 items-center text-sm font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="mt-2 flex min-h-11 w-fit items-center text-sm font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             {themeLabel}
           </Link>
           <h1
-            className={`mt-3 max-w-[36ch] font-display font-extrabold leading-[1.08] tracking-tight ${titleClass}`}
+            className={`max-w-[36ch] font-display font-extrabold leading-[1.15] tracking-tight ${titleClass}`}
           >
             {measure.text}
           </h1>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <span className="text-sm text-muted-foreground">
-              Revue par Poligraph le {formatDate(measure.reviewedAt)}.{" "}
-              <Link
-                href="/methodologie/mesures-presidentielle-2027"
-                className="font-bold text-primary underline"
-              >
-                Voir la méthode
-              </Link>
-            </span>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Revue par Poligraph le {formatDate(measure.reviewedAt)}.{" "}
+            <Link
+              href="/methodologie/mesures-presidentielle-2027"
+              className="font-bold text-primary underline"
+            >
+              Voir la méthode
+            </Link>
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link
+              href={comparisonUrl}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] bg-primary px-5 font-bold text-primary-foreground hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              Comparer avec un autre candidat
+              <ArrowRight aria-hidden="true" className="h-4 w-4" />
+            </Link>
           </div>
         </header>
 
-        <div className="py-6">
-          <YoutubeBanner />
-        </div>
-
-        {measure.details !== null && (
-          <section aria-labelledby="details-title" className="border-b border-border py-8">
-            <h2 id="details-title" className="font-display text-2xl font-extrabold">
-              Contexte et précisions
-            </h2>
-            <MarkdownText className="mt-4 max-w-[80ch] leading-relaxed text-foreground">
-              {measure.details}
-            </MarkdownText>
-            {measure.contextClaims.length > 0 ? (
-              <details className="group mt-5 max-w-[80ch] rounded-xl border border-border bg-card">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 py-3 font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
-                  Vérifier les affirmations dans la source
-                </summary>
-                <ol className="space-y-4 border-t border-border px-4 py-4">
-                  {measure.contextClaims.map((claim, claimIndex) => (
-                    <li key={`${claim.text}-${claimIndex}`}>
-                      <p className="text-sm leading-relaxed text-foreground">{claim.text}</p>
-                      <ul className="mt-2 flex flex-wrap gap-3">
-                        {claim.references
-                          .filter(
-                            (reference, index, references) =>
-                              references.findIndex(
-                                (candidate) => candidate.page === reference.page
-                              ) === index
-                          )
-                          .map((reference) => (
-                            <li key={reference.page ?? "unknown-page"}>
-                              <a
-                                href={claim.documentUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={`Consulter l'extrait source${reference.page === null ? "" : `, page ${reference.page}`}, lien externe`}
-                                className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                              >
-                                Extrait source
-                                {reference.page === null ? "" : `, page ${reference.page}`}
-                                <ExternalLink aria-hidden="true" className="h-4 w-4" />
-                              </a>
-                            </li>
-                          ))}
-                      </ul>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            ) : measure.sources.length > 0 ? (
-              <Link
-                href="#sources"
-                className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
-                Voir les sources utilisées pour ce contexte
-              </Link>
-            ) : null}
-          </section>
-        )}
-
-        {measure.readerGuides.length > 0 && (
-          <section aria-labelledby="reader-guides-title" className="border-b border-border py-8">
-            <h2 id="reader-guides-title" className="font-display text-2xl font-extrabold">
-              Repères pour comprendre
-            </h2>
-            <p className="mt-2 max-w-[72ch] text-sm leading-relaxed text-muted-foreground">
-              Des définitions factuelles pour comprendre les dispositifs cités, sans évaluer la
-              mesure.
-            </p>
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              {measure.readerGuides.map((guide) => (
-                <article key={guide.slug} className="rounded-2xl border border-border bg-card p-5">
-                  <h3 className="font-display text-lg font-bold">
-                    <Link
-                      href={presidentialReaderGuidePath(guide.slug)}
-                      className="inline-flex min-h-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    >
-                      {guide.label}
-                    </Link>
-                  </h3>
-                  <p className="mt-2 leading-relaxed text-foreground">{guide.definition}</p>
-                  <a
-                    href={guide.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Consulter la source ${guide.sourceLabel} publiée par ${guide.sourcePublisher}, lien externe`}
-                    className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  >
-                    Source : {guide.sourcePublisher}, vérifiée le {formatDate(guide.reviewedAt)}
-                    <ExternalLink aria-hidden="true" className="h-4 w-4" />
-                  </a>
-                </article>
-              ))}
-            </div>
-            <Link
-              href={presidentialReaderGuidesPath()}
-              className="mt-4 inline-flex min-h-11 items-center font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        <aside
+          aria-label="En bref"
+          className="flex flex-col gap-4 self-start pb-2 lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:pt-2"
+        >
+          {measure.programEdition !== null && (
+            <section
+              aria-labelledby="programme-title"
+              className="rounded-2xl border border-border bg-card p-4"
             >
-              Consulter tous les repères de la présidentielle 2027
-            </Link>
-          </section>
-        )}
-
-        {measure.subtopics.length > 0 && (
-          <section aria-labelledby="concepts-title" className="border-b border-border py-8">
-            <h2 id="concepts-title" className="font-display text-2xl font-extrabold">
-              Notions abordées
-            </h2>
-            <p className="mt-2 max-w-[72ch] text-sm leading-relaxed text-muted-foreground">
-              Ces repères décrivent les sujets auxquels la mesure a été rattachée après validation
-              éditoriale. Ils n&apos;évaluent ni son coût, ni sa faisabilité.
-            </p>
-            <dl className="mt-5 grid gap-3 sm:grid-cols-2">
-              {measure.subtopics.map((subtopic) => (
-                <div key={subtopic.slug} className="rounded-xl border border-border bg-card p-4">
-                  <dt>
-                    <PresidentialSubtopicLink
-                      slug={subtopic.slug}
-                      label={subtopic.label}
-                      className="justify-start border-0 bg-transparent px-0 font-display text-lg font-bold shadow-none hover:bg-transparent hover:underline"
-                    />
-                  </dt>
-                  <dd className="mt-1 text-sm leading-relaxed text-muted-foreground-strong">
-                    {subtopic.description}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        )}
-
-        {measure.programEdition !== null && (
-          <section aria-labelledby="programme-title" className="border-b border-border py-8">
-            <h2 id="programme-title" className="font-display text-2xl font-extrabold">
-              Dans le programme
-            </h2>
-            <div className="mt-4 rounded-2xl border border-border bg-card p-5">
-              <p className="text-sm font-bold text-muted-foreground">
+              <h2 id="programme-title" className="text-sm font-bold">
+                Dans le programme
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
                 {MEASURE_ATTRIBUTION_LABELS[measure.attribution]}
               </p>
-              <p className="mt-1 text-lg font-bold">{measure.programEdition.label}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="font-bold">{measure.programEdition.label}</p>
+              <p className="text-sm text-muted-foreground">
                 Document publié le {formatDate(measure.programEdition.publishedAt)}
               </p>
               <a
@@ -288,235 +189,335 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Consulter le programme ${measure.programEdition.label}, lien externe`}
-                className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
                 Consulter le programme complet
                 <ExternalLink aria-hidden="true" className="h-4 w-4" />
               </a>
-            </div>
-          </section>
-        )}
+            </section>
+          )}
 
-        <section aria-labelledby="carrier-title" className="py-8">
-          <h2 id="carrier-title" className="font-display text-2xl font-extrabold">
-            Personnalité porteuse
-          </h2>
-          <Link
-            href={candidateUrl}
-            className="mt-4 flex min-h-24 items-center gap-4 rounded-2xl border border-border bg-card p-5 hover:border-primary/50 hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            <PoliticianAvatar
-              photoUrl={measure.candidate.photoUrl}
-              blobPhotoUrl={measure.candidate.blobPhotoUrl}
-              fullName={measure.candidate.name}
-              size="md"
-            />
-            <span className="min-w-0 flex-1">
-              <span className="block text-lg font-bold">{measure.candidate.name}</span>
-              {measure.candidate.party && (
-                <span className="block text-sm text-muted-foreground">
-                  {measure.candidate.party}
-                </span>
-              )}
-            </span>
-            <ArrowRight aria-hidden="true" className="h-5 w-5 shrink-0 text-primary" />
-          </Link>
-          <Link
-            href={comparisonUrl}
-            className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-          >
-            Comparer cette mesure avec celles d&apos;un autre candidat
-            <ArrowRight aria-hidden="true" className="h-4 w-4" />
-          </Link>
-        </section>
-
-        {measure.relatedMeasures.length > 0 && (
-          <section aria-labelledby="related-title" className="border-t border-border py-8">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 id="related-title" className="font-display text-2xl font-extrabold">
-                  Ce que proposent d&apos;autres candidates et candidats
-                </h2>
-                <p className="mt-2 max-w-[72ch] text-sm leading-relaxed text-muted-foreground">
-                  Mesures publiées sur {themeLabel.toLocaleLowerCase("fr")}
-                  {measure.relatedMeasures.some((related) => related.sharedSubtopics.length > 0)
-                    ? ", rapprochées par sous-thème quand cette information a été validée."
-                    : "."}{" "}
-                  Aucun classement ni jugement de faisabilité n&apos;est appliqué.
-                </p>
-              </div>
-              <Link
-                href={themeUrl}
-                className="inline-flex min-h-11 items-center gap-2 font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
-                Voir toute la comparaison
-                <ArrowRight aria-hidden="true" className="h-4 w-4" />
-              </Link>
-            </div>
-            <ul className="mt-5 grid gap-3 md:grid-cols-2">
-              {measure.relatedMeasures.map((related) => (
-                <li
-                  key={related.slug}
-                  className="flex h-full min-h-32 flex-col rounded-2xl border border-border bg-card p-5"
-                >
-                  <Link
-                    href={`/elections/${ELECTION_SLUG}/mesures/${related.slug}`}
-                    prefetch={false}
-                    className="group min-h-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  >
-                    <span className="block text-sm font-bold text-primary">
-                      {related.candidateName}
-                      {related.party ? ` · ${related.party}` : ""}
-                    </span>
-                    <span className="mt-2 line-clamp-3 block leading-relaxed text-foreground group-hover:underline">
-                      {related.text}
-                    </span>
-                  </Link>
-                  {related.sharedSubtopics.length > 0 && (
-                    <ul aria-label="Sous-thèmes partagés" className="mt-3 flex flex-wrap gap-2">
-                      {related.sharedSubtopics.map((subtopic) => (
-                        <li key={subtopic.slug}>
-                          <PresidentialSubtopicLink slug={subtopic.slug} label={subtopic.label} />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section
-          id="sources"
-          aria-labelledby="sources-title"
-          className="border-t border-border py-8"
-        >
-          <h2 id="sources-title" className="font-display text-2xl font-extrabold">
-            Sources
-          </h2>
-          <ul className="mt-4 space-y-3">
-            {measure.sources.map((source) => {
-              const isVideo = isVideoSource(source.url, source.startAtSeconds);
-              const timecode =
-                source.startAtSeconds == null ? null : formatTimecode(source.startAtSeconds);
-              const kindLabel = MEASURE_SOURCE_KIND_LABELS[source.sourceKind];
-              // Only YouTube opens at the passage. Elsewhere the link opens the page, so the label
-              // must not promise a jump the player will not make.
-              const jumpsToPassage = timecode !== null && isYouTubeUrl(source.url);
-              const linkLabel = jumpsToPassage
-                ? "Voir le passage à " + timecode
-                : timecode
-                  ? "Consulter la vidéo (passage à " + timecode + ")"
-                  : "Consulter la source";
-              return (
-                <li key={source.id} className="rounded-2xl border border-border bg-card p-5">
-                  <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
-                    <span>{SOURCE_TIER_LABELS[source.tier]}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{kindLabel}</span>
-                    {isVideo && (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs font-bold">
-                        <PlayCircle aria-hidden="true" className="h-3.5 w-3.5" />
-                        Vidéo
-                      </span>
-                    )}
+          {measure.subtopics.length > 0 && (
+            <section
+              aria-labelledby="concepts-title"
+              className="rounded-2xl border border-border bg-card p-4"
+            >
+              <h2 id="concepts-title" className="text-sm font-bold">
+                Notions abordées
+              </h2>
+              <dl className="mt-2 space-y-3">
+                {measure.subtopics.map((subtopic) => (
+                  <div key={subtopic.slug}>
+                    <dt>
+                      <PresidentialSubtopicLink slug={subtopic.slug} label={subtopic.label} />
+                    </dt>
+                    <dd className="mt-1 text-sm leading-snug text-muted-foreground-strong">
+                      {subtopic.description}
+                    </dd>
                   </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Publiée le {formatDate(source.publishedAt)}
-                    {timecode ? " · Passage à " + timecode : source.page ? " · " + source.page : ""}
-                  </p>
-                  {source.excerpt ? (
-                    <figure className="mt-4 rounded-xl border border-border bg-muted/60 p-4">
-                      <figcaption className="text-muted-foreground-strong flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
-                        <Quote aria-hidden="true" className="text-brand-on-surface h-4 w-4" />
-                        Dans le document source
-                        {source.page
-                          ? ", " + (/^\d/.test(source.page) ? "page " : "") + source.page
-                          : ""}
-                      </figcaption>
-                      <blockquote
-                        cite={source.url}
-                        className="mt-3 max-w-[80ch] border-l-4 border-brand pl-4 text-[1.0625rem] leading-relaxed text-foreground"
-                      >
-                        <p>« {source.excerpt} »</p>
-                      </blockquote>
-                    </figure>
-                  ) : null}
-                  <a
-                    href={videoSourceHref(source.url, source.startAtSeconds)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={
-                      timecode
-                        ? linkLabel + " : source externe, " + kindLabel
-                        : "Consulter la source externe : " + kindLabel
-                    }
-                    className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    {linkLabel}
-                    <ExternalLink aria-hidden="true" className="h-4 w-4" />
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+                ))}
+              </dl>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground-strong">
+                Rattachement validé par la rédaction. Ces repères n&apos;évaluent ni le coût, ni la
+                faisabilité de la mesure.
+              </p>
+            </section>
+          )}
+        </aside>
 
-        {measure.votes.length > 0 && (
-          <section aria-labelledby="votes-title" className="border-t border-border py-8">
-            <h2 id="votes-title" className="font-display text-2xl font-extrabold">
-              Votes parlementaires liés
+        <div className="lg:col-start-1">
+          <section id="sources" aria-labelledby="sources-title" className="scroll-mt-24 py-6">
+            <h2 id="sources-title" className="title-card font-display">
+              Sources
             </h2>
             <ul className="mt-4 space-y-3">
-              {measure.votes.map((vote) => {
-                const details =
-                  vote.scrutin !== null
-                    ? CHAMBER_LABELS[vote.scrutin.chamber] +
-                      ", " +
-                      formatDate(vote.scrutin.votingDate)
-                    : "Vérifié le " + formatDate(vote.checkedAt);
+              {measure.sources.map((source) => {
+                const isVideo = isVideoSource(source.url, source.startAtSeconds);
+                const timecode =
+                  source.startAtSeconds == null ? null : formatTimecode(source.startAtSeconds);
+                const kindLabel = MEASURE_SOURCE_KIND_LABELS[source.sourceKind];
+                // Only YouTube opens at the passage. Elsewhere the link opens the page, so the label
+                // must not promise a jump the player will not make.
+                const jumpsToPassage = timecode !== null && isYouTubeUrl(source.url);
+                const linkLabel = jumpsToPassage
+                  ? "Voir le passage à " + timecode
+                  : timecode
+                    ? "Consulter la vidéo (passage à " + timecode + ")"
+                    : "Consulter la source";
                 return (
-                  <li key={vote.id} className="rounded-2xl border border-border bg-card p-5">
-                    {vote.scrutin ? (
-                      <Link
-                        href={"/parlement/votes/" + (vote.scrutin.slug ?? vote.scrutin.id)}
-                        className="inline-flex min-h-11 items-center font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                      >
-                        {vote.scrutin.title}
-                      </Link>
-                    ) : (
-                      <p className="font-bold">Recherche de vote documentée</p>
-                    )}
-                    <VoteRelationBadge
-                      relation={vote.relation}
-                      basisDetails={details}
-                      className="mt-3"
-                    />
+                  <li key={source.id} className="rounded-2xl border border-border bg-card p-5">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                      <span>{SOURCE_TIER_LABELS[source.tier]}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{kindLabel}</span>
+                      {isVideo && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs font-bold">
+                          <PlayCircle aria-hidden="true" className="h-3.5 w-3.5" />
+                          Vidéo
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Publiée le {formatDate(source.publishedAt)}
+                      {timecode
+                        ? " · Passage à " + timecode
+                        : source.page
+                          ? " · " + source.page
+                          : ""}
+                    </p>
+                    {source.excerpt ? (
+                      <figure className="mt-4 rounded-xl border border-border bg-muted/60 p-4">
+                        <figcaption className="text-muted-foreground-strong flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                          <Quote aria-hidden="true" className="text-brand-on-surface h-4 w-4" />
+                          Dans le document source
+                          {source.page
+                            ? ", " + (/^\d/.test(source.page) ? "page " : "") + source.page
+                            : ""}
+                        </figcaption>
+                        <blockquote
+                          cite={source.url}
+                          className="mt-3 max-w-[80ch] border-l-4 border-brand pl-4 text-[1.0625rem] leading-relaxed text-foreground"
+                        >
+                          <p>« {source.excerpt} »</p>
+                        </blockquote>
+                      </figure>
+                    ) : null}
+                    <a
+                      href={videoSourceHref(source.url, source.startAtSeconds)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={
+                        timecode
+                          ? linkLabel + " : source externe, " + kindLabel
+                          : "Consulter la source externe : " + kindLabel
+                      }
+                      className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      {linkLabel}
+                      <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                    </a>
                   </li>
                 );
               })}
             </ul>
           </section>
-        )}
 
-        <MeasureParliamentLinks
-          links={measure.parliamentLinks}
-          candidateName={measure.candidate.name}
-        />
+          {measure.relatedMeasures.length > 0 && (
+            <section aria-labelledby="related-title" className="py-6">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                <h2 id="related-title" className="title-card font-display">
+                  Ce que proposent d&apos;autres candidates et candidats
+                </h2>
+                <Link
+                  href={themeUrl}
+                  className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  Voir toute la comparaison
+                  <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                </Link>
+              </div>
+              <ul className="mt-2 grid gap-2 md:grid-cols-2">
+                {measure.relatedMeasures.map((related) => (
+                  <li
+                    key={related.slug}
+                    className="flex h-full flex-col rounded-xl border border-border bg-card px-4 py-3"
+                  >
+                    <Link
+                      href={`/elections/${ELECTION_SLUG}/mesures/${related.slug}`}
+                      prefetch={false}
+                      className="group min-h-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    >
+                      <span className="block text-sm font-bold text-primary">
+                        {related.candidateName}
+                        {related.party ? ` · ${related.party}` : ""}
+                      </span>
+                      <span className="mt-1 line-clamp-3 block leading-snug text-foreground group-hover:underline">
+                        {related.text}
+                      </span>
+                    </Link>
+                    {related.sharedSubtopics.length > 0 && (
+                      <ul aria-label="Sous-thèmes partagés" className="mt-2 flex flex-wrap gap-2">
+                        {related.sharedSubtopics.map((subtopic) => (
+                          <li key={subtopic.slug}>
+                            <PresidentialSubtopicLink slug={subtopic.slug} label={subtopic.label} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground-strong">
+                Mesures publiées sur {themeLabel.toLocaleLowerCase("fr")}
+                {measure.relatedMeasures.some((related) => related.sharedSubtopics.length > 0)
+                  ? ", rapprochées par sous-thème quand cette information a été validée."
+                  : "."}{" "}
+                Aucun classement ni jugement de faisabilité n&apos;est appliqué.
+              </p>
+            </section>
+          )}
 
-        <div className="border-t border-border py-8 empty:hidden">
-          <ParliamentThemeBridgeLoader theme={measure.theme} source="mesure" />
+          {measure.details !== null && (
+            <section aria-labelledby="details-title" className="py-6">
+              <h2 id="details-title" className="title-card font-display">
+                Contexte et précisions
+              </h2>
+              <MarkdownText className="mt-4 max-w-[80ch] leading-relaxed text-foreground">
+                {measure.details}
+              </MarkdownText>
+              {measure.contextClaims.length > 0 ? (
+                <details className="group mt-5 max-w-[80ch] rounded-xl border border-border bg-card">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 py-3 font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+                    Vérifier les affirmations dans la source
+                  </summary>
+                  <ol className="space-y-4 border-t border-border px-4 py-4">
+                    {measure.contextClaims.map((claim, claimIndex) => (
+                      <li key={`${claim.text}-${claimIndex}`}>
+                        <p className="text-sm leading-relaxed text-foreground">{claim.text}</p>
+                        <ul className="mt-2 flex flex-wrap gap-3">
+                          {claim.references
+                            .filter(
+                              (reference, index, references) =>
+                                references.findIndex(
+                                  (candidate) => candidate.page === reference.page
+                                ) === index
+                            )
+                            .map((reference) => (
+                              <li key={reference.page ?? "unknown-page"}>
+                                <a
+                                  href={claim.documentUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label={`Consulter l'extrait source${reference.page === null ? "" : `, page ${reference.page}`}, lien externe`}
+                                  className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                >
+                                  Extrait source
+                                  {reference.page === null ? "" : `, page ${reference.page}`}
+                                  <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                                </a>
+                              </li>
+                            ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ) : measure.sources.length > 0 ? (
+                <Link
+                  href="#sources"
+                  className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  Voir les sources utilisées pour ce contexte
+                </Link>
+              ) : null}
+            </section>
+          )}
+
+          {measure.readerGuides.length > 0 && (
+            <section aria-labelledby="reader-guides-title" className="py-6">
+              <h2 id="reader-guides-title" className="title-card font-display">
+                Repères pour comprendre
+              </h2>
+              <p className="mt-2 max-w-[72ch] text-sm leading-relaxed text-muted-foreground">
+                Des définitions factuelles pour comprendre les dispositifs cités, sans évaluer la
+                mesure.
+              </p>
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                {measure.readerGuides.map((guide) => (
+                  <article
+                    key={guide.slug}
+                    className="rounded-2xl border border-border bg-card p-5"
+                  >
+                    <h3 className="font-display text-lg font-bold">
+                      <Link
+                        href={presidentialReaderGuidePath(guide.slug)}
+                        className="inline-flex min-h-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      >
+                        {guide.label}
+                      </Link>
+                    </h3>
+                    <p className="mt-2 leading-relaxed text-foreground">{guide.definition}</p>
+                    <a
+                      href={guide.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Consulter la source ${guide.sourceLabel} publiée par ${guide.sourcePublisher}, lien externe`}
+                      className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    >
+                      Source : {guide.sourcePublisher}, vérifiée le {formatDate(guide.reviewedAt)}
+                      <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                    </a>
+                  </article>
+                ))}
+              </div>
+              <Link
+                href={presidentialReaderGuidesPath()}
+                className="mt-4 inline-flex min-h-11 items-center font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                Consulter tous les repères de la présidentielle 2027
+              </Link>
+            </section>
+          )}
+
+          {measure.votes.length > 0 && (
+            <section aria-labelledby="votes-title" className="py-6">
+              <h2 id="votes-title" className="title-card font-display">
+                Votes parlementaires liés
+              </h2>
+              <ul className="mt-4 space-y-3">
+                {measure.votes.map((vote) => {
+                  const details =
+                    vote.scrutin !== null
+                      ? CHAMBER_LABELS[vote.scrutin.chamber] +
+                        ", " +
+                        formatDate(vote.scrutin.votingDate)
+                      : "Vérifié le " + formatDate(vote.checkedAt);
+                  return (
+                    <li key={vote.id} className="rounded-2xl border border-border bg-card p-5">
+                      {vote.scrutin ? (
+                        <Link
+                          href={"/parlement/votes/" + (vote.scrutin.slug ?? vote.scrutin.id)}
+                          className="inline-flex min-h-11 items-center font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                        >
+                          {vote.scrutin.title}
+                        </Link>
+                      ) : (
+                        <p className="font-bold">Recherche de vote documentée</p>
+                      )}
+                      <VoteRelationBadge
+                        relation={vote.relation}
+                        basisDetails={details}
+                        className="mt-3"
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
+          <MeasureParliamentLinks
+            links={measure.parliamentLinks}
+            candidateName={measure.candidate.name}
+          />
+
+          <div className="py-6 empty:hidden">
+            <ParliamentThemeBridgeLoader theme={measure.theme} source="mesure" />
+          </div>
+
+          <div className="py-6">
+            <YoutubeBanner />
+          </div>
+
+          <footer className="border-t border-border py-8 text-sm text-muted-foreground">
+            <p>
+              Cette page décrit le contenu actuellement publié dans le corpus PoliGraph. Elle ne
+              constitue ni une appréciation de la mesure, ni une synthèse de l{"'"}ensemble de la
+              campagne.
+            </p>
+            <p className="mt-2">Dernière revue éditoriale : {formatDate(measure.reviewedAt)}</p>
+          </footer>
         </div>
-
-        <footer className="border-t border-border py-8 text-sm text-muted-foreground">
-          <p>
-            Cette page décrit le contenu actuellement publié dans le corpus PoliGraph. Elle ne
-            constitue ni une appréciation de la mesure, ni une synthèse de l{"'"}ensemble de la
-            campagne.
-          </p>
-          <p className="mt-2">Dernière revue éditoriale : {formatDate(measure.reviewedAt)}</p>
-        </footer>
       </article>
     </main>
   );
