@@ -184,3 +184,34 @@ YouTube plus tôt modifie aussi la page de confidentialité et la directive `fra
 Les pages de mesure n'ont pas encore de table équivalente. On la crée sur le même modèle le jour où
 une vidéo s'y rattache. Quand un déploiement par vidéo devient pesant, la suite prévue est un champ
 en base avec saisie en admin, ce qui demande un changement de schéma.
+
+## 13. L'appel au soutien Tipeee
+
+Les légendes des posts, des carrousels et des Reels portent un appel au soutien, toujours le même et
+toujours à la même place. On donne plus volontiers quand on vient de profiter du travail que lors
+d'une campagne isolée : la mention est donc discrète et répétée, elle ne fait pas campagne.
+
+**La phrase.** Elle clôt la légende, après le contact et les hashtags :
+
+```
+Une erreur ? contact@poligraph.fr
+
+#hashtags
+
+Poligraph est gratuit. Pour le soutenir : lien dans la bio
+```
+
+Elle ne change pas d'une publication à l'autre. Pas de supplique, pas de montant, pas d'objectif
+chiffré, pas de « sans pub » : ce dernier mot vaut pour le site, pas pour la chaîne (voir §12).
+
+**Où elle n'apparaît pas.** Sur les stories d'actualité, pour ne pas lasser, et sur toute
+publication qui touche à une affaire judiciaire, pour la même raison qu'au §12.
+
+**Le lien.** « Lien dans la bio » ne tient sa promesse que si le lien de la bio mène à Tipeee
+(`fr.tipeee.com/poligraph`), ou à une page de liens où Tipeee figure en premier. Vérifier la bio
+avant de publier la première légende qui porte la phrase.
+
+**La slide finale d'un carrousel.** Une slide « Soutenir Poligraph » peut clore un carrousel, aux
+couleurs de la charte, avec la chouette, « Gratuit, code ouvert » et « Lien dans la bio ». Aucun
+montant ni aucune jauge : un visuel ne se corrige pas (§9), le chiffre serait périmé à la
+publication suivante.
