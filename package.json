@@ -158,6 +158,7 @@
     "audit:government-support": "tsx scripts/audit-government-support.ts",
     "audit:source-urls": "tsx scripts/audit-source-urls.ts",
     "audit:senateurs-series": "tsx scripts/audit-senateurs-series.ts",
+    "audit:senat-mandate-dates": "tsx scripts/audit-senat-mandate-dates.ts",
     "audit:senate-participation": "tsx scripts/audit-senate-participation.ts",
     "senat:capture-composition": "tsx scripts/capture-senate-composition.ts",
     "audit:compliance": "tsx scripts/audit-affairs-compliance.ts",
