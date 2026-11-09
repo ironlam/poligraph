@@ -356,7 +356,11 @@ export async function syncScrutinsSenat(
       try {
         scrutinNumbers = await getScrutinListForSession(currentSession);
       } catch (error) {
-        console.log(`⚠️ Could not fetch session ${currentSession}: ${error}`);
+        // Une session illisible n'est pas une session vide : le sync doit échouer, sinon
+        // le workflow finit en succès avec 0 scrutin traité (constaté le 2026-11-08).
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`⚠️ Could not fetch session ${currentSession}: ${message}`);
+        stats.errors.push(`Session ${currentSession} : liste des scrutins illisible (${message})`);
         continue;
       }
 
