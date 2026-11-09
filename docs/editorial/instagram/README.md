@@ -26,7 +26,8 @@ Un kit est un dossier hors du dépôt qui contient :
 - un dossier `public/` avec `logo.svg` et `logo-inverse.svg`, copiés depuis `public/` du dépôt ;
 - `BRIEF.md` : l'objectif, les faits, leurs sources et la date à laquelle les chiffres ont été
   relevés ;
-- `TEXTE.md` (story) ou `LEGENDE.md` (carrousel) : le texte qui accompagne la publication ;
+- `TEXTE.md` (story) ou `LEGENDE.md` (carrousel) : le texte qui accompagne la publication. Une
+  légende de carrousel se termine par la phrase de soutien Tipeee (`reseaux-sociaux.md` §13) ;
 - `ALT.md` : le texte alternatif de chaque image, dans l'ordre.
 
 ## Exporter
