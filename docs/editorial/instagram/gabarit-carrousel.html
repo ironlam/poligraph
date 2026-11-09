@@ -189,6 +189,12 @@
         font-size: 28px;
         line-height: 1.38;
       }
+      .support-logo {
+        width: 340px;
+        height: 340px;
+        margin: -40px 0 0 -98px; /* le SVG a de la marge interne : la chouette s'aligne sur le texte */
+        object-fit: contain;
+      }
       .button {
         display: inline-block;
         margin-top: 36px;
@@ -277,6 +283,27 @@
             <h2>Titre à remplacer</h2>
             <p class="lead">Phrase à remplacer.</p>
             <div><div class="button">Adresse à remplacer</div></div>
+          </div>
+          <div class="footer">
+            <div class="brand">
+              <img class="brand-logo" src="public/logo-inverse.svg" alt="" />Poligraph
+            </div>
+            <span>@poligraph_fr</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Soutien : identique d'un carrousel à l'autre (reseaux-sociaux.md §13). À garder tel quel,
+           sans montant ni jauge. Absent des stories d'actualité et des sujets judiciaires. -->
+      <section class="slide cta" data-screen-label="05 Soutien">
+        <div class="accent"></div>
+        <div class="page">
+          <div class="center">
+            <img class="support-logo" src="public/logo-inverse.svg" alt="" />
+            <p class="kicker light">Soutenir Poligraph</p>
+            <h2>Gratuit, code ouvert</h2>
+            <p class="lead">Poligraph vit des dons. Le lien pour le soutenir est dans la bio.</p>
+            <div><div class="button">Lien dans la bio</div></div>
           </div>
           <div class="footer">
             <div class="brand">
