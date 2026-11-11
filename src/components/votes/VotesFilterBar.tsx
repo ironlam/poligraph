@@ -195,8 +195,10 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
     },
     {
       value: "",
-      label: votesCount > 0 ? `Vote d'ensemble (${formatCount(votesCount)})` : "Vote d'ensemble",
-      title: "Adoption d'un texte entier",
+      // Named for what the option holds: every scrutin that is not an amendment, which is wider
+      // than votes on a whole text (motions and articles are in it too).
+      label: votesCount > 0 ? `Hors amendements (${formatCount(votesCount)})` : "Hors amendements",
+      title: "Tous les votes sauf ceux qui portent sur un amendement",
     },
     {
       value: "amendements",

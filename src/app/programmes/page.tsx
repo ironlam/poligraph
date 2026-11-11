@@ -6,7 +6,6 @@ import { ArrowRight, FileCheck2, Info, UsersRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { buttonVariants } from "@/components/ui/button";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
-import { HubCandidacyField } from "@/app/elections/presidentielle-2027/_components/HubCandidacyField";
 import { getHubCandidacyField, getHubMeasureContext } from "@/lib/data/hub";
 import { getLatestPlatformsPerParty } from "@/lib/data/platforms";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -42,8 +41,8 @@ export async function generateMetadata({ searchParams }: ProgrammesPageProps): P
 
   return {
     ...baseMetadata,
-    // The presidential directory is embedded here, so its utility filters must not create
-    // indexable duplicate programme URLs while the canonical bare page stays indexable.
+    // The presidential directory used to be embedded here. Its filter parameters may still reach
+    // this address from old links: they stay out of the index, the bare page stays indexable.
     ...listingRobotsMetadata(
       hasActiveListingFilter(flatParams, PRESIDENTIAL_CANDIDATES_FILTER_KEYS)
     ),
@@ -106,8 +105,8 @@ export default async function ProgrammesPage({}: ProgrammesPageProps) {
 
               {presidentialContext?.hubPublishable === true ? (
                 <>
-                  <dl className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border bg-background p-4">
+                  <dl className="grid grid-cols-3 gap-2 sm:gap-3">
+                    <div className="rounded-xl border bg-background p-3 sm:p-4">
                       <dt className="flex items-center gap-2 text-sm text-muted-foreground">
                         <FileCheck2 className="h-4 w-4" aria-hidden="true" />
                         Mesures publiées
@@ -116,7 +115,7 @@ export default async function ProgrammesPage({}: ProgrammesPageProps) {
                         {presidentialContext.verifiedMeasureCount.toLocaleString("fr-FR")}
                       </dd>
                     </div>
-                    <div className="rounded-xl border bg-background p-4">
+                    <div className="rounded-xl border bg-background p-3 sm:p-4">
                       <dt className="flex items-center gap-2 text-sm text-muted-foreground">
                         <UsersRound className="h-4 w-4" aria-hidden="true" />
                         Personnalités documentées
@@ -125,7 +124,7 @@ export default async function ProgrammesPage({}: ProgrammesPageProps) {
                         {candidaciesWithMeasures.length.toLocaleString("fr-FR")}
                       </dd>
                     </div>
-                    <div className="rounded-xl border bg-background p-4">
+                    <div className="rounded-xl border bg-background p-3 sm:p-4">
                       <dt className="text-sm text-muted-foreground">Thèmes comparables</dt>
                       <dd className="mt-1 font-display text-2xl font-bold">
                         {presidentialContext.publishableSubjectPageCount.toLocaleString("fr-FR")}
@@ -152,11 +151,22 @@ export default async function ProgrammesPage({}: ProgrammesPageProps) {
               ) : (
                 <p className="rounded-xl border border-dashed bg-background/70 p-4 text-sm leading-relaxed text-muted-foreground">
                   Les comparaisons thématiques seront ouvertes après validation éditoriale du
-                  corpus. Les candidatures et les sources disponibles restent consultables ici.
+                  corpus. Les candidatures et les sources disponibles restent consultables sur la
+                  page des candidatures.
                 </p>
               )}
 
-              <HubCandidacyField candidacies={candidacies} />
+              {/* A link, not the directory itself: embedded here, the same list of candidacies was
+                  served at two addresses. */}
+              <Link
+                href={`${PRESIDENTIAL_HUB_PATH}/candidats`}
+                prefetch={false}
+                className={cn(buttonVariants({ variant: "outline" }), "min-h-11 justify-between")}
+              >
+                Voir les {candidacies.length.toLocaleString("fr-FR")} candidatures et personnalités
+                suivies
+                <ArrowRight aria-hidden="true" />
+              </Link>
             </div>
           </section>
         )}

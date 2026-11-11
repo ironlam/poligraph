@@ -44,7 +44,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 export default async function PresidentialCandidatesPage() {
   const candidacies = await getCandidacies();
   return (
-    <main className="container mx-auto space-y-8 px-4 pb-10 pt-4">
+    <main className="container mx-auto space-y-5 px-4 pb-10 pt-4 sm:space-y-8">
       <BreadcrumbJsonLd
         items={[
           { name: "Présidentielle 2027", url: `${SITE_URL}/elections/presidentielle-2027` },
@@ -70,10 +70,11 @@ export default async function PresidentialCandidatesPage() {
       />
       <PresidentialHubNav active="candidates" />
       <header className="max-w-4xl space-y-3">
-        <p className="text-xs font-bold uppercase tracking-widest text-brand">
+        {/* From sm up: on a phone the breadcrumb and the hub navigation already say it. */}
+        <p className="hidden text-xs font-bold uppercase tracking-widest text-brand sm:block">
           Présidentielle 2027
         </p>
-        <h1 className="font-display text-3xl font-extrabold tracking-tight md:text-5xl">
+        <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl md:text-5xl">
           Candidatures à la présidentielle 2027
         </h1>
         <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
