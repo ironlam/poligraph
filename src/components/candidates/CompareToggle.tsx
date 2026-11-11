@@ -54,7 +54,7 @@ export function CompareToggle({ currentSlug, currentName }: Props) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="fixed bottom-4 right-4 z-30 rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+        className="fixed bottom-[calc(var(--tabbar-h)+1rem)] right-4 z-30 rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
       >
         ⇄ Comparer
       </button>

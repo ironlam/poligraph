@@ -78,7 +78,7 @@ export function InstallPrompt() {
       role="dialog"
       aria-labelledby="pwa-install-title"
       aria-describedby="pwa-install-description"
-      className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md rounded-2xl border border-border bg-background p-4 shadow-lg md:hidden"
+      className="fixed bottom-[calc(var(--tabbar-h)+1rem)] left-4 right-4 z-50 mx-auto max-w-md rounded-2xl border border-border bg-background p-4 shadow-lg md:hidden"
     >
       <div className="flex items-start gap-3">
         <Download className="mt-1 h-5 w-5 text-primary" aria-hidden="true" />

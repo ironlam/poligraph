@@ -189,6 +189,41 @@ export const NAV_ELECTIONS: ElectionNavItem[] = [
   },
 ];
 
+export type TabIcon = "users" | "landmark" | "scale" | "vote";
+
+export interface TabNavItem {
+  href: string;
+  /** Short enough to fit a fifth of a 320px screen on one line */
+  label: string;
+  /** Spoken name, when the visible label is too terse to stand alone */
+  ariaLabel?: string;
+  icon: TabIcon;
+  /** Path prefix that lights the tab: a tab stands for its whole section, not for one page */
+  match: string;
+}
+
+// Bottom tab bar, below `lg`. Four links to existing pages; the menu button is added by the
+// component. The fourth slot follows the election put forward: it goes back to /programmes once
+// the presidential ballot has been held.
+export const NAV_TABS: TabNavItem[] = [
+  { href: "/politiques", label: "Élus", icon: "users", match: "/politiques" },
+  { href: "/parlement/votes", label: "Votes", icon: "landmark", match: "/parlement" },
+  { href: "/affaires", label: "Affaires", icon: "scale", match: "/affaires" },
+  {
+    href: "/elections/presidentielle-2027",
+    label: "2027",
+    ariaLabel: "Présidentielle 2027",
+    icon: "vote",
+    match: "/elections/presidentielle-2027",
+  },
+];
+
+/** The `href` of the tab whose section holds `pathname`, or null outside of the four sections. */
+export function getActiveTabHref(pathname: string): string | null {
+  const tab = NAV_TABS.find(({ match }) => pathname === match || pathname.startsWith(`${match}/`));
+  return tab?.href ?? null;
+}
+
 /** @deprecated Use NAV_PRIMARY instead */
 export const NAV_TOP_LEVEL = NAV_PRIMARY;
 

@@ -4,6 +4,8 @@ import localFont from "next/font/local";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { MobileMenuProvider } from "@/components/layout/MobileMenuProvider";
+import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { WebSiteJsonLd } from "@/components/seo/JsonLd";
 import { ChatWidget } from "@/components/chat/ChatWidget";
@@ -155,11 +157,19 @@ export default async function RootLayout({
                 }}
                 aria-hidden="true"
               />
-              <Header />
-              <main id="main-content" role="main" className="flex-1 overflow-x-clip" tabIndex={-1}>
-                {children}
-              </main>
-              <Footer />
+              <MobileMenuProvider>
+                <Header />
+                <main
+                  id="main-content"
+                  role="main"
+                  className="flex-1 overflow-x-clip"
+                  tabIndex={-1}
+                >
+                  {children}
+                </main>
+                <Footer />
+                <MobileTabBar />
+              </MobileMenuProvider>
               <CommandPalette />
               {chatEnabled && <ChatWidget />}
               <Toaster />
