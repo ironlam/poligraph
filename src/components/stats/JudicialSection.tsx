@@ -98,14 +98,81 @@ export function JudicialSection({
 
   return (
     <section aria-labelledby="judicial-heading" className="py-8 overflow-x-hidden">
+      {/* 3 maturity-based KPIs. One row at every width: stacked, they filled a phone screen and a
+          half before the first chart. */}
+      <div className="mb-8 grid grid-cols-3 gap-2 md:gap-4">
+        <Card>
+          <CardContent className="px-2 pt-4 text-center md:px-6 md:pt-6">
+            <div className="text-2xl font-bold tabular-nums md:text-3xl text-red-600">
+              {uniqueCondamnes.toLocaleString("fr-FR")}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground md:text-sm">Élus condamnés</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {maturityCounts.CONDAMNATION} condamnation
+              {maturityCounts.CONDAMNATION !== 1 ? "s" : ""}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="px-2 pt-4 text-center md:px-6 md:pt-6">
+            <div className="text-2xl font-bold tabular-nums md:text-3xl text-amber-600">
+              {uniqueMisEnCause.toLocaleString("fr-FR")}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground md:text-sm">Élus mis en cause</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {maturityCounts.PROCEDURE_VALIDEE} procédure
+              {maturityCounts.PROCEDURE_VALIDEE !== 1 ? "s" : ""} validée
+              {maturityCounts.PROCEDURE_VALIDEE !== 1 ? "s" : ""} par un juge
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="px-2 pt-4 text-center md:px-6 md:pt-6">
+            <div className="text-2xl font-bold tabular-nums md:text-3xl text-gray-500">
+              {maturityCounts.CLOSE_SANS_CONDAMNATION.toLocaleString("fr-FR")}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground md:text-sm">
+              Relaxes / acquittements
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Procédures closes sans condamnation
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Hemicycle visualization */}
+      {hemicycleGroups.length > 0 && (
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-lg">Hémicycle et affaires judiciaires</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Chaque siège représente un député. La taille du cercle est proportionnelle au niveau
+              de certitude judiciaire.{" "}
+              <span className="max-md:hidden">
+                Cliquez sur un siège pour accéder à la fiche du député.
+              </span>
+              <span className="md:hidden">
+                Touchez un groupe dans la légende pour le mettre en évidence.
+              </span>
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Hemicycle groups={hemicycleGroups} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Further reading, after the figures: the per-party rate is one reading among others, not
+          the entry point of the section. */}
       <nav
         aria-label="Approfondir les statistiques judiciaires"
-        className="mb-6 grid gap-3 sm:grid-cols-2"
+        className="mb-8 grid gap-3 sm:grid-cols-2"
       >
         <Link
           href="/affaires/condamnations?view=stats"
           className={cn(
-            buttonVariants({ variant: "default" }),
+            buttonVariants({ variant: "outline" }),
             "min-h-12 justify-between whitespace-normal px-4 text-left"
           )}
           prefetch={false}
@@ -125,62 +192,6 @@ export function JudicialSection({
           <ArrowRight aria-hidden="true" className="h-4 w-4" />
         </Link>
       </nav>
-
-      {/* Hemicycle visualization */}
-      {hemicycleGroups.length > 0 && (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-lg">Hémicycle et affaires judiciaires</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Chaque siège représente un député. La taille du cercle est proportionnelle au niveau
-              de certitude judiciaire. Cliquez sur un siège pour accéder à la fiche du député.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <Hemicycle groups={hemicycleGroups} />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 3 maturity-based KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <div className="text-3xl font-bold tabular-nums text-red-600">
-              {uniqueCondamnes.toLocaleString("fr-FR")}
-            </div>
-            <div className="text-sm text-muted-foreground mt-1">Élus condamnés</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              {maturityCounts.CONDAMNATION} condamnation
-              {maturityCounts.CONDAMNATION !== 1 ? "s" : ""}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <div className="text-3xl font-bold tabular-nums text-amber-600">
-              {uniqueMisEnCause.toLocaleString("fr-FR")}
-            </div>
-            <div className="text-sm text-muted-foreground mt-1">Élus mis en cause</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              {maturityCounts.PROCEDURE_VALIDEE} procédure
-              {maturityCounts.PROCEDURE_VALIDEE !== 1 ? "s" : ""} validée
-              {maturityCounts.PROCEDURE_VALIDEE !== 1 ? "s" : ""} par un juge
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <div className="text-3xl font-bold tabular-nums text-gray-500">
-              {maturityCounts.CLOSE_SANS_CONDAMNATION.toLocaleString("fr-FR")}
-            </div>
-            <div className="text-sm text-muted-foreground mt-1">Relaxes / acquittements</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Procédures closes sans condamnation
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Atteintes à la probité by category → party */}
       {critiqueByCategory.length > 0 && (
