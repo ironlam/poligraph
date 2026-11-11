@@ -189,6 +189,47 @@ export const NAV_ELECTIONS: ElectionNavItem[] = [
   },
 ];
 
+// Mobile menu, grouped by what the reader is trying to do. The four sections of the tab bar
+// (NAV_TABS) are left out: the bar already holds them. Search is the field at the top of the menu.
+export const NAV_MENU_GROUPS: NavGroup[] = [
+  {
+    label: "Près de chez moi",
+    items: [
+      { href: TERRITOIRES_PATH, label: "Ma commune" },
+      { href: "/mon-depute", label: "Mon député", featureFlag: "MON_DEPUTE_SECTION" },
+      { href: TERRITOIRES_DEPARTEMENTS_PATH, label: "Départements" },
+      { href: TERRITOIRES_REGIONS_ANCHOR, label: "Régions" },
+    ],
+  },
+  {
+    label: "Comprendre et comparer",
+    items: [
+      { href: "/statistiques", label: "Statistiques", featureFlag: "STATISTIQUES_SECTION" },
+      { href: "/factchecks", label: "Fact-checks" },
+      { href: "/programmes", label: "Programmes", featureFlag: "PROGRAMMES_ENABLED" },
+      { href: "/partis", label: "Partis" },
+      { href: "/comparer", label: "Comparer", featureFlag: "COMPARISON_TOOL" },
+      { href: "/politiques/gouvernements", label: "Gouvernements", featureFlag: "gouvernements" },
+      { href: "/parlement/groupes", label: "Groupes parlementaires" },
+      { href: "/procedures-baillons", label: "Procédures-bâillons" },
+    ],
+  },
+  {
+    label: "Mes outils",
+    items: [
+      { href: "/mon-observatoire", label: "Mon Observatoire" },
+      { href: "/chat", label: "Assistant IA", featureFlag: "CHATBOT_ENABLED" },
+    ],
+  },
+];
+
+/** The menu groups with their flagged items filtered, groups left empty dropped. */
+export function filterNavGroups(groups: NavGroup[], enabledFlags: ReadonlySet<string>): NavGroup[] {
+  return groups
+    .map((group) => ({ ...group, items: filterNavItems(group.items, enabledFlags) }))
+    .filter((group) => group.items.length > 0);
+}
+
 export type TabIcon = "users" | "landmark" | "scale" | "vote";
 
 export interface TabNavItem {
