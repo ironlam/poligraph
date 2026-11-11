@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_TABS, getActiveTabHref } from "../navigation";
+import { NAV_MENU_GROUPS, NAV_TABS, filterNavGroups, getActiveTabHref } from "../navigation";
 
 describe("NAV_TABS", () => {
   it("leaves the fifth slot of the bar to the menu button", () => {
@@ -47,5 +47,28 @@ describe("getActiveTabHref", () => {
   it("does not match a path that merely starts with the same letters", () => {
     expect(getActiveTabHref("/affaires-etrangeres")).toBeNull();
     expect(getActiveTabHref("/")).toBeNull();
+  });
+});
+
+describe("NAV_MENU_GROUPS", () => {
+  it("does not repeat a section the tab bar already holds", () => {
+    const tabHrefs = new Set(NAV_TABS.flatMap((tab) => [tab.href, tab.match]));
+    for (const group of NAV_MENU_GROUPS) {
+      for (const item of group.items) {
+        expect(tabHrefs.has(item.href), `${group.label} / ${item.label}`).toBe(false);
+      }
+    }
+  });
+
+  it("drops a flagged item, and a group left with nothing to show", () => {
+    const none = filterNavGroups(NAV_MENU_GROUPS, new Set());
+    const labels = none.flatMap((group) => group.items.map((item) => item.label));
+    expect(labels).toContain("Fact-checks");
+    expect(labels).not.toContain("Statistiques");
+    expect(labels).not.toContain("Assistant IA");
+
+    const onlyFlagged = [{ label: "Vide", items: [{ href: "/x", label: "X", featureFlag: "X" }] }];
+    expect(filterNavGroups(onlyFlagged, new Set())).toEqual([]);
+    expect(filterNavGroups(onlyFlagged, new Set(["X"]))).toHaveLength(1);
   });
 });
