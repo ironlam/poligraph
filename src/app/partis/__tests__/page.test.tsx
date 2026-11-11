@@ -44,7 +44,9 @@ describe("carte de parti sur /partis", () => {
     vi.mocked(getPartiesStats).mockResolvedValue({ actifs: 1 } as never);
   });
 
-  it("affiche les quatre compteurs au pluriel", async () => {
+  // The listing compares parties at a glance, and a raw count per party reads as a ranking there.
+  // The detail, with status and sources, stays on each party page.
+  it("n'affiche aucun décompte judiciaire dans la liste", async () => {
     const text = await pageText({
       condamnationsDefinitives: 3,
       condamnationsNonDefinitives: 3,
@@ -52,26 +54,8 @@ describe("carte de parti sur /partis", () => {
       closesSansCondamnation: 1,
     });
 
-    expect(text).toContain("3 condamnations définitives");
-    expect(text).toContain("3 condamnations non définitives");
-    expect(text).toContain("1 procédure en cours");
-    expect(text).toContain("1 close sans condamnation");
-    expect(text).not.toContain("classée");
-  });
-
-  it("accorde au singulier", async () => {
-    const text = await pageText({
-      condamnationsDefinitives: 1,
-      condamnationsNonDefinitives: 1,
-      enCours: 2,
-      closesSansCondamnation: 2,
-    });
-
-    expect(text).toContain("1 condamnation définitive");
-    expect(text).not.toContain("1 condamnations");
-    expect(text).toContain("1 condamnation non définitive");
-    expect(text).toContain("2 procédures en cours");
-    expect(text).toContain("2 closes sans condamnation");
-    expect(text).not.toContain("classée");
+    expect(text).toContain("Parti A");
+    expect(text).toContain("2 membres");
+    expect(text).not.toMatch(/condamnation|procédure|close/i);
   });
 });

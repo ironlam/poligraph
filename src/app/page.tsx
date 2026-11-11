@@ -36,13 +36,15 @@ export default async function HomePage() {
     <div className="container mx-auto px-4 py-8 space-y-10">
       <HomeHero />
 
-      <YoutubeBanner />
-
       {/* The banner derives its own temporal state: a day count computed here was the duplication
           that kept the other four states invisible from this page. */}
       {featuredElection && <ElectionBanner election={featuredElection} now={now} />}
 
       <HomeIntentGrid enabledFlags={enabledFlags} />
+
+      {/* After the intents, not before: the banner promotes the channel, the grid answers the
+          visit. */}
+      <YoutubeBanner />
 
       <KPIStrip kpis={kpis} />
 
