@@ -19,6 +19,7 @@ vi.mock("@/lib/db", () => ({
 
 import PartyOgImage from "@/app/partis/[slug]/opengraph-image";
 import FactCheckOgImage from "@/app/factchecks/[slug]/opengraph-image";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 
 describe("images Open Graph du contrat public MCP", () => {
   beforeEach(() => {
@@ -36,7 +37,7 @@ describe("images Open Graph du contrat public MCP", () => {
       expect.objectContaining({
         where: {
           slug: "parti-draft-only",
-          politicians: { some: { publicationStatus: "PUBLISHED" } },
+          ...PUBLIC_PARTY_WHERE,
         },
       })
     );

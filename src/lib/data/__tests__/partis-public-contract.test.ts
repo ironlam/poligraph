@@ -13,6 +13,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { getParties, getParty } from "@/lib/data/partis";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 
 describe("données HTML publiques des partis", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -25,14 +26,14 @@ describe("données HTML publiques des partis", () => {
       expect.objectContaining({
         where: {
           slug: "parti-draft-only",
-          politicians: { some: { publicationStatus: "PUBLISHED" } },
+          ...PUBLIC_PARTY_WHERE,
         },
         include: expect.objectContaining({
           politicians: expect.objectContaining({ where: { publicationStatus: "PUBLISHED" } }),
           partyMemberships: expect.objectContaining({
             where: { politician: { publicationStatus: "PUBLISHED" } },
           }),
-          successors: { where: { politicians: { some: { publicationStatus: "PUBLISHED" } } } },
+          successors: { where: { ...PUBLIC_PARTY_WHERE } },
         }),
       })
     );
@@ -152,7 +153,7 @@ describe("données HTML publiques des partis", () => {
     const listingQuery = mocks.partyFindMany.mock.calls.at(-1)?.[0];
     expect(detailQuery.where).toEqual({
       slug: publicParty.slug,
-      politicians: { some: { publicationStatus: "PUBLISHED" } },
+      ...PUBLIC_PARTY_WHERE,
     });
     expect(detailQuery.include.affairsAtTime.where).toEqual({
       publicationStatus: "PUBLISHED",

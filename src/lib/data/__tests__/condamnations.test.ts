@@ -15,6 +15,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { getCondamnations, getCondamnationsStatsByParty } from "../condamnations";
 import { db } from "@/lib/db";
 import type { Mock } from "vitest";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 
 const mockFindMany = db.affair.findMany as Mock;
 const mockCount = db.affair.count as Mock;
@@ -129,14 +130,14 @@ describe("getCondamnations", () => {
       {
         partyAtTime: {
           slug: "rn",
-          politicians: { some: { publicationStatus: "PUBLISHED" } },
+          ...PUBLIC_PARTY_WHERE,
         },
       },
       {
         politician: {
           currentParty: {
             slug: "rn",
-            politicians: { some: { publicationStatus: "PUBLISHED" } },
+            ...PUBLIC_PARTY_WHERE,
           },
         },
       },

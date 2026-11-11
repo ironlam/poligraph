@@ -29,6 +29,10 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import Image from "./opengraph-image";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
+
+// The gate as it appears inside a serialized where clause, braces stripped.
+const PUBLIC_PARTY_GATE_JSON = JSON.stringify(PUBLIC_PARTY_WHERE).slice(1, -1);
 
 function textContent(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -49,9 +53,7 @@ describe("Open Graph du programme", () => {
 
   it("n'expose pas l'identité d'un parti non public via une plateforme publiée", async () => {
     mocks.platformFindFirst.mockImplementation(async (args: unknown) => {
-      const publicOnly = JSON.stringify(args).includes(
-        '"politicians":{"some":{"publicationStatus":"PUBLISHED"}}'
-      );
+      const publicOnly = JSON.stringify(args).includes(PUBLIC_PARTY_GATE_JSON);
       return publicOnly
         ? null
         : {

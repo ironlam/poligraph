@@ -22,6 +22,10 @@ import {
   getPublicPartyMetadataBySlug,
   searchAffairs,
 } from "./affairs";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
+
+// The gate as it appears inside a serialized where clause, braces stripped.
+const PUBLIC_PARTY_GATE_JSON = JSON.stringify(PUBLIC_PARTY_WHERE).slice(1, -1);
 
 describe("getPartiesWithAffairs", () => {
   beforeEach(() => {
@@ -31,9 +35,7 @@ describe("getPartiesWithAffairs", () => {
 
   it("charge les metadata d'un parti uniquement derrière la frontière publique", async () => {
     mocks.partyFindFirst.mockImplementation(async (args: unknown) => {
-      const publicOnly = JSON.stringify(args).includes(
-        '"politicians":{"some":{"publicationStatus":"PUBLISHED"}}'
-      );
+      const publicOnly = JSON.stringify(args).includes(PUBLIC_PARTY_GATE_JSON);
       return publicOnly ? null : { name: "Parti interne", shortName: "PI" };
     });
 
@@ -41,7 +43,7 @@ describe("getPartiesWithAffairs", () => {
     expect(mocks.partyFindFirst).toHaveBeenCalledWith({
       where: {
         slug: "parti-interne",
-        politicians: { some: { publicationStatus: "PUBLISHED" } },
+        ...PUBLIC_PARTY_WHERE,
       },
       select: { name: true, shortName: true },
     });
@@ -56,9 +58,7 @@ describe("getPartiesWithAffairs", () => {
   it("écarte les partis et affaires qui ne franchissent pas toutes les frontières publiques", async () => {
     mocks.partyFindMany.mockImplementation(async (args: unknown) => {
       const serialized = JSON.stringify(args);
-      const partyIsPublic = serialized.includes(
-        '"politicians":{"some":{"publicationStatus":"PUBLISHED"}}'
-      );
+      const partyIsPublic = serialized.includes(PUBLIC_PARTY_GATE_JSON);
       const affairsUsePublishedPoliticians = serialized.includes(
         '"politician":{"publicationStatus":"PUBLISHED"}'
       );
@@ -109,7 +109,7 @@ describe("getPartiesWithAffairs", () => {
     expect(mocks.partyFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          politicians: { some: { publicationStatus: "PUBLISHED" } },
+          ...PUBLIC_PARTY_WHERE,
           affairsAtTime: {
             some: expect.objectContaining({
               publicationStatus: "PUBLISHED",
@@ -218,15 +218,13 @@ describe("getPartiesWithAffairs", () => {
     mocks.affairFindMany.mockImplementation(async (args: { where?: unknown }) => {
       const where = JSON.stringify(args.where);
       const hasPublicPartyBoundary = where.includes(
-        '"partyAtTime":{"slug":"parti-public","politicians":{"some":{"publicationStatus":"PUBLISHED"}}}'
+        `"partyAtTime":{"slug":"parti-public",${PUBLIC_PARTY_GATE_JSON}}`
       );
       return (hasPublicPartyBoundary ? [publicAffair] : []) as never;
     });
     mocks.affairCount.mockImplementation(async (args: { where?: unknown }) => {
       const where = JSON.stringify(args.where);
-      return where.includes(
-        '"partyAtTime":{"slug":"parti-public","politicians":{"some":{"publicationStatus":"PUBLISHED"}}}'
-      )
+      return where.includes(`"partyAtTime":{"slug":"parti-public",${PUBLIC_PARTY_GATE_JSON}}`)
         ? 1
         : 0;
     });
@@ -260,7 +258,7 @@ describe("getPartiesWithAffairs", () => {
         where: expect.objectContaining({
           partyAtTime: {
             slug: "parti-interne",
-            politicians: { some: { publicationStatus: "PUBLISHED" } },
+            ...PUBLIC_PARTY_WHERE,
           },
         }),
       })

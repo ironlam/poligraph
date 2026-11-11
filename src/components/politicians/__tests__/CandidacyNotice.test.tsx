@@ -16,6 +16,7 @@ const base: PoliticianCandidacy = {
   sourceUrl: "https://example.org/source",
   sourceLabel: "Le Monde, 14 janvier 2026",
   partyLabel: null,
+  partySlug: null,
   partyLogoUrl: null,
   partyColor: null,
   programmeIdentified: false,

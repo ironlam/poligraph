@@ -48,7 +48,7 @@ const PARTY_SUGGESTIONS: Suggestion[] = [
     rightName: "Rassemblement National",
   },
   {
-    leftSlug: "socialistes-et-apparentes",
+    leftSlug: "parti-socialiste",
     leftName: "Parti Socialiste",
     rightSlug: "les-republicains",
     rightName: "Les Républicains",

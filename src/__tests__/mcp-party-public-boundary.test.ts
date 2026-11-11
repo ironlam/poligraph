@@ -39,6 +39,7 @@ import { GET as getStats } from "@/app/api/stats/route";
 import { GET as searchParties } from "@/app/api/search/parties/route";
 import { GET as getCompareIndex } from "@/app/api/compare/search-index/route";
 import { GET as getElection } from "@/app/api/elections/[slug]/route";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 
 const context = (params: Record<string, string> = {}) => ({ params: Promise.resolve(params) });
 
@@ -66,7 +67,7 @@ describe("MCP party public boundary", () => {
     expect(mocks.partyFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          politicians: { some: { publicationStatus: "PUBLISHED" } },
+          ...PUBLIC_PARTY_WHERE,
         }),
         select: expect.objectContaining({
           _count: {
@@ -104,7 +105,7 @@ describe("MCP party public boundary", () => {
     await getStats(new NextRequest("https://poligraph.fr/api/stats"), context());
 
     expect(mocks.partyCount).toHaveBeenCalledWith({
-      where: { politicians: { some: { publicationStatus: "PUBLISHED" } } },
+      where: { ...PUBLIC_PARTY_WHERE },
     });
 
     await getCompareIndex(
@@ -115,7 +116,7 @@ describe("MCP party public boundary", () => {
     expect(mocks.partyFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          politicians: { some: { publicationStatus: "PUBLISHED" } },
+          ...PUBLIC_PARTY_WHERE,
           dissolvedDate: null,
         },
         select: expect.objectContaining({
