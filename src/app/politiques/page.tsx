@@ -9,7 +9,13 @@ import {
   getProbityConvictionBadgeSql,
   getProbityConvictionBadgeWhere,
 } from "@/lib/affairs/public-filters";
-import { type SortOption, type MandateFilter } from "@/components/politicians/FilterBar";
+import { type MandateFilter } from "@/components/politicians/FilterBar";
+import {
+  DEFAULT_POLITIQUES_SORT,
+  parsePolitiquesSort,
+  politiquesSortParam,
+  type SortOption,
+} from "@/config/politiques-sort";
 import { MandateType, type Prisma } from "@/generated/prisma";
 import { SearchForm } from "@/components/politicians/SearchForm";
 import { PoliticiansGrid } from "@/components/politicians/PoliticiansGrid";
@@ -52,10 +58,11 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   if (params.party) cp.set("party", params.party);
   if (params.conviction === "true") cp.set("conviction", "true");
   if (params.financing === "true") cp.set("financing", "true");
-  if (params.sort && params.sort !== "prominence") cp.set("sort", params.sort);
+  const sortParam = politiquesSortParam(params.sort);
+  if (sortParam) cp.set("sort", sortParam);
   const qs = cp.toString();
 
-  const hasNonDefaultSort = params.sort !== undefined && params.sort !== "prominence";
+  const hasNonDefaultSort = params.sort !== undefined && params.sort !== DEFAULT_POLITIQUES_SORT;
   const hasConvictionFilter = params.conviction === "true" || params.financing === "true";
   const noindex =
     hasActiveListingFilter(params, POLITIQUES_LISTING_FILTER_KEYS) ||
@@ -140,7 +147,7 @@ async function queryPoliticians(
   withConviction?: boolean,
   withFinancing?: boolean,
   mandateFilter?: MandateFilter,
-  sortOption: SortOption = "alpha",
+  sortOption: SortOption = DEFAULT_POLITIQUES_SORT,
   page = 1
 ) {
   const limit = 24;
@@ -206,7 +213,7 @@ async function queryPoliticians(
 
   // Get order by config
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const orderBy = (SORT_CONFIGS[sortOption] || SORT_CONFIGS.alpha) as any;
+  const orderBy = (SORT_CONFIGS[sortOption] || SORT_CONFIGS[DEFAULT_POLITIQUES_SORT]) as any;
 
   const [politicians, total] = await Promise.all([
     db.politician.findMany({
@@ -260,7 +267,7 @@ async function getPoliticiansFiltered(
   withConviction?: boolean,
   withFinancing?: boolean,
   mandateFilter?: MandateFilter,
-  sortOption: SortOption = "alpha",
+  sortOption: SortOption = DEFAULT_POLITIQUES_SORT,
   page = 1
 ) {
   "use cache";
@@ -285,7 +292,7 @@ async function searchPoliticians(
   withConviction?: boolean,
   withFinancing?: boolean,
   mandateFilter?: MandateFilter,
-  sortOption: SortOption = "alpha",
+  sortOption: SortOption = DEFAULT_POLITIQUES_SORT,
   page = 1
 ) {
   return queryPoliticians(
@@ -306,7 +313,7 @@ async function getPoliticians(
   withConviction?: boolean,
   withFinancing?: boolean,
   mandateFilter?: MandateFilter,
-  sortOption: SortOption = "alpha",
+  sortOption: SortOption = DEFAULT_POLITIQUES_SORT,
   page = 1
 ) {
   if (search) {
@@ -468,8 +475,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
   // "dissidence" sort, say) would otherwise reach the <select> as a value with
   // no matching option, showing an empty sort box over an alphabetically
   // sorted list, and get echoed back into every filter link the grid builds.
-  const rawSort = params.sort ?? "";
-  const sortOption: SortOption = rawSort in SORT_CONFIGS ? (rawSort as SortOption) : "prominence";
+  const sortOption = parsePolitiquesSort(params.sort);
   const page = parsePageParam(params.page);
 
   const [{ politicians, total, totalPages }, parties, counts, governmentsEnabled] =
@@ -493,7 +499,8 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
     Boolean
   ).length;
   // Bare landing: the banner and entry tiles only show without search, filter, sort or page.
-  const isLanding = !search && activeFilterCount === 0 && sortOption === "prominence" && page === 1;
+  const isLanding =
+    !search && activeFilterCount === 0 && sortOption === DEFAULT_POLITIQUES_SORT && page === 1;
 
   const entrees: RubriqueEntree[] = [
     {

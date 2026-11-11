@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PoliticianCard } from "./PoliticianCard";
 import { FilterBar, type SortOption, type MandateFilter } from "./FilterBar";
+import { politiquesSortParam } from "@/config/politiques-sort";
 import { Badge } from "@/components/ui/badge";
 import { PartySelect } from "./PartySelect";
 import type { PoliticianWithPartyAndCounts, Party } from "@/types";
@@ -62,7 +63,7 @@ export function PoliticiansGrid({
       financing: financingFilter ? "true" : undefined,
       mandate: mandateFilter || undefined,
       status: undefined,
-      sort: sortOption !== "alpha" ? sortOption : undefined,
+      sort: politiquesSortParam(sortOption) || undefined,
       page: undefined,
       ...newParams,
     };
