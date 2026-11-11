@@ -166,12 +166,9 @@ export default async function AssembleePage({ searchParams }: PageProps) {
         />
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-3xl">🏛️</span>
-            <h1 className="text-3xl font-display font-extrabold tracking-tight">
-              Les lois en construction
-            </h1>
-          </div>
+          <h1 className="mb-2 text-3xl font-display font-extrabold tracking-tight">
+            Les lois en construction
+          </h1>
           <p className="text-muted-foreground text-lg">
             Comprendre les textes déposés, discutés, amendés ou adoptés au Parlement.
           </p>
@@ -200,61 +197,6 @@ export default async function AssembleePage({ searchParams }: PageProps) {
           />
         </div>
 
-        {/* Pedagogical callout: what a legislative dossier is, and is not */}
-        <Card className="mb-8 bg-muted/40">
-          <CardContent className="pt-6">
-            <div className="flex gap-3">
-              <Info className="h-5 w-5 shrink-0 text-muted-foreground mt-0.5" aria-hidden="true" />
-              <div className="text-sm text-muted-foreground space-y-2">
-                <p>
-                  Un dossier législatif retrace le parcours d&apos;un texte : dépôt, examen en
-                  commission, séance publique, navette entre l&apos;Assemblée et le Sénat,
-                  amendements, votes et éventuelle adoption.
-                </p>
-                <p>
-                  <strong className="text-foreground">
-                    Tous les textes déposés ne deviennent pas des lois.
-                  </strong>{" "}
-                  Un dossier n&apos;est pas forcément une loi adoptée : beaucoup sont amendés,
-                  rejetés, retirés ou restent sans suite. Poligraph reprend les données publiques de
-                  l&apos;Assemblée nationale et les rend plus lisibles.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* How a bill moves through Parliament */}
-        <LegislativeJourney />
-
-        {/* PPL Stats */}
-        <DossierPPLStats stats={pplStats} />
-
-        {/* Status legend — placed before the list so badges are understood upfront */}
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <h2 className="font-semibold mb-3">Comprendre les statuts</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              {(Object.keys(DOSSIER_STATUS_LABELS) as DossierStatus[]).map((status) => (
-                <div key={status} className="flex items-start gap-2">
-                  <span className="shrink-0">{DOSSIER_STATUS_ICONS[status]}</span>
-                  <div>
-                    <span className="font-medium">{DOSSIER_STATUS_LABELS[status]}</span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      &mdash; {DOSSIER_STATUS_DESCRIPTIONS[status]}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground mt-4">
-              Les statuts sont simplifiés à partir des données disponibles. Le détail officiel reste
-              accessible via le lien Assemblée nationale sur chaque dossier.
-            </p>
-          </CardContent>
-        </Card>
-
         {/* Filter bar */}
         <DossierFilterBar
           currentFilters={{
@@ -267,8 +209,16 @@ export default async function AssembleePage({ searchParams }: PageProps) {
         />
 
         {/* Results count */}
-        <p className="text-sm text-muted-foreground mb-4">
-          {total} résultat{total !== 1 ? "s" : ""}
+        <p className="mb-4 flex flex-wrap items-center justify-between gap-x-4 text-sm text-muted-foreground">
+          <span>
+            {total} résultat{total !== 1 ? "s" : ""}
+          </span>
+          <a
+            href="#comprendre-les-statuts"
+            className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
+          >
+            Comprendre les statuts
+          </a>
         </p>
 
         {/* Dossiers list */}
@@ -341,6 +291,68 @@ export default async function AssembleePage({ searchParams }: PageProps) {
             </CardContent>
           </Card>
         )}
+
+        {/* Explanations come after the list: placed before it, they pushed the first dossier four
+            screens down on a phone. The link under the filters leads here. */}
+        <div className="mt-10">
+          {/* Pedagogical callout: what a legislative dossier is, and is not */}
+          <Card className="mb-8 bg-muted/40">
+            <CardContent className="pt-6">
+              <div className="flex gap-3">
+                <Info
+                  className="h-5 w-5 shrink-0 text-muted-foreground mt-0.5"
+                  aria-hidden="true"
+                />
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p>
+                    Un dossier législatif retrace le parcours d&apos;un texte : dépôt, examen en
+                    commission, séance publique, navette entre l&apos;Assemblée et le Sénat,
+                    amendements, votes et éventuelle adoption.
+                  </p>
+                  <p>
+                    <strong className="text-foreground">
+                      Tous les textes déposés ne deviennent pas des lois.
+                    </strong>{" "}
+                    Un dossier n&apos;est pas forcément une loi adoptée : beaucoup sont amendés,
+                    rejetés, retirés ou restent sans suite. Poligraph reprend les données publiques
+                    de l&apos;Assemblée nationale et les rend plus lisibles.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* How a bill moves through Parliament */}
+          <LegislativeJourney />
+
+          {/* PPL Stats */}
+          <DossierPPLStats stats={pplStats} />
+
+          {/* Status legend */}
+          <Card id="comprendre-les-statuts" className="mb-8 scroll-mt-24">
+            <CardContent className="pt-6">
+              <h2 className="font-semibold mb-3">Comprendre les statuts</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                {(Object.keys(DOSSIER_STATUS_LABELS) as DossierStatus[]).map((status) => (
+                  <div key={status} className="flex items-start gap-2">
+                    <span className="shrink-0">{DOSSIER_STATUS_ICONS[status]}</span>
+                    <div>
+                      <span className="font-medium">{DOSSIER_STATUS_LABELS[status]}</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        &mdash; {DOSSIER_STATUS_DESCRIPTIONS[status]}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-4">
+                Les statuts sont simplifiés à partir des données disponibles. Le détail officiel
+                reste accessible via le lien Assemblée nationale sur chaque dossier.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Info box */}
         <Card className="mt-8 bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
