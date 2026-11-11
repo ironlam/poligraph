@@ -161,35 +161,6 @@ export default async function PartiesPage({ searchParams }: PageProps) {
                           {party.dissolvedDate && party._count.partyMemberships > 0 && (
                             <span>{party._count.partyMemberships} anciens membres</span>
                           )}
-                          {party.affairCounts.condamnationsDefinitives > 0 && (
-                            <span className="text-amber-600 dark:text-amber-400 font-medium">
-                              {party.affairCounts.condamnationsDefinitives} condamnation
-                              {party.affairCounts.condamnationsDefinitives > 1 ? "s" : ""}{" "}
-                              définitive
-                              {party.affairCounts.condamnationsDefinitives > 1 ? "s" : ""}
-                            </span>
-                          )}
-                          {party.affairCounts.condamnationsNonDefinitives > 0 && (
-                            <span className="text-amber-600 dark:text-amber-400">
-                              {party.affairCounts.condamnationsNonDefinitives} condamnation
-                              {party.affairCounts.condamnationsNonDefinitives > 1 ? "s" : ""} non
-                              définitive
-                              {party.affairCounts.condamnationsNonDefinitives > 1 ? "s" : ""}
-                            </span>
-                          )}
-                          {party.affairCounts.enCours > 0 && (
-                            <span className="text-amber-600 dark:text-amber-400">
-                              {party.affairCounts.enCours} procédure
-                              {party.affairCounts.enCours > 1 ? "s" : ""} en cours
-                            </span>
-                          )}
-                          {party.affairCounts.closesSansCondamnation > 0 && (
-                            <span>
-                              {party.affairCounts.closesSansCondamnation} close
-                              {party.affairCounts.closesSansCondamnation > 1 ? "s" : ""} sans
-                              condamnation
-                            </span>
-                          )}
                         </div>
                         {party.predecessor ? (
                           <p className="text-xs text-muted-foreground mt-1">

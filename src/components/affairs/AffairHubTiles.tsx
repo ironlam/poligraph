@@ -40,14 +40,16 @@ export function AffairHubTiles({ etabliCount }: AffairHubTilesProps) {
     },
   ];
 
+  // Below sm the four tiles share one line that scrolls sideways: stacked, they stood between the
+  // filters and the first affair.
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="-mx-4 flex gap-3 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
       {tiles.map((tile) => (
         <Link
           key={tile.href}
           href={tile.href}
           prefetch={false}
-          className="flex min-h-[44px] flex-col justify-center gap-0.5 rounded-lg border bg-card px-4 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex min-h-[44px] w-60 shrink-0 flex-col justify-center gap-0.5 rounded-lg border bg-card px-4 py-3 sm:w-auto transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
             {tile.accent && (
@@ -67,7 +69,7 @@ export function AffairHubTiles({ etabliCount }: AffairHubTilesProps) {
       <Link
         href="/elections/presidentielle-2027/affaires-judiciaires"
         prefetch={false}
-        className="flex min-h-[44px] flex-col justify-center gap-0.5 rounded-lg border border-primary/25 bg-primary/[0.035] px-4 py-3 transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="flex min-h-[44px] w-60 shrink-0 flex-col justify-center gap-0.5 rounded-lg border border-primary/25 sm:w-auto bg-primary/[0.035] px-4 py-3 transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <span className="text-sm font-semibold text-foreground">
           Affaires des candidats et personnalités suivies

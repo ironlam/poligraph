@@ -594,7 +594,10 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
               titreId="explorer-par-mandat"
               entrees={entrees}
             />
-            <SurChaqueFiche />
+            {/* From sm up only: on a phone it stood between the entries and the list. */}
+            <div className="hidden sm:block">
+              <SurChaqueFiche />
+            </div>
             <div>
               <h2 className="font-display text-2xl font-extrabold text-primary">
                 Tous les représentants

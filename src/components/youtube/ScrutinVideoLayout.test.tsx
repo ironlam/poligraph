@@ -19,6 +19,13 @@ describe("ScrutinVideoLayout", () => {
     expect(screen.queryByRole("button", { name: /lire la vidéo/i })).toBeNull();
   });
 
+  it("sans vidéo : le bandeau de la chaîne suit le résultat au lieu de le précéder", () => {
+    renderLayout(null);
+    const content = screen.getByText("Résultat officiel");
+    const banner = screen.getByRole("link", { name: /s'abonner à la chaîne/i });
+    expect(content.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("avec vidéo : le lecteur remplace le bandeau", () => {
     renderLayout("abcdefghijk");
     expect(screen.getByRole("button", { name: /lire la vidéo/i })).toBeInTheDocument();
