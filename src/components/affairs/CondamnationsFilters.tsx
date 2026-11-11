@@ -58,7 +58,11 @@ export function CondamnationsFilters({
   );
 
   return (
-    <div className="flex flex-col gap-3 mb-6" role="group" aria-label="Filtres de la liste">
+    <div
+      className="mb-4 flex flex-col gap-2 md:mb-6 md:gap-3"
+      role="group"
+      aria-label="Filtres de la liste"
+    >
       <FilterGroup
         legend="Type de mandat"
         options={MANDAT_OPTIONS}
@@ -125,8 +129,16 @@ function FilterGroup({
 }) {
   return (
     <fieldset>
-      <legend className="text-xs font-medium text-muted-foreground mb-1">{legend}</legend>
-      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={legend}>
+      {/* Below md each group is one line that scrolls sideways, its legend left to screen readers:
+          three stacked groups with visible legends filled the first screen of a phone. */}
+      <legend className="mb-1 text-xs font-medium text-muted-foreground max-md:sr-only">
+        {legend}
+      </legend>
+      <div
+        className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+        role="radiogroup"
+        aria-label={legend}
+      >
         {options.map((opt) => {
           const active = currentKey === opt.key;
           return (
@@ -135,7 +147,7 @@ function FilterGroup({
               href={onHref(opt.key)}
               role="radio"
               aria-checked={active}
-              className={`inline-flex items-center justify-center min-h-11 px-4 rounded-full border text-sm transition-colors hover:bg-muted ${
+              className={`inline-flex shrink-0 items-center justify-center whitespace-nowrap min-h-11 px-4 rounded-full border text-sm transition-colors hover:bg-muted ${
                 active ? "border-primary bg-primary/10 font-medium" : ""
               }`}
               prefetch={false}
