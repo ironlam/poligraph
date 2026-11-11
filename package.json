@@ -194,6 +194,7 @@
     "sync:press-analysis:stats": "tsx scripts/sync-press-analysis.ts --stats",
     "sync:moderate": "tsx scripts/sync-moderate-affairs.ts",
     "sync:moderate:stats": "tsx scripts/sync-moderate-affairs.ts --stats",
+    "votes:revalidate-page": "tsx --env-file=.env scripts/revalidate-vote-page.ts",
     "moderate:preflight": "tsx scripts/moderate-preflight.ts",
     "proposals": "tsx --env-file=.env scripts/proposals.ts",
     "moderate:preflight:dry": "tsx scripts/moderate-preflight.ts --dry-run",

@@ -2,14 +2,14 @@
  * Revalide la page publique d'un ou plusieurs scrutins (et elle seule) après une correction
  * de résumé, de décryptage ou de titre faite en base. Passe par la vraie connexion admin.
  *
- *   node_modules/.bin/tsx --env-file=.env scripts/revalidate-vote-page.ts <slug|id> [<slug|id> ...]
+ *   npm run votes:revalidate-page -- --deployed <slug|id> [<slug|id> ...]
  *
  * Exige ADMIN_PASSWORD dans l'environnement et --deployed : tant que la route avec `scope` n'est
  * pas déployée en production, elle ignore ce paramètre et fait la revalidation LARGE (tag votes).
  * Les titres non APPROVED sont ignorés par la route.
  */
 import { db } from "@/lib/db";
-import { revalidateVotePagesAsAdmin } from "@/lib/votes/admin-revalidate-client";
+import { revalidateVotePagesAsAdmin } from "@/lib/api/admin-revalidate-client";
 
 const BASE = "https://poligraph.fr";
 const MAX = 10;
