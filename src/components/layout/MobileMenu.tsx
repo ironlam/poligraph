@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -18,7 +18,6 @@ import {
   MapPin,
   Building,
   Search,
-  Menu,
   X,
   ChevronRight,
   Heart,
@@ -29,6 +28,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Logo } from "./Logo";
+import { useMobileMenu } from "./MobileMenuProvider";
 
 const ICON_MAP: Record<string, LucideIcon> = {
   barChart: BarChart3,
@@ -67,9 +67,9 @@ export function MobileMenu({
   pastElectionSlugs,
   spotlightSlug = null,
 }: MobileMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  // Opened from the bottom tab bar, which sits outside of the header this component renders in.
+  const { isOpen, setIsOpen, triggerRef } = useMobileMenu();
   const menuRef = useRef<HTMLDivElement>(null);
-  const toggleRef = useRef<HTMLButtonElement>(null);
   const searchFieldRef = useRef<HTMLButtonElement>(null);
   // Set when the search screen hands back to the menu, so focus lands where the reader left.
   const returnToSearchFieldRef = useRef(false);
@@ -106,8 +106,8 @@ export function MobileMenu({
 
   const close = useCallback(() => {
     setIsOpen(false);
-    toggleRef.current?.focus();
-  }, []);
+    triggerRef.current?.focus();
+  }, [setIsOpen, triggerRef]);
 
   // Keyboard handling
   useEffect(() => {
@@ -157,7 +157,7 @@ export function MobileMenu({
   // Close on route change
   useEffect(() => {
     setIsOpen(false);
-  }, [pathname]);
+  }, [pathname, setIsOpen]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -186,18 +186,6 @@ export function MobileMenu({
         </button>
 
         <PageShareButton />
-
-        {/* Hamburger */}
-        <button
-          ref={toggleRef}
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center justify-center h-10 w-10 rounded-lg text-foreground/70 hover:text-foreground hover:bg-muted/50 transition-colors"
-          aria-label={isOpen ? "Fermer le menu" : "Ouvrir le menu"}
-          aria-expanded={isOpen}
-          aria-controls="mobile-menu"
-        >
-          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
       </div>
 
       {/* Full-screen menu overlay — portaled to body to escape header's backdrop-filter containing block */}

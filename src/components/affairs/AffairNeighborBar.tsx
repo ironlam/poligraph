@@ -121,7 +121,7 @@ export function AffairNeighborBar({ slug, politicianSlug }: AffairNeighborBarPro
 
       {/* Mobile: fixed bottom action bar, thumb zone, safe-area aware. */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur-sm transition-transform duration-200 motion-reduce:transition-none sm:hidden ${
+        className={`fixed inset-x-0 bottom-[var(--tabbar-h)] z-30 border-t bg-background/95 backdrop-blur-sm transition-transform duration-200 motion-reduce:transition-none sm:hidden ${
           hidden ? "translate-y-full" : "translate-y-0"
         }`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}

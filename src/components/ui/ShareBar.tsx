@@ -98,11 +98,12 @@ export function ShareBar({ data }: ShareBarProps) {
         </button>
       </div>
 
-      {/* Mobile: horizontal bar, bottom */}
+      {/* lg to 2xl: horizontal bar, bottom. Below lg the tab bar owns the bottom edge and the
+          header share button covers the action. */}
       <div
         className={cn(
-          "2xl:hidden fixed bottom-0 left-0 right-0 z-40",
-          "flex items-center justify-center gap-3 px-4 py-3",
+          "hidden lg:flex 2xl:hidden fixed bottom-0 left-0 right-0 z-40",
+          "items-center justify-center gap-3 px-4 py-3",
           "bg-background/95 backdrop-blur-sm border-t shadow-lg"
         )}
         role="group"
