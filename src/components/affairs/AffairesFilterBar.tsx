@@ -9,6 +9,7 @@ import {
   DebouncedSearchInput,
   SelectFilter,
   ActiveFilterChips,
+  MobileFilterRow,
   FilterBarShell,
   type ActiveFilter,
 } from "@/components/filters";
@@ -239,20 +240,27 @@ export function AffairesFilterBar({
       {/* Mobile layout: "Filtres" bottom-sheet */}
       <div className="md:hidden space-y-3">
         <Dialog.Root open={sheetOpen} onOpenChange={setSheetOpen}>
-          <Dialog.Trigger asChild>
-            <button
-              type="button"
-              className="relative inline-flex min-h-11 items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-            >
-              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-              Filtres
-              {activeFilters.length > 0 && (
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
-                  {activeFilters.length}
-                </span>
-              )}
-            </button>
-          </Dialog.Trigger>
+          <MobileFilterRow
+            filters={activeFilters}
+            onRemove={removeFilter}
+            onClearAll={clearAll}
+            trigger={
+              <Dialog.Trigger asChild>
+                <button
+                  type="button"
+                  className="relative inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground outline-none transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                >
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                  Filtres
+                  {activeFilters.length > 0 && (
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-background px-1 text-xs font-semibold text-primary">
+                      {activeFilters.length}
+                    </span>
+                  )}
+                </button>
+              </Dialog.Trigger>
+            }
+          />
           <Dialog.Portal>
             <Dialog.Overlay
               className={cn(
@@ -360,8 +368,6 @@ export function AffairesFilterBar({
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
-
-        <ActiveFilterChips filters={activeFilters} onRemove={removeFilter} onClearAll={clearAll} />
       </div>
     </FilterBarShell>
   );
