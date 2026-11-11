@@ -23,6 +23,14 @@ describe("revalidateVotesSchema", () => {
     expect(r.success).toBe(true);
   });
 
+  it("defaults scope to all and accepts page, rejects anything else", () => {
+    expect(revalidateVotesSchema.parse({ scrutinIds: ["a"] }).scope).toBe("all");
+    expect(revalidateVotesSchema.safeParse({ scrutinIds: ["a"], scope: "page" }).success).toBe(
+      true
+    );
+    expect(revalidateVotesSchema.safeParse({ scrutinIds: ["a"], scope: "x" }).success).toBe(false);
+  });
+
   it("accepts exactly 200 scrutinIds (cap boundary)", () => {
     const scrutinIds = Array.from({ length: 200 }, (_, i) => `sc-${i}`);
     const r = revalidateVotesSchema.safeParse({ scrutinIds });

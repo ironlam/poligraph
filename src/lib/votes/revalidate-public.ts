@@ -24,3 +24,9 @@ export async function revalidatePublicPathsForScrutin(scrutinId: string): Promis
     revalidatePath("/parlement");
   }
 }
+
+/** Revalidates the detail page of one scrutin only: no list, theme, home or votes tag. */
+export async function revalidateVotePage(scrutinId: string): Promise<void> {
+  const scrutin = await db.scrutin.findUnique({ where: { id: scrutinId }, select: { slug: true } });
+  if (scrutin?.slug) revalidatePath(`/parlement/votes/${scrutin.slug}`);
+}

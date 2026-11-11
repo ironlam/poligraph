@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   auditCreate: vi.fn(),
   revalidateTags: vi.fn(),
   revalidatePublicPathsForScrutin: vi.fn(),
+  revalidateVotePage: vi.fn(),
   requestProfileRefresh: vi.fn(),
 }));
 
@@ -17,6 +18,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/cache", () => ({ revalidateTags: h.revalidateTags }));
 vi.mock("@/lib/votes/revalidate-public", () => ({
   revalidatePublicPathsForScrutin: h.revalidatePublicPathsForScrutin,
+  revalidateVotePage: h.revalidateVotePage,
 }));
 vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
   requestProfileRefresh: h.requestProfileRefresh,
@@ -27,10 +29,10 @@ vi.mock("@/lib/api/with-admin-auth", () => ({
 
 import { POST } from "../route";
 
-async function post(scrutinIds: string[]) {
+async function post(scrutinIds: string[], scope?: "all" | "page") {
   const request = new Request("https://poligraph.fr/api/admin/votes/revalidate", {
     method: "POST",
-    body: JSON.stringify({ scrutinIds }),
+    body: JSON.stringify({ scrutinIds, scope }),
     headers: { "content-type": "application/json" },
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,7 +51,11 @@ describe("POST /api/admin/votes/revalidate : recalcul des fiches", () => {
   it("revalide les votes et demande le recalcul des votants des seuls titres approuvés", async () => {
     const res = await post(["s1", "s2"]);
 
-    expect(await res.json()).toEqual({ revalidated: ["s1"], skipped: expect.any(Array) });
+    expect(await res.json()).toEqual({
+      revalidated: ["s1"],
+      skipped: expect.any(Array),
+      scope: "all",
+    });
     expect(h.revalidateTags).toHaveBeenCalledWith(["votes"], "max");
     expect(h.requestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
       { scrutinIds: ["s1"] },
@@ -59,6 +65,20 @@ describe("POST /api/admin/votes/revalidate : recalcul des fiches", () => {
 
   it("ne demande aucun recalcul quand aucun titre n'est approuvé", async () => {
     await post(["s2"]);
+    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
+  });
+
+  it("en scope page, ne revalide que la page des titres approuvés, sans tag ni fiches votants", async () => {
+    const res = await post(["s1", "s2"], "page");
+
+    expect(await res.json()).toEqual({
+      revalidated: ["s1"],
+      skipped: expect.any(Array),
+      scope: "page",
+    });
+    expect(h.revalidateVotePage).toHaveBeenCalledExactlyOnceWith("s1");
+    expect(h.revalidatePublicPathsForScrutin).not.toHaveBeenCalled();
+    expect(h.revalidateTags).not.toHaveBeenCalled();
     expect(h.requestProfileRefresh).not.toHaveBeenCalled();
   });
 });

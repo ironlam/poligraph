@@ -24,6 +24,8 @@ export const revalidateCacheSchema = z.union([
 // unbounded batch would mean an unbounded number of revalidatePath calls.
 export const revalidateVotesSchema = z.object({
   scrutinIds: z.array(z.string().min(1)).min(1).max(200),
+  // "page" ne revalide que /parlement/votes/{slug} (ni listing, ni tag votes, ni fiches votants).
+  scope: z.enum(["all", "page"]).default("all"),
 });
 
 export const createSyncSchema = z.object({

@@ -21,7 +21,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { revalidatePublicPathsForScrutin } from "@/lib/votes/revalidate-public";
+import { revalidatePublicPathsForScrutin, revalidateVotePage } from "@/lib/votes/revalidate-public";
 
 describe("revalidatePublicPathsForScrutin", () => {
   it("revalidates detail + list + theme paths, never the votes tag", async () => {
@@ -30,5 +30,13 @@ describe("revalidatePublicPathsForScrutin", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/parlement/votes");
     expect(revalidateTag).not.toHaveBeenCalled();
     expect(updateTag).not.toHaveBeenCalled();
+  });
+});
+
+describe("revalidateVotePage", () => {
+  it("revalide uniquement la page de détail", async () => {
+    revalidatePath.mockClear();
+    await revalidateVotePage("id1");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith("/parlement/votes/s");
   });
 });
