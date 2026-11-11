@@ -221,7 +221,7 @@ export async function getCondamnationsStatsByParty(
     GROUP BY pt.id, pt.slug, pt."shortName", pt.name
     HAVING COUNT(DISTINCT p.id) >= 3
         OR COUNT(DISTINCT CASE WHEN a.status = 'CONDAMNATION_DEFINITIVE' THEN a."politicianId" END) >= 1
-    ORDER BY "nCondamnesDefinitifs" DESC, "nSuivis" DESC
+    ORDER BY "nSuivis" DESC, "nCondamnesDefinitifs" DESC, pt.name ASC
   `);
 
   return rows.map((r) => ({

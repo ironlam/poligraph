@@ -98,6 +98,28 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   };
 }
 
+/**
+ * Sits after the list, not above the title: on a phone it used to push the first conviction off
+ * the first screen of the page that carries most of the site's organic traffic.
+ */
+function PresidentialAffairsLink() {
+  return (
+    <aside className="mt-8 rounded-xl border border-primary/25 bg-primary/[0.035] p-4">
+      <p className="text-sm text-muted-foreground">
+        Consultez aussi les affaires judiciaires documentées des candidats et personnalités suivies
+        pour la présidentielle 2027.
+      </p>
+      <Link
+        href="/elections/presidentielle-2027/affaires-judiciaires"
+        prefetch={false}
+        className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        Voir la page présidentielle 2027
+      </Link>
+    </aside>
+  );
+}
+
 export default async function CondamnationsPage({ searchParams }: PageProps) {
   const raw = await searchParams;
   const parsed = searchParamsSchema.safeParse(raw);
@@ -132,21 +154,10 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
         />
         <div className="container mx-auto px-4 pt-4 pb-8">
           <Breadcrumb items={breadcrumbItems} />
-          <div className="mb-5 rounded-xl border border-primary/25 bg-primary/[0.035] p-4">
-            <p className="text-sm text-muted-foreground">
-              Consultez aussi les affaires judiciaires documentées des candidats et personnalités
-              suivies pour la présidentielle 2027.
-            </p>
-            <Link
-              href="/elections/presidentielle-2027/affaires-judiciaires"
-              prefetch={false}
-              className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              Voir la page présidentielle 2027
-            </Link>
-          </div>
-          <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">{h1}</h1>
-          <p className="text-muted-foreground mb-6">
+          <h1 className="text-2xl font-display font-extrabold tracking-tight mb-2 sm:text-3xl">
+            {h1}
+          </h1>
+          <p className="text-muted-foreground mb-4 md:mb-6">
             Répartition des responsables politiques condamnés définitivement par leur parti d{"'"}
             appartenance. Sources vérifiables. Les condamnations encore susceptibles de recours ne
             sont pas comptées dans ce taux.
@@ -165,6 +176,7 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
             }))}
           />
           <CondamnationsStatsTable rows={stats} currentMandat={params.mandat} />
+          <PresidentialAffairsLink />
         </div>
       </>
     );
@@ -221,21 +233,10 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
       )}
       <div className="container mx-auto px-4 pt-4 pb-8">
         <Breadcrumb items={breadcrumbItems} />
-        <div className="mb-5 rounded-xl border border-primary/25 bg-primary/[0.035] p-4">
-          <p className="text-sm text-muted-foreground">
-            Consultez aussi les affaires judiciaires documentées des candidats et personnalités
-            suivies pour la présidentielle 2027.
-          </p>
-          <Link
-            href="/elections/presidentielle-2027/affaires-judiciaires"
-            prefetch={false}
-            className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            Voir la page présidentielle 2027
-          </Link>
-        </div>
-        <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">{h1}</h1>
-        <p className="text-muted-foreground mb-6">
+        <h1 className="text-2xl font-display font-extrabold tracking-tight mb-2 sm:text-3xl">
+          {h1}
+        </h1>
+        <p className="text-muted-foreground mb-4 md:mb-6">
           {totalDefinitif > 0 &&
             `${totalDefinitif} condamnation${totalDefinitif !== 1 ? "s" : ""} définitive${totalDefinitif !== 1 ? "s" : ""}`}
           {totalDefinitif > 0 && totalPrononce > 0 && " · "}
@@ -293,6 +294,8 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
             </div>
           </section>
         )}
+
+        <PresidentialAffairsLink />
 
         {/* Methodology footer */}
         <section className="mt-12 border-t border-border pt-6">
