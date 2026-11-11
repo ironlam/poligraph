@@ -15,9 +15,13 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { getPartyPlatform, getPartyPositionsForMatching, getPlatformsListing } from "./platforms";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
+
+// The gate as it appears inside a serialized where clause, braces stripped.
+const PUBLIC_PARTY_GATE_JSON = JSON.stringify(PUBLIC_PARTY_WHERE).slice(1, -1);
 
 function hasPublicParty(value: unknown): boolean {
-  return JSON.stringify(value).includes('"politicians":{"some":{"publicationStatus":"PUBLISHED"}}');
+  return JSON.stringify(value).includes(PUBLIC_PARTY_GATE_JSON);
 }
 
 const publicPlatform = {

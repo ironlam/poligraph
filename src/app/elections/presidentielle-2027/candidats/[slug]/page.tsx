@@ -218,9 +218,20 @@ export default async function CandidateFichePage({ params }: PageProps) {
                 withdrewReason={candidacy.withdrewReason}
               />
             </p>
-            {candidacy.partyLabel && (
-              <p className="text-base font-semibold text-foreground">{candidacy.partyLabel}</p>
-            )}
+            {candidacy.partyLabel &&
+              (candidacy.partySlug ? (
+                <p className="text-base font-semibold">
+                  <Link
+                    href={`/partis/${candidacy.partySlug}`}
+                    className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
+                    prefetch={false}
+                  >
+                    {candidacy.partyLabel}
+                  </Link>
+                </p>
+              ) : (
+                <p className="text-base font-semibold text-foreground">{candidacy.partyLabel}</p>
+              ))}
           </div>
           {candidacy.partyLabel && (
             <PartyLogo

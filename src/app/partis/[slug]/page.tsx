@@ -7,6 +7,8 @@ import { getParty, getPartyLeadership, getPartyRoles } from "@/lib/data/partis";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { getPartyPlatform } from "@/lib/data/platforms";
 import { ProgrammeCTA, ProgrammeCTAEmpty } from "@/components/programmes/ProgrammeCTA";
+import { PartyPresidentialSection } from "@/components/partis/PartyPresidentialSection";
+import { getPartyPresidentialProgramme } from "@/lib/data/party-presidentielle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
@@ -54,9 +56,28 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const positionLabel = party.politicalPosition
     ? POLITICAL_POSITION_LABELS[party.politicalPosition]
     : null;
+  // Only the generated description needs it; a written one is used as is.
+  const presidential = party.description
+    ? null
+    : await getPartyPresidentialProgramme(party.id, slug);
+  const candidateNames = presidential?.candidacies.map((c) => c.candidateName) ?? [];
+  const membersSentence =
+    memberCount > 0
+      ? ` ${memberCount.toLocaleString("fr-FR")} membre${memberCount > 1 ? "s" : ""} actuel${memberCount > 1 ? "s" : ""} suivi${memberCount > 1 ? "s" : ""} par Poligraph.`
+      : "";
+  const affairsSentence =
+    affairCount > 0
+      ? ` ${affairCount} affaire${affairCount > 1 ? "s" : ""} judiciaire${affairCount > 1 ? "s" : ""} documentée${affairCount > 1 ? "s" : ""}.`
+      : "";
+  const presidentialSentence =
+    presidential && presidential.measureCount > 0
+      ? ` Présidentielle 2027 : ${presidential.measureCount.toLocaleString("fr-FR")} mesure${presidential.measureCount > 1 ? "s" : ""} publiée${presidential.measureCount > 1 ? "s" : ""} (${candidateNames.join(", ")}).`
+      : candidateNames.length > 0
+        ? ` Présidentielle 2027 : ${candidateNames.join(", ")}.`
+        : "";
   const description =
     party.description ||
-    `${party.name} (${party.shortName})${positionLabel ? `, parti de ${positionLabel.toLowerCase()}` : ""} — ${memberCount} membre${memberCount > 1 ? "s" : ""} actuels.${affairCount > 0 ? ` ${affairCount} affaire${affairCount > 1 ? "s" : ""} judiciaire${affairCount > 1 ? "s" : ""} documentée${affairCount > 1 ? "s" : ""}.` : ""} Consultez la liste des élus et l'historique du parti.`;
+    `${party.name} (${party.shortName})${positionLabel ? `, parti de ${positionLabel.toLowerCase()}` : ""}.${membersSentence}${presidentialSentence}${affairsSentence}`;
 
   return {
     title: `${party.name} (${party.shortName})`,
@@ -92,14 +113,21 @@ export default async function PartyPage({ params }: PageProps) {
     notFound();
   }
 
-  const [leadershipMandates, partyRoles, pressEnabled, programmeEnabled, partyPlatform] =
-    await Promise.all([
-      getPartyLeadership(party.id, party.name),
-      getPartyRoles(party.id),
-      isFeatureEnabled("PRESS_SECTION"),
-      isFeatureEnabled("PROGRAMMES_ENABLED"),
-      getPartyPlatform(slug),
-    ]);
+  const [
+    leadershipMandates,
+    partyRoles,
+    pressEnabled,
+    programmeEnabled,
+    partyPlatform,
+    presidential,
+  ] = await Promise.all([
+    getPartyLeadership(party.id, party.name),
+    getPartyRoles(party.id),
+    isFeatureEnabled("PRESS_SECTION"),
+    isFeatureEnabled("PROGRAMMES_ENABLED"),
+    getPartyPlatform(slug),
+    getPartyPresidentialProgramme(party.id, slug),
+  ]);
   const currentLeaders = leadershipMandates.filter((m) => m.isCurrent);
   const pastLeaders = leadershipMandates.filter((m) => !m.isCurrent);
 
@@ -202,7 +230,20 @@ export default async function PartyPage({ params }: PageProps) {
           <p className="text-muted-foreground leading-relaxed mb-8">{party.description}</p>
         )}
 
-        {/* Programme CTA */}
+        {/* Presidential 2027: candidacies attached to the party and their published measures */}
+        {programmeEnabled && presidential && (
+          <div className="mb-8">
+            <PartyPresidentialSection
+              partyName={party.name}
+              partySlug={slug}
+              programme={presidential}
+              variant="summary"
+            />
+          </div>
+        )}
+
+        {/* Programme CTA: the dated party platform. The empty variant only shows when the
+            presidential block above has nothing to say either. */}
         {programmeEnabled &&
           (partyPlatform ? (
             <div className="mb-8">
@@ -215,9 +256,11 @@ export default async function PartyPage({ params }: PageProps) {
               />
             </div>
           ) : (
-            <div className="mb-8">
-              <ProgrammeCTAEmpty partyName={party.name} partyWebsite={party.website} />
-            </div>
+            !presidential && (
+              <div className="mb-8">
+                <ProgrammeCTAEmpty partyName={party.name} partyWebsite={party.website} />
+              </div>
+            )
           ))}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

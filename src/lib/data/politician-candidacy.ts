@@ -53,6 +53,8 @@ export type PoliticianCandidacy = {
   sourceUrl: string;
   sourceLabel: string;
   partyLabel: string | null;
+  /** Slug of the attached party page, null when the candidacy names no party in base. */
+  partySlug: string | null;
   partyLogoUrl: string | null;
   partyColor: string | null;
   programmeIdentified: boolean;
@@ -120,7 +122,7 @@ export async function loadPoliticianPresidentialCandidacy(
   const party = row.partyId
     ? await db.party.findUnique({
         where: { id: row.partyId },
-        select: { name: true, shortName: true, logoUrl: true, color: true },
+        select: { name: true, shortName: true, slug: true, logoUrl: true, color: true },
       })
     : null;
   const election = await db.election.findUniqueOrThrow({
@@ -167,6 +169,7 @@ export async function loadPoliticianPresidentialCandidacy(
     sourceUrl: row.sourceUrl,
     sourceLabel: row.sourceLabel,
     partyLabel: row.partyLabel ?? party?.shortName ?? party?.name ?? null,
+    partySlug: party?.slug ?? null,
     partyLogoUrl: party?.logoUrl ?? null,
     partyColor: party?.color ?? null,
     programmeIdentified: programme !== null,

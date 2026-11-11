@@ -8,6 +8,7 @@ import {
   isAllowedFactCheckSource,
   PUBLIC_PARTY_WHERE,
 } from "@/lib/api/public-contract";
+import { PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE } from "@/lib/data/presidential-candidacy-policy";
 
 describe("canonical external public fact-check boundary", () => {
   it("always requires PUBLISHED and an allowed source", () => {
@@ -38,17 +39,27 @@ describe("canonical external public fact-check boundary", () => {
 });
 
 describe("canonical public party boundary", () => {
-  it("requires at least one published politician on every public party", () => {
+  it("opens a party on a published politician or a tracked presidential candidacy", () => {
     expect(PUBLIC_PARTY_WHERE).toEqual({
-      politicians: { some: { publicationStatus: "PUBLISHED" } },
+      NOT: {
+        politicians: { none: { publicationStatus: "PUBLISHED" } },
+        candidacies: { none: PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE },
+      },
     });
   });
 
-  it("binds the raw SQL gate to the Party alias and published status", () => {
+  it("exposes no OR or AND key, because callers spread it next to their own", () => {
+    // `{ ...PUBLIC_PARTY_WHERE, OR: [...] }` would overwrite an OR here and drop the gate.
+    expect(Object.keys(PUBLIC_PARTY_WHERE)).toEqual(["NOT"]);
+  });
+
+  it("binds the raw SQL gate to the Party alias, members and candidacies", () => {
     const sql = getPublicPartySqlWhere();
 
     expect(sql.sql).toContain('public_party_member."currentPartyId" = p."id"');
-    expect(sql.values).toEqual(["PUBLISHED"]);
+    expect(sql.sql).toContain('public_party_candidacy."partyId" = p."id"');
+    expect(sql.sql).toContain('public_party_candidacy."sourceLabel" IS NOT NULL');
+    expect(sql.values).toEqual(["PUBLISHED", "PUBLISHED"]);
   });
 });
 

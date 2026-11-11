@@ -18,6 +18,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/services/voteStats", () => ({ getPoliticianVotingStats: vi.fn() }));
 
 import { getPreview, loadComparisonData } from "@/lib/data/compare";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 
 const publicMinister = (slug: string) => ({
   id: `id-${slug}`,
@@ -81,7 +82,7 @@ describe("comparaisons publiques MCP", () => {
     expect(mocks.partyFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          politicians: { some: { publicationStatus: "PUBLISHED" } },
+          ...PUBLIC_PARTY_WHERE,
           OR: [{ slug: "parti-draft-only" }, { id: "parti-draft-only" }],
         },
         select: expect.objectContaining({

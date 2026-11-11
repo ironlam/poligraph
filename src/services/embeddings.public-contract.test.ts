@@ -168,7 +168,7 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
 
     it("retire l'embedding d'un parti sans membre public", async () => {
       mocks.db.party.findFirst.mockImplementation(async ({ where }) =>
-        where?.politicians ? null : { id: "parti-interne" }
+        where?.NOT ? null : { id: "parti-interne" }
       );
 
       await indexParty("parti-interne");
@@ -239,7 +239,7 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
         model === "affair"
           ? gatesPublication(where) && gatesPolitician(where)
           : model === "party"
-            ? Boolean(where?.politicians)
+            ? Boolean(where?.NOT)
             : gatesPublication(where);
       expect(isGated).toBe(true);
     });
@@ -252,7 +252,7 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
       ]);
       mocks.db.party.findMany.mockResolvedValue([]);
       mocks.db.party.findMany.mockImplementation(async ({ where }) =>
-        where?.politicians ? [{ id: "parti-public", updatedAt: new Date(0) }] : []
+        where?.NOT ? [{ id: "parti-public", updatedAt: new Date(0) }] : []
       );
 
       await indexAllOfType("PARTY", { deltaOnly: true });
@@ -313,7 +313,7 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
       mocks.db.mandate.groupBy.mockImplementation(async ({ where }) => [
         { type: "DEPUTE", _count: gatesPolitician(where) ? 5 : 9 },
       ]);
-      mocks.db.party.count.mockImplementation(async (args) => (args?.where?.politicians ? 4 : 8));
+      mocks.db.party.count.mockImplementation(async (args) => (args?.where?.NOT ? 4 : 8));
       mocks.db.affair.count.mockImplementation(async ({ where }) =>
         gatesPublication(where) && gatesPolitician(where) ? 3 : 10
       );

@@ -142,6 +142,22 @@ const nextConfig: NextConfig = {
         destination: "/partis/:slug",
         permanent: true,
       },
+      // The Parti socialiste page carried the slug of its parliamentary group.
+      {
+        source: "/partis/socialistes-et-apparentes",
+        destination: "/partis/parti-socialiste",
+        permanent: true,
+      },
+      {
+        source: "/partis/socialistes-et-apparentes/programme",
+        destination: "/partis/parti-socialiste/programme",
+        permanent: true,
+      },
+      {
+        source: "/affaires/parti/socialistes-et-apparentes",
+        destination: "/affaires/parti/parti-socialiste",
+        permanent: true,
+      },
       // Fiches fusionnées (PG-001728 -> PG-001774).
       {
         source: "/politiques/sabrina-agresti-roubache",

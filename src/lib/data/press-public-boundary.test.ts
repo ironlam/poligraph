@@ -25,15 +25,17 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { getPartiesWithPressMentions, getPressStats, searchPress } from "./press";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
+
+// The gate as it appears inside a serialized where clause, braces stripped.
+const PUBLIC_PARTY_GATE_JSON = JSON.stringify(PUBLIC_PARTY_WHERE).slice(1, -1);
 
 function hasPublicPolitician(value: unknown): boolean {
   return JSON.stringify(value).includes('"politician":{"publicationStatus":"PUBLISHED"}');
 }
 
 function hasPublicParty(value: unknown): boolean {
-  return JSON.stringify(value).includes(
-    '"party":{"politicians":{"some":{"publicationStatus":"PUBLISHED"}}}'
-  );
+  return JSON.stringify(value).includes(`"party":{${PUBLIC_PARTY_GATE_JSON}}`);
 }
 
 describe("presse, frontières publiques", () => {
@@ -139,9 +141,7 @@ describe("presse, frontières publiques", () => {
 
   it("ne propose aucun parti de filtre sans personnalité publiée", async () => {
     mocks.partyFindMany.mockImplementation(async (args: unknown) => {
-      const publicOnly = JSON.stringify(args).includes(
-        '"politicians":{"some":{"publicationStatus":"PUBLISHED"}}'
-      );
+      const publicOnly = JSON.stringify(args).includes(PUBLIC_PARTY_GATE_JSON);
       return (
         publicOnly
           ? [{ id: "party-public", name: "Parti public", shortName: "PP" }]

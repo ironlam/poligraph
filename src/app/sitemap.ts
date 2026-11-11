@@ -17,7 +17,10 @@ import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
 import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
-import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
+import {
+  PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+  PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+} from "@/lib/presidentielle/publication";
 import { getPublicPresidentialCandidates } from "@/lib/data/presidential-candidates-public";
 import { getPublicMeasureStatsByCandidacy } from "@/lib/data/measures";
 import { loadPresidentialReaderGuideIndex } from "@/lib/data/presidential-reader-guides";
@@ -33,7 +36,10 @@ import {
   MIN_BIOGRAPHY_LENGTH,
 } from "@/lib/seo/politician-robots";
 import { TERRITOIRE_COMMUNE_MIN_POPULATION } from "@/lib/seo/territoire-robots";
-import { PUBLIC_POLITICIAN_PUBLICATION_STATUS } from "@/lib/api/public-contract";
+import {
+  PUBLIC_PARTY_WHERE,
+  PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+} from "@/lib/api/public-contract";
 import { REGIONS } from "@/config/regions";
 import { REPERE_METHODES, repereMethodePath } from "@/config/territoire-methodes";
 import {
@@ -535,28 +541,54 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     },
   ];
 
-  const [affairs, parties, partiesWithAffairs, elections] = await Promise.all([
-    db.affair.findMany({
-      where: getPublishedAffairWhere(),
-      select: { slug: true, updatedAt: true },
-      orderBy: { updatedAt: "desc" },
-    }),
-    db.party.findMany({
-      where: { politicians: { some: {} } },
-      select: { slug: true, updatedAt: true },
-    }),
-    db.party.findMany({
-      where: {
-        slug: { not: null },
-        affairsAtTime: { some: getPublishedAffairWhere() },
-      },
-      select: { slug: true, updatedAt: true },
-    }),
-    db.election.findMany({
-      select: { id: true, slug: true, updatedAt: true },
-      orderBy: { round1Date: "desc" },
-    }),
-  ]);
+  const programmesEnabled = await isFeatureEnabled("PROGRAMMES_ENABLED");
+  const [affairs, parties, partiesWithProgramme, partiesWithAffairs, elections] = await Promise.all(
+    [
+      db.affair.findMany({
+        where: getPublishedAffairWhere(),
+        select: { slug: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+      // Same gate as the party page itself, so the sitemap never lists a URL that 404s.
+      db.party.findMany({
+        where: PUBLIC_PARTY_WHERE,
+        select: { slug: true, updatedAt: true },
+      }),
+      // Mirrors the programme page's own indexability rule: a published platform, or a
+      // presidential fiche that carries public measures.
+      programmesEnabled
+        ? db.party.findMany({
+            where: {
+              ...PUBLIC_PARTY_WHERE,
+              slug: { not: null },
+              OR: [
+                { platforms: { some: { publicationStatus: "PUBLISHED" } } },
+                {
+                  candidacies: {
+                    some: {
+                      ...PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+                      election: { slug: PRESIDENTIELLE_2027_SLUG },
+                    },
+                  },
+                },
+              ],
+            },
+            select: { slug: true, updatedAt: true },
+          })
+        : Promise.resolve([]),
+      db.party.findMany({
+        where: {
+          slug: { not: null },
+          affairsAtTime: { some: getPublishedAffairWhere() },
+        },
+        select: { slug: true, updatedAt: true },
+      }),
+      db.election.findMany({
+        select: { id: true, slug: true, updatedAt: true },
+        orderBy: { round1Date: "desc" },
+      }),
+    ]
+  );
 
   // The presidentielle-2027 hub is noindex,follow until it clears its own publication gate
   // (spec §4, PUBLICATION_GATES.hub): below the gate there is nothing indexable to send
@@ -597,6 +629,25 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       changeFrequency: "weekly" as const,
       priority: 0.6,
     }));
+
+  const partyProgrammePages: MetadataRoute.Sitemap = [
+    ...(programmesEnabled
+      ? [
+          {
+            url: `${SITE_URL}/programmes`,
+            lastModified: new Date(),
+            changeFrequency: "weekly" as const,
+            priority: 0.8,
+          },
+        ]
+      : []),
+    ...partiesWithProgramme.map((p) => ({
+      url: `${SITE_URL}/partis/${p.slug}/programme`,
+      lastModified: p.updatedAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+  ];
 
   const partyAffairPages: MetadataRoute.Sitemap = partiesWithAffairs
     .filter((p) => p.slug)
@@ -756,6 +807,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     ...condamnationsEntries,
     ...affairPages,
     ...partyPages,
+    ...partyProgrammePages,
     ...partyAffairPages,
     ...electionPages,
     ...presidentialDirectoryPages,

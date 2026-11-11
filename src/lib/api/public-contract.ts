@@ -34,20 +34,52 @@ export const PUBLIC_POLITICIAN_WHERE = {
 } satisfies Prisma.PoliticianWhereInput;
 
 /**
- * A party is public only when at least one public politician is attached to it.
- * This prevents list, detail and search surfaces from enumerating internal-only
- * parties through an otherwise zero-valued member count.
+ * A party is public when a public politician is attached to it, or when a publicly tracked
+ * presidential candidacy names it. The second branch exists because the presidential hub already
+ * names these parties: a movement founded for a run has no elected member yet, and its page
+ * must not 404 while the hub links a candidate to it.
+ *
+ * The candidacy branch repeats PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE instead of importing
+ * it (that module imports this one); a test asserts the two stay equal.
+ *
+ * Shape matters: callers spread this object next to their own `OR` and `AND` keys, so an
+ * `OR` here would be silently overwritten and the gate dropped. Hence the De Morgan form
+ * under `NOT`, a key no caller uses.
  */
+export const PUBLIC_PARTY_TRACKED_CANDIDACY_WHERE = {
+  status: { not: null },
+  sourceUrl: { not: null },
+  sourceLabel: { not: null },
+  politicianId: { not: null },
+  politician: { is: PUBLIC_POLITICIAN_WHERE },
+} satisfies Prisma.CandidacyWhereInput;
+
 export const PUBLIC_PARTY_WHERE = {
-  politicians: { some: PUBLIC_POLITICIAN_WHERE },
+  NOT: {
+    politicians: { none: PUBLIC_POLITICIAN_WHERE },
+    candidacies: { none: PUBLIC_PARTY_TRACKED_CANDIDACY_WHERE },
+  },
 } satisfies Prisma.PartyWhereInput;
 
 export function getPublicPartySqlWhere(): Prisma.Sql {
-  return Prisma.sql`EXISTS (
-    SELECT 1
-    FROM "Politician" public_party_member
-    WHERE public_party_member."currentPartyId" = p."id"
-      AND public_party_member."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+  return Prisma.sql`(
+    EXISTS (
+      SELECT 1
+      FROM "Politician" public_party_member
+      WHERE public_party_member."currentPartyId" = p."id"
+        AND public_party_member."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM "Candidacy" public_party_candidacy
+      JOIN "Politician" public_party_candidate
+        ON public_party_candidate."id" = public_party_candidacy."politicianId"
+      WHERE public_party_candidacy."partyId" = p."id"
+        AND public_party_candidacy."status" IS NOT NULL
+        AND public_party_candidacy."sourceUrl" IS NOT NULL
+        AND public_party_candidacy."sourceLabel" IS NOT NULL
+        AND public_party_candidate."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+    )
   )`;
 }
 
