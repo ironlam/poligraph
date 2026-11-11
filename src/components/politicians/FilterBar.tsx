@@ -5,8 +5,9 @@ import { useFilterParams } from "@/hooks/useFilterParams";
 import { SelectFilter } from "@/components/filters";
 import { Spinner } from "@/components/ui/spinner";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { politiquesSortParam, type SortOption } from "@/config/politiques-sort";
 
-export type SortOption = "prominence" | "alpha" | "alpha-desc" | "recent";
+export type { SortOption };
 export type MandateFilter =
   | ""
   | "depute"
@@ -110,7 +111,7 @@ export function FilterBar({
         <SelectFilter
           id="sort-select"
           value={currentSort}
-          onChange={(v) => updateParams({ sort: v === "alpha" ? "" : v })}
+          onChange={(v) => updateParams({ sort: politiquesSortParam(v) })}
           options={sortOptions}
           selectClassName="h-11"
         />

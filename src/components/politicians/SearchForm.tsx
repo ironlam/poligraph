@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { SearchAutocomplete } from "./SearchAutocomplete";
 import Link from "next/link";
+import { politiquesSortParam } from "@/config/politiques-sort";
 
 interface SearchFormProps {
   defaultSearch: string;
@@ -34,7 +35,8 @@ export function SearchForm({
     if (convictionFilter) params.set("conviction", "true");
     if (financingFilter) params.set("financing", "true");
     if (mandateFilter) params.set("mandate", mandateFilter);
-    if (sortOption && sortOption !== "alpha") params.set("sort", sortOption);
+    const sortParam = politiquesSortParam(sortOption);
+    if (sortParam) params.set("sort", sortParam);
 
     const queryString = params.toString();
     router.push(`/politiques${queryString ? `?${queryString}` : ""}`);
