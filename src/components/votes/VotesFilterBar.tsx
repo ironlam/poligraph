@@ -321,6 +321,17 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
 
       {/* Mobile layout: quick-access theme rail + "Filtres" bottom-sheet */}
       <div className="md:hidden space-y-3">
+        {/* Outside of the sheet: by default the listing leaves amendments out, and a reader who
+            does not open the sheet cannot tell why a vote is missing. */}
+        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
+          <ToggleGroup
+            label="Portée du vote"
+            value={porteeValue}
+            options={porteeOptions}
+            onChange={(v) => set({ type: v })}
+            className="flex-nowrap"
+          />
+        </div>
         {themeGroup("rail")}
 
         <Dialog.Root open={sheetOpen} onOpenChange={setSheetOpen}>
