@@ -11,6 +11,7 @@ import {
 } from "@/lib/share-card";
 import { formatDate } from "@/lib/utils";
 import { ShareSheet, type ShareSheetCard } from "./ShareSheet";
+import { loadPortrait } from "./card-canvas";
 import { drawGroupCard } from "./draw-group-card";
 
 interface GroupShareSheetProps {
@@ -19,6 +20,8 @@ interface GroupShareSheetProps {
   name: string;
   subline: string;
   color: string | null;
+  /** Who presides the group, with the function already agreed and dated. Null when unknown. */
+  president: { fullName: string; role: string; photoUrl: string | null } | null;
   seatCount: number;
   /** Null for a group with no declared place on the benches: no hemicycle is drawn then. */
   hemicycle: { placement: HemicyclePlacement; seatNoun: string } | null;
@@ -34,6 +37,7 @@ export function GroupShareSheet({
   name,
   subline,
   color,
+  president,
   seatCount,
   hemicycle,
   indicators,
@@ -52,15 +56,17 @@ export function GroupShareSheet({
       : "";
     return {
       fileName: shareCardFileName("groupe", slug),
-      alt: `${name}, ${subline}.${counters ? ` ${counters}.` : ""}${share} ${scope}`,
+      alt: `${name}, ${subline}.${president ? ` ${president.role} : ${president.fullName}.` : ""}${counters ? ` ${counters}.` : ""}${share} ${scope}`,
       note: "L'image est datée du jour et précise la chambre, la législature et ce que mesurent ses pourcentages.",
-      draw: (ctx, fonts) =>
+      draw: async (ctx, fonts) => {
+        const portrait = await loadPortrait(president?.photoUrl ?? null);
         drawGroupCard(
           ctx,
           {
             name,
             subline,
             color,
+            president: president && { fullName: president.fullName, role: president.role },
             members,
             hemicycle,
             indicators,
@@ -68,10 +74,12 @@ export function GroupShareSheet({
             // Read when the card is drawn, so the image carries the day it was made.
             asOfLabel: formatDate(new Date()),
           },
-          fonts
-        ),
+          fonts,
+          portrait
+        );
+      },
     };
-  }, [color, hemicycle, indicators, name, scope, seatCount, slug, subline]);
+  }, [color, hemicycle, indicators, name, president, scope, seatCount, slug, subline]);
 
   return (
     <ShareSheet
