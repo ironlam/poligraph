@@ -133,4 +133,16 @@ describe("profils cacheLife et revalidate ISR effectif", () => {
       [...stripComments(commentOnly).matchAll(/cacheLife\("([a-z]+)"\)/g)].map((m) => m[1])
     ).toEqual(["synced"]);
   });
+
+  it("le profil synced garde un expire long, sous la rétention ISR de Vercel", () => {
+    // Read as text: importing next.config.ts pulls in the Sentry wrapper.
+    const config = stripComments(readFileSync(join(process.cwd(), "next.config.ts"), "utf8"));
+    const match = config.match(/synced:\s*\{[^}]*expire:\s*([\d_]+)/);
+    expect(match, "profil synced introuvable dans next.config.ts").not.toBeNull();
+    const expire = Number(match![1]!.replace(/_/g, ""));
+    // Below a month, pages crawled less than monthly are rebuilt and fully rewritten on each visit.
+    expect(expire).toBeGreaterThanOrEqual(30 * 86400);
+    // Vercel drops an ISR entry unread for 31 days: a longer expire would promise nothing more.
+    expect(expire).toBeLessThanOrEqual(31 * 86400);
+  });
 });
