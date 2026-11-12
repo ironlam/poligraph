@@ -16,7 +16,9 @@ import {
   THEME_CATEGORY_COLORS,
   SCRUTIN_TYPE_LABELS,
   SCRUTIN_TYPE_COLORS,
+  CHAMBER_LABELS,
 } from "@/config/labels";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { ArrowLeft, ExternalLink, Calendar, Users, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/legislation";
@@ -46,6 +48,7 @@ import { buildHistoricalPositionsView, planGroupsSection } from "@/lib/votes/his
 import type { VotePosition } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
+import { VoteShareSheet } from "@/components/share/VoteShareSheet";
 import { toPublicTitleView } from "@/lib/votes/to-public-title-view";
 import { formatLegislature } from "@/lib/votes/legislature";
 import { extractScrutinNumber } from "@/lib/votes/scrutin-number";
@@ -331,6 +334,14 @@ export default async function ScrutinPage({ params }: PageProps) {
   // (logic, not display).
   const isMotionDeCensure = /motion\s+de\s+censure/i.test(scrutin.title);
   const videoId = getScrutinVideoId(scrutin.slug);
+  // The card only sends readers to /mon-depute while that page exists.
+  const monDeputeEnabled = await isFeatureEnabled("MON_DEPUTE_SECTION");
+
+  const shareData = {
+    title: displayTitle,
+    text: `${formatExternalId(scrutin.externalId, scrutin.chamber)} : ${displayTitle} (${scrutin.result === "ADOPTED" ? "Adopté" : "Rejeté"}, ${scrutin.chamber === "AN" ? "Assemblée nationale" : "Sénat"})`,
+    url: `${SITE_URL}/parlement/votes/${scrutin.slug}`,
+  };
 
   return (
     <>
@@ -343,13 +354,7 @@ export default async function ScrutinPage({ params }: PageProps) {
           image={`${SITE_URL}/parlement/votes/${scrutin.slug}/opengraph-image`}
         />
       )}
-      <ShareBar
-        data={{
-          title: displayTitle,
-          text: `${formatExternalId(scrutin.externalId, scrutin.chamber)} : ${displayTitle} (${scrutin.result === "ADOPTED" ? "Adopté" : "Rejeté"}, ${scrutin.chamber === "AN" ? "Assemblée nationale" : "Sénat"})`,
-          url: `${SITE_URL}/parlement/votes/${scrutin.slug}`,
-        }}
-      />
+      <ShareBar data={shareData} />
       <div className="container mx-auto px-4 pt-4 pb-8">
         <Breadcrumb
           items={[
@@ -475,6 +480,33 @@ export default async function ScrutinPage({ params }: PageProps) {
             source={source}
             isMotionDeCensure={isMotionDeCensure}
           />
+          <div className="mb-8">
+            <VoteShareSheet
+              slug={scrutin.slug ?? scrutin.id}
+              data={shareData}
+              // No image in two cases, where the scrutin is shared by link only. A motion de censure
+              // counts the votes in favour only, so a for/against bar would misstate it. And a
+              // scrutin whose link does not lead to its chamber's site cannot print "Source".
+              card={
+                isMotionDeCensure || !source
+                  ? null
+                  : {
+                      title: displayTitle,
+                      chamberLabel: CHAMBER_LABELS[scrutin.chamber],
+                      dateLabel: formatDate(scrutin.votingDate),
+                      adopted: scrutin.result === "ADOPTED",
+                      votesFor: scrutin.votesFor,
+                      votesAgainst: scrutin.votesAgainst,
+                      votesAbstain: scrutin.votesAbstain,
+                      callToAction:
+                        scrutin.chamber === "AN" && monDeputeEnabled
+                          ? "Et votre député ? poligraph.fr/mon-depute"
+                          : "Le détail du vote sur poligraph.fr",
+                      source: `Source : ${source.label}, scrutin du ${formatDate(scrutin.votingDate)}`,
+                    }
+              }
+            />
+          </div>
         </ScrutinVideoLayout>
 
         {/* Synthèse PoliGraph, enjeux et B. Votes individuels (tabbed) */}

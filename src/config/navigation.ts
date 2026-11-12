@@ -189,6 +189,82 @@ export const NAV_ELECTIONS: ElectionNavItem[] = [
   },
 ];
 
+// Mobile menu, grouped by what the reader is trying to do. The four sections of the tab bar
+// (NAV_TABS) are left out: the bar already holds them. Search is the field at the top of the menu.
+export const NAV_MENU_GROUPS: NavGroup[] = [
+  {
+    label: "Près de chez moi",
+    items: [
+      { href: TERRITOIRES_PATH, label: "Ma commune" },
+      { href: "/mon-depute", label: "Mon député", featureFlag: "MON_DEPUTE_SECTION" },
+      { href: TERRITOIRES_DEPARTEMENTS_PATH, label: "Départements" },
+      { href: TERRITOIRES_REGIONS_ANCHOR, label: "Régions" },
+    ],
+  },
+  {
+    label: "Comprendre et comparer",
+    items: [
+      { href: "/statistiques", label: "Statistiques", featureFlag: "STATISTIQUES_SECTION" },
+      { href: "/factchecks", label: "Fact-checks" },
+      { href: "/programmes", label: "Programmes", featureFlag: "PROGRAMMES_ENABLED" },
+      { href: "/partis", label: "Partis" },
+      { href: "/comparer", label: "Comparer", featureFlag: "COMPARISON_TOOL" },
+      { href: "/politiques/gouvernements", label: "Gouvernements", featureFlag: "gouvernements" },
+      { href: "/parlement/groupes", label: "Groupes parlementaires" },
+      { href: "/procedures-baillons", label: "Procédures-bâillons" },
+    ],
+  },
+  {
+    label: "Mes outils",
+    items: [
+      { href: "/mon-observatoire", label: "Mon Observatoire" },
+      { href: "/chat", label: "Assistant IA", featureFlag: "CHATBOT_ENABLED" },
+    ],
+  },
+];
+
+/** The menu groups with their flagged items filtered, groups left empty dropped. */
+export function filterNavGroups(groups: NavGroup[], enabledFlags: ReadonlySet<string>): NavGroup[] {
+  return groups
+    .map((group) => ({ ...group, items: filterNavItems(group.items, enabledFlags) }))
+    .filter((group) => group.items.length > 0);
+}
+
+export type TabIcon = "users" | "landmark" | "scale" | "vote";
+
+export interface TabNavItem {
+  href: string;
+  /** Short enough to fit a fifth of a 320px screen on one line */
+  label: string;
+  /** Spoken name, when the visible label is too terse to stand alone */
+  ariaLabel?: string;
+  icon: TabIcon;
+  /** Path prefix that lights the tab: a tab stands for its whole section, not for one page */
+  match: string;
+}
+
+// Bottom tab bar, below `lg`. Four links to existing pages; the menu button is added by the
+// component. The fourth slot follows the election put forward: it goes back to /programmes once
+// the presidential ballot has been held.
+export const NAV_TABS: TabNavItem[] = [
+  { href: "/politiques", label: "Élus", icon: "users", match: "/politiques" },
+  { href: "/parlement/votes", label: "Votes", icon: "landmark", match: "/parlement" },
+  { href: "/affaires", label: "Affaires", icon: "scale", match: "/affaires" },
+  {
+    href: "/elections/presidentielle-2027",
+    label: "2027",
+    ariaLabel: "Présidentielle 2027",
+    icon: "vote",
+    match: "/elections/presidentielle-2027",
+  },
+];
+
+/** The `href` of the tab whose section holds `pathname`, or null outside of the four sections. */
+export function getActiveTabHref(pathname: string): string | null {
+  const tab = NAV_TABS.find(({ match }) => pathname === match || pathname.startsWith(`${match}/`));
+  return tab?.href ?? null;
+}
+
 /** @deprecated Use NAV_PRIMARY instead */
 export const NAV_TOP_LEVEL = NAV_PRIMARY;
 

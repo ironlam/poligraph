@@ -7,6 +7,7 @@ import { useFilterParams } from "@/hooks/useFilterParams";
 import { ToggleGroup, type ToggleGroupOption } from "@/components/ui/ToggleGroup";
 import {
   ActiveFilterChips,
+  MobileFilterRow,
   SelectFilter,
   FilterBarShell,
   type ActiveFilter,
@@ -194,8 +195,10 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
     },
     {
       value: "",
-      label: votesCount > 0 ? `Vote d'ensemble (${formatCount(votesCount)})` : "Vote d'ensemble",
-      title: "Adoption d'un texte entier",
+      // Named for what the option holds: every scrutin that is not an amendment, which is wider
+      // than votes on a whole text (motions and articles are in it too).
+      label: votesCount > 0 ? `Hors amendements (${formatCount(votesCount)})` : "Hors amendements",
+      title: "Tous les votes sauf ceux qui portent sur un amendement",
     },
     {
       value: "amendements",
@@ -318,23 +321,41 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
 
       {/* Mobile layout: quick-access theme rail + "Filtres" bottom-sheet */}
       <div className="md:hidden space-y-3">
+        {/* Outside of the sheet: by default the listing leaves amendments out, and a reader who
+            does not open the sheet cannot tell why a vote is missing. */}
+        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
+          <ToggleGroup
+            label="Portée du vote"
+            value={porteeValue}
+            options={porteeOptions}
+            onChange={(v) => set({ type: v })}
+            className="flex-nowrap"
+          />
+        </div>
         {themeGroup("rail")}
 
         <Dialog.Root open={sheetOpen} onOpenChange={setSheetOpen}>
-          <Dialog.Trigger asChild>
-            <button
-              type="button"
-              className="relative inline-flex min-h-11 items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-            >
-              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-              Filtres
-              {activeFilters.length > 0 && (
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
-                  {activeFilters.length}
-                </span>
-              )}
-            </button>
-          </Dialog.Trigger>
+          <MobileFilterRow
+            filters={activeFilters}
+            onRemove={removeFilter}
+            onClearAll={clearAll}
+            trigger={
+              <Dialog.Trigger asChild>
+                <button
+                  type="button"
+                  className="relative inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground outline-none transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                >
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                  Filtres
+                  {activeFilters.length > 0 && (
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-background px-1 text-xs font-semibold text-primary">
+                      {activeFilters.length}
+                    </span>
+                  )}
+                </button>
+              </Dialog.Trigger>
+            }
+          />
           <Dialog.Portal>
             <Dialog.Overlay
               className={cn(
@@ -403,8 +424,6 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
-
-        <ActiveFilterChips filters={activeFilters} onRemove={removeFilter} onClearAll={clearAll} />
       </div>
     </FilterBarShell>
   );

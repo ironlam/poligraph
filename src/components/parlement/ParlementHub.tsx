@@ -199,7 +199,8 @@ export async function ParlementHub() {
           ))}
         </ul>
       </nav>
-      <div className="container mx-auto px-4 pt-8">
+      {/* A column so that one section can be moved by `order` below sm (see "Les deux chambres"). */}
+      <div className="container mx-auto flex flex-col px-4 pt-8">
         {/* Parliamentary period banner */}
         {period &&
           (() => {
@@ -215,8 +216,10 @@ export async function ParlementHub() {
             );
           })()}
 
-        {/* Les deux chambres: first choice for a citizen who does not know the institutions */}
-        <section aria-labelledby="deux-chambres" className="mb-8">
+        {/* Les deux chambres: first choice for a citizen who does not know the institutions. Below
+            sm it closes the page instead: two tall cards stood there between the banner and the
+            votes of the day, and the quick-access row above already routes to both chambers. */}
+        <section aria-labelledby="deux-chambres" className="mb-8 max-sm:order-last">
           <h2 id="deux-chambres" className="font-display text-2xl font-extrabold text-primary">
             Deux chambres, un même texte
           </h2>
@@ -274,8 +277,9 @@ export async function ParlementHub() {
           </p>
         </section>
 
-        {/* Orientation: entry tiles to the three pillars */}
-        <div className="mb-8">
+        {/* Orientation: entry tiles to the three pillars. From sm up: below it, the quick-access row
+            under the banner carries the same destinations. */}
+        <div className="mb-8 hidden sm:block">
           <RubriqueEntrees
             titre="Explorer le Parlement"
             titreId="explorer-parlement"

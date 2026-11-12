@@ -317,28 +317,6 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
           </div>
         )}
 
-        {/* Top politicians */}
-        {stats.topPoliticians.length > 0 && !politicianSlug && (
-          <div className="mb-6">
-            <p className="text-xs text-muted-foreground mb-2">
-              Politiciens les plus fact-checkés :
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {stats.topPoliticians.map((p) => (
-                <Link
-                  key={p.slug}
-                  href={buildUrl({ politician: p.slug, directOnly: "1" })}
-                  prefetch={false}
-                >
-                  <Badge variant="outline" className="text-xs hover:bg-muted cursor-pointer">
-                    {p.fullName} ({Number(p.count)})
-                  </Badge>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Results count: the banner already gives the total on the bare landing */}
         {!isLanding && (
           <p className="text-sm text-muted-foreground mb-4">
@@ -386,6 +364,33 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
           totalPages={totalPages}
           buildUrl={(p) => buildUrl({ page: String(p) })}
         />
+
+        {/* Most-checked people. After the list, with the caveat: a count of fact-checks says nothing
+            about their verdicts, and ahead of the results it read as a ranking. */}
+        {stats.topPoliticians.length > 0 && !politicianSlug && (
+          <section aria-labelledby="factchecks-top-title" className="mt-8 border-t pt-6">
+            <h2 id="factchecks-top-title" className="font-display text-lg font-bold">
+              Personnes les plus souvent vérifiées
+            </h2>
+            <p className="mt-1 mb-3 text-sm text-muted-foreground">
+              Le nombre de vérifications ne dit rien des verdicts : une personne très exposée est
+              plus souvent vérifiée.
+            </p>
+            <ul className="flex flex-wrap gap-2">
+              {stats.topPoliticians.map((p) => (
+                <li key={p.slug}>
+                  <Link
+                    href={buildUrl({ politician: p.slug, directOnly: "1" })}
+                    prefetch={false}
+                    className="inline-flex min-h-11 items-center rounded-full border px-4 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {p.fullName} ({Number(p.count).toLocaleString("fr-FR")})
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* Info box */}
         <Card className="mt-8 bg-blue-50 border-blue-200">

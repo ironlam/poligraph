@@ -45,13 +45,14 @@ export function PartiesFilterBar({ currentFilters, total }: PartiesFilterBarProp
   return (
     <FilterBarShell isPending={isPending} className="space-y-3">
       {/* Search + filters grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <DebouncedSearchInput
           id="search-parties"
           value={currentFilters.search}
           onSearch={(v) => updateParams({ search: v })}
           placeholder="Nom du parti..."
           label="Recherche"
+          className="col-span-2 sm:col-span-1"
         />
 
         <SelectFilter

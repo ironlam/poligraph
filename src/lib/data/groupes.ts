@@ -13,7 +13,9 @@ import {
   type ReasonQuote,
   type ReasonsPayload,
 } from "@/services/scrutin-substance/reasons";
-import type { GroupPosition, Chamber } from "@/generated/prisma";
+import type { GroupPosition, Chamber, PoliticalPosition } from "@/generated/prisma";
+import { POLITICAL_POSITION_ORDER } from "@/config/labels";
+import type { HemicyclePlacement } from "@/lib/share-card";
 import { getParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
 import {
   getGovernmentProjectPositionDataset,
@@ -394,6 +396,56 @@ export async function getGroupKeyVotes(groupId: string, limit = 5) {
       },
     },
   });
+}
+
+/**
+ * Where a group sits among the groups of its chamber, for the hemicycle of its share card.
+ *
+ * Benches are ordered by declared political position, the same order as the hemicycle of the
+ * statistics page, with the code as a tie-break so two renders agree. A group without a declared
+ * position (the non-inscrits, for one) has no place to be drawn at: null, rather than a seat
+ * invented at one end, which would read as a political label. Seats are counted like
+ * `getGroupeDetail` counts them, so the card and the page give the same number.
+ */
+export async function getGroupHemicyclePlacement(
+  groupId: string,
+  chamber: Chamber
+): Promise<HemicyclePlacement | null> {
+  "use cache";
+  cacheTag("votes", "groupes");
+  cacheLife("synced");
+
+  const sitting = { mandate: { isCurrent: true, politician: PUBLIC_POLITICIAN_WHERE } };
+  const groups = await db.parliamentaryGroup.findMany({
+    where: { chamber, mandates: { some: sitting } },
+    select: {
+      id: true,
+      code: true,
+      politicalPosition: true,
+      _count: { select: { mandates: { where: sitting } } },
+    },
+  });
+
+  const self = groups.find((group) => group.id === groupId);
+  if (!self || self.politicalPosition === null || self._count.mandates === 0) return null;
+
+  const rank = (position: PoliticalPosition | null) =>
+    position === null
+      ? POLITICAL_POSITION_ORDER.length
+      : POLITICAL_POSITION_ORDER.indexOf(position);
+  const ordered = [...groups].sort(
+    (a, b) =>
+      rank(a.politicalPosition) - rank(b.politicalPosition) || a.code.localeCompare(b.code, "fr")
+  );
+  const index = ordered.findIndex((group) => group.id === groupId);
+  const count = (list: typeof ordered) =>
+    list.reduce((sum, group) => sum + group._count.mandates, 0);
+
+  return {
+    before: count(ordered.slice(0, index)),
+    seats: self._count.mandates,
+    total: count(ordered),
+  };
 }
 
 export async function getGroupeDetail(slug: string) {

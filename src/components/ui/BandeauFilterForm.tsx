@@ -53,9 +53,14 @@ export function BandeauFilterForm({
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Below sm the selects share one line that scrolls sideways, so the banner stays short enough
+          to leave the first results on the first screen. `py-1` keeps their focus outline unclipped. */}
+      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 py-1 sm:grid sm:grid-cols-2 sm:py-0 lg:grid-cols-4">
         {selects.map(({ name, label, options }) => (
-          <div key={name} className="min-w-0 last:odd:col-span-2 lg:last:odd:col-span-1">
+          <div
+            key={name}
+            className="w-44 min-w-0 shrink-0 sm:w-auto sm:last:odd:col-span-2 lg:last:odd:col-span-1"
+          >
             <label
               htmlFor={`${idPrefix}-${name}`}
               className="mb-1 block text-sm font-bold text-white"

@@ -43,14 +43,14 @@ const rows: CondamnationsPartyStats[] = [
 describe("CondamnationsStatsTable", () => {
   it("affiche le taux quand l'effectif atteint le seuil", () => {
     render(<CondamnationsStatsTable rows={rows} />);
-    expect(screen.getByText("1.6%")).toBeInTheDocument(); // LR, 309 suivis
-    expect(screen.getByText("10.0%")).toBeInTheDocument(); // seuil, 10 suivis
+    expect(screen.getByText(/^1,6\s%$/)).toBeInTheDocument(); // LR, 309 suivis
+    expect(screen.getByText(/^10,0\s%$/)).toBeInTheDocument(); // seuil, 10 suivis
   });
 
   it("masque le taux (n.s.) sous le seuil d'effectif", () => {
     render(<CondamnationsStatsTable rows={rows} />);
     // PRG (5 suivis) ne doit pas afficher son taux brut trompeur de 20%
-    expect(screen.queryByText("20.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^20,0\s%$/)).not.toBeInTheDocument();
     expect(screen.getByTitle("Effectif trop faible pour un taux significatif")).toBeInTheDocument();
   });
 
@@ -76,11 +76,24 @@ describe("CondamnationsStatsTable", () => {
     ).toBeInTheDocument();
   });
 
+  it("montre le calcul et rappelle le dénominateur sur chaque ligne", () => {
+    render(<CondamnationsStatsTable rows={rows} />);
+    expect(
+      screen.getByText("Responsables politiques du parti enregistrés dans la base Poligraph")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("5 condamnés définitifs sur 309 responsables suivis")
+    ).toBeInTheDocument();
+    expect(screen.getByText("1 condamné définitif sur 5 responsables suivis")).toBeInTheDocument();
+  });
+
   it("structure le tableau avec une légende et des en-têtes de colonnes", () => {
     render(<CondamnationsStatsTable rows={rows} currentMandat="locaux" />);
     const table = screen.getByRole("table");
     expect(within(table).getByRole("columnheader", { name: "Taux" })).toBeInTheDocument();
-    expect(within(table).getByRole("columnheader", { name: "Élus suivis" })).toBeInTheDocument();
+    expect(
+      within(table).getByRole("columnheader", { name: "Responsables suivis" })
+    ).toBeInTheDocument();
     expect(within(table).getByRole("rowheader", { name: /Les Républicains/ })).toBeInTheDocument();
   });
 });

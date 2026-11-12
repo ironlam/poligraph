@@ -478,21 +478,27 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
   const sortOption = parsePolitiquesSort(params.sort);
   const page = parsePageParam(params.page);
 
-  const [{ politicians, total, totalPages }, parties, counts, governmentsEnabled] =
-    await Promise.all([
-      getPoliticians(
-        search,
-        partyFilter,
-        convictionFilter,
-        financingFilter,
-        mandateFilter,
-        sortOption,
-        page
-      ),
-      getParties(),
-      getFilterCounts(),
-      isFeatureEnabled("gouvernements"),
-    ]);
+  const [
+    { politicians, total, totalPages },
+    parties,
+    counts,
+    governmentsEnabled,
+    monDeputeEnabled,
+  ] = await Promise.all([
+    getPoliticians(
+      search,
+      partyFilter,
+      convictionFilter,
+      financingFilter,
+      mandateFilter,
+      sortOption,
+      page
+    ),
+    getParties(),
+    getFilterCounts(),
+    isFeatureEnabled("gouvernements"),
+    isFeatureEnabled("MON_DEPUTE_SECTION"),
+  ]);
 
   // Count active filters
   const activeFilterCount = [partyFilter, convictionFilter, financingFilter, mandateFilter].filter(
@@ -587,6 +593,16 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
                 </strong>{" "}
                 représentants référencés
               </p>
+              {monDeputeEnabled && (
+                <Link
+                  href="/mon-depute"
+                  prefetch={false}
+                  className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-white underline underline-offset-4 hover:no-underline"
+                >
+                  <MapPin className="h-4 w-4" aria-hidden="true" />
+                  Trouver mon député par code postal
+                </Link>
+              )}
               {seoIntro}
             </div>
             <HemicycleDecor className="hidden w-[420px] shrink-0 lg:block" />
@@ -601,7 +617,10 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
               titreId="explorer-par-mandat"
               entrees={entrees}
             />
-            <SurChaqueFiche />
+            {/* From sm up only: on a phone it stood between the entries and the list. */}
+            <div className="hidden sm:block">
+              <SurChaqueFiche />
+            </div>
             <div>
               <h2 className="font-display text-2xl font-extrabold text-primary">
                 Tous les représentants

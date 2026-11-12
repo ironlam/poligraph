@@ -43,8 +43,26 @@ const PRIMARY_DESTINATIONS = [
   { href: "/parlement", label: "Parlement" },
 ];
 
-/** On desktop Programmes lives in the election panel; the mobile menu keeps it as a section. */
-const MOBILE_ONLY_DESTINATIONS = [{ href: "/programmes", label: "Programmes" }];
+/**
+ * Below `lg` the four busiest sections sit in the bottom tab bar, and the menu holds the rest,
+ * grouped by intent. Programmes lives in the election panel on desktop and in the menu here.
+ */
+const TAB_BAR_DESTINATIONS = [
+  { href: "/politiques", label: "Élus" },
+  { href: "/parlement/votes", label: "Votes" },
+  { href: "/affaires", label: "Affaires" },
+  { href: "/elections/presidentielle-2027", label: "2027" },
+];
+
+const MOBILE_MENU_DESTINATIONS = [
+  { href: "/territoires", label: "Ma commune" },
+  { href: "/statistiques", label: "Statistiques" },
+  { href: "/factchecks", label: "Fact-checks" },
+  { href: "/programmes", label: "Programmes" },
+  { href: "/partis", label: "Partis" },
+];
+
+const TAB_BAR = 'nav[aria-label="Navigation rapide"]';
 
 const SPOTLIGHT_LABEL = "Présidentielle 2027";
 
@@ -135,17 +153,21 @@ for (const theme of THEMES) {
         page,
       }) => {
         if (regime === "mobile") {
+          for (const { href, label } of TAB_BAR_DESTINATIONS) {
+            const tab = page.locator(`${TAB_BAR} a[href="${href}"]`);
+            await expect(tab, `onglet ${href} absent à ${width}px`).toBeVisible();
+            await expect(tab, `onglet ${href} sans libellé à ${width}px`).toContainText(label);
+          }
           await page.getByRole("button", { name: "Ouvrir le menu" }).click();
           await expect(page.locator(MOBILE_MENU)).toBeVisible();
+        } else {
+          await expect(page.locator(TAB_BAR)).toBeHidden();
         }
 
         // The mobile menu is portalled out of the header, so the scope follows the regime.
         const scope = regime === "mobile" ? page.locator(MOBILE_MENU) : page.locator("header");
 
-        const destinations =
-          regime === "mobile"
-            ? [...PRIMARY_DESTINATIONS, ...MOBILE_ONLY_DESTINATIONS]
-            : PRIMARY_DESTINATIONS;
+        const destinations = regime === "mobile" ? MOBILE_MENU_DESTINATIONS : PRIMARY_DESTINATIONS;
         for (const { href, label } of destinations) {
           const link = scope.locator(`a[href="${href}"]`).first();
           await expect(link, `destination ${href} absente à ${width}px`).toBeVisible();

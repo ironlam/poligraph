@@ -99,36 +99,43 @@ export function FilterBar({
 
   return (
     <div className="relative flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
-      {/* Sort */}
-      <div className="flex items-center gap-2">
-        <label
-          htmlFor="sort-select"
-          className="text-sm text-muted-foreground whitespace-nowrap flex items-center gap-1"
-        >
-          Tri:
-          {currentSort === "prominence" && <InfoTooltip term="prominence" side="bottom" />}
-        </label>
-        <SelectFilter
-          id="sort-select"
-          value={currentSort}
-          onChange={(v) => updateParams({ sort: politiquesSortParam(v) })}
-          options={sortOptions}
-          selectClassName="h-11"
-        />
-      </div>
+      {/* Sort and mandate share one line below sm, label above the field: stacked, the two selects
+          alone took a fifth of a phone screen. */}
+      <div className="flex w-full gap-3 sm:contents">
+        {/* Sort */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none sm:flex-row sm:items-center sm:gap-2">
+          <label
+            htmlFor="sort-select"
+            className="text-sm text-muted-foreground whitespace-nowrap flex items-center gap-1"
+          >
+            Tri:
+            {currentSort === "prominence" && <InfoTooltip term="prominence" side="bottom" />}
+          </label>
+          <SelectFilter
+            id="sort-select"
+            value={currentSort}
+            onChange={(v) => updateParams({ sort: politiquesSortParam(v) })}
+            options={sortOptions}
+            selectClassName="h-11 max-sm:w-full"
+          />
+        </div>
 
-      {/* Mandate type filter */}
-      <div className="flex items-center gap-2">
-        <label htmlFor="mandate-select" className="text-sm text-muted-foreground whitespace-nowrap">
-          Mandat:
-        </label>
-        <SelectFilter
-          id="mandate-select"
-          value={currentMandate}
-          onChange={(v) => updateParams({ mandate: v })}
-          options={mandateOptions}
-          selectClassName="h-11"
-        />
+        {/* Mandate type filter */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none sm:flex-row sm:items-center sm:gap-2">
+          <label
+            htmlFor="mandate-select"
+            className="text-sm text-muted-foreground whitespace-nowrap"
+          >
+            Mandat:
+          </label>
+          <SelectFilter
+            id="mandate-select"
+            value={currentMandate}
+            onChange={(v) => updateParams({ mandate: v })}
+            options={mandateOptions}
+            selectClassName="h-11 max-sm:w-full"
+          />
+        </div>
       </div>
 
       {/* Conviction filters: probité et financement politique, cumulés en « l'un ou l'autre » */}

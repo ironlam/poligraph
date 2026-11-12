@@ -5,6 +5,7 @@ import { ChevronDown, ExternalLink, UserRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ShareBar } from "@/components/ui/ShareBar";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
+import { CandidateShareSheet } from "@/components/share/CandidateShareSheet";
 import { BreadcrumbJsonLd, PersonJsonLd } from "@/components/seo/JsonLd";
 import { candidacyRoleLabel } from "@/config/labels";
 import { hasPublishedProgramme, isFicheCandidatPublishable } from "@/config/publication-gates";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/data/politician-candidacy";
 import { getPresidentialReaderGuideIndex } from "@/lib/data/presidential-reader-guides";
 import { getThemesIndex } from "@/lib/data/themes-index";
+import { normalizeImageUrl } from "@/lib/utils";
 import {
   selectCandidateReaderGuides,
   selectComparableThemes,
@@ -59,6 +61,11 @@ export const revalidate = 86400;
  */
 function fichePath(slug: string): string {
   return `/elections/presidentielle-2027/candidats/${slug}`;
+}
+
+function plural(count: number, one: string, many: string): string {
+  if (count > 1) return many;
+  return one;
 }
 
 /**
@@ -140,6 +147,37 @@ export default async function CandidateFichePage({ params }: PageProps) {
       ])
     : [null, null, []];
 
+  const shareData = {
+    title: politician.fullName,
+    // Name, election, party: the three facts that stay true. Deliberately no candidacy
+    // status and no measure count, for the reason the OG card states at length. A post
+    // outlives the day it was written, and a withdrawn candidacy shared as "annoncée"
+    // cannot be corrected once it is out.
+    text: `${politician.fullName}, ${candidacy.electionShortTitle}${candidacy.partyLabel ? ` (${candidacy.partyLabel})` : ""} : ses mesures et leurs sources sur Poligraph`,
+    url: `${SITE_URL}${fichePath(slug)}`,
+  };
+  // Counters for the image a reader makes from the sheet. Unlike the text above and the OG card,
+  // that image prints the day it was drawn, so a count on it is a dated statement, not a stale one.
+  // The status stays off it all the same.
+  const cardStats = [
+    {
+      value: candidacy.publishedMeasureCount,
+      label: plural(candidacy.publishedMeasureCount, "mesure publiée", "mesures publiées"),
+    },
+    {
+      value: candidacy.themesCoveredCount,
+      label: plural(candidacy.themesCoveredCount, "thème couvert", "thèmes couverts"),
+    },
+    {
+      value: detail?.mandateCount ?? 0,
+      label: plural(detail?.mandateCount ?? 0, "mandat exercé", "mandats exercés"),
+    },
+    {
+      value: politician.declarations.length,
+      label: plural(politician.declarations.length, "déclaration HATVP", "déclarations HATVP"),
+    },
+  ];
+
   return (
     <>
       <PersonJsonLd
@@ -164,17 +202,7 @@ export default async function CandidateFichePage({ params }: PageProps) {
           bar, with the same platforms and the same copy control. It used to be held back on a fiche
           without measures, because spreading a page we kept out of search contradicted that policy.
           The fiche is indexed now, so the reason is gone with it. */}
-      <ShareBar
-        data={{
-          title: politician.fullName,
-          // Name, election, party: the three facts that stay true. Deliberately no candidacy
-          // status and no measure count, for the reason the OG card states at length. A post
-          // outlives the day it was written, and a withdrawn candidacy shared as "annoncée"
-          // cannot be corrected once it is out.
-          text: `${politician.fullName}, ${candidacy.electionShortTitle}${candidacy.partyLabel ? ` (${candidacy.partyLabel})` : ""} : ses mesures et leurs sources sur Poligraph`,
-          url: `${SITE_URL}${fichePath(slug)}`,
-        }}
-      />
+      <ShareBar data={shareData} />
       <CandidacyBackBar electionSlug={candidacy.electionSlug} />
       {/* The mobile share bar is fixed to the bottom of the viewport, so the last control of the
           page needs room to clear it. The extra padding goes away at `2xl`, where that bar becomes
@@ -232,6 +260,15 @@ export default async function CandidateFichePage({ params }: PageProps) {
               ) : (
                 <p className="text-base font-semibold text-foreground">{candidacy.partyLabel}</p>
               ))}
+            <CandidateShareSheet
+              slug={slug}
+              data={shareData}
+              fullName={politician.fullName}
+              partyLabel={candidacy.partyLabel}
+              photoUrl={normalizeImageUrl(politician.blobPhotoUrl ?? politician.photoUrl ?? null)}
+              round1Date={candidacy.round1Date?.toISOString() ?? null}
+              stats={cardStats}
+            />
           </div>
           {candidacy.partyLabel && (
             <PartyLogo

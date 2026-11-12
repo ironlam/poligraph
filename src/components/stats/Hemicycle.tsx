@@ -194,6 +194,9 @@ export function Hemicycle({ groups }: HemicycleProps) {
               key={i}
               href={`/politiques/${data.deputy.slug}`}
               aria-label={`Voir la fiche de ${deputyName}`}
+              // A seat is a few pixels wide: below md it is not a touch target. The legend buttons
+              // and the keyboard still reach every deputy.
+              className="max-md:pointer-events-none"
               onFocus={() =>
                 setTooltip({
                   deputy: data.deputy,

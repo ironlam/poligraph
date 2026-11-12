@@ -40,6 +40,8 @@ vi.mock("@/lib/data/scrutin-official-groups", () => ({
   getScrutinOfficialGroups: (...args: unknown[]) => mocks.getOfficialGroups(...args),
 }));
 vi.mock("@/components/ui/ShareBar", () => ({ ShareBar: () => null }));
+vi.mock("@/components/share/VoteShareSheet", () => ({ VoteShareSheet: () => null }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: async () => false }));
 vi.mock("@/components/votes/DailyVotesPage", () => ({ DailyVotesPage: () => null }));
 vi.mock("@/components/politicians/PoliticianAvatar", () => ({ PoliticianAvatar: () => null }));
 vi.mock("@/components/votes", () => ({

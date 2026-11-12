@@ -97,4 +97,16 @@ describe("VotesFilterBar", () => {
     expect(screen.getAllByRole("option", { name: senatLabel }).length).toBeGreaterThan(0);
     expect(screen.queryByText("2023e")).not.toBeInTheDocument();
   });
+
+  // jsdom ignores the md breakpoint, so both layouts are in the tree: the desktop group, and the
+  // mobile one that sits outside of the filter sheet.
+  it("garde la portée du vote visible sur mobile, hors du panneau de filtres", () => {
+    render(<VotesFilterBar {...baseProps()} />);
+    const groups = screen.getAllByRole("radiogroup", { name: "Portée du vote" });
+    expect(groups).toHaveLength(2);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    for (const group of groups) {
+      expect(group).toHaveTextContent("Hors amendements");
+    }
+  });
 });

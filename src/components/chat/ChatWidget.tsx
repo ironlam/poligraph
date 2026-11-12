@@ -88,7 +88,7 @@ export function ChatWidget() {
             setHasInteracted(true);
           }}
           className={cn(
-            "fixed bottom-6 right-6 z-50",
+            "fixed bottom-[calc(var(--tabbar-h)+1.5rem)] right-6 z-50",
             "w-14 h-14 rounded-full",
             "bg-primary text-primary-foreground shadow-lg",
             "flex items-center justify-center",
@@ -115,10 +115,10 @@ export function ChatWidget() {
             "flex flex-col overflow-hidden",
             "transition-all duration-300 ease-in-out",
             isMinimized
-              ? "bottom-6 right-6 w-80 h-14"
-              : "bottom-6 right-6 w-[420px] h-[600px] max-h-[80vh]",
+              ? "bottom-[calc(var(--tabbar-h)+1.5rem)] right-6 w-80 h-14"
+              : "bottom-[calc(var(--tabbar-h)+1.5rem)] right-6 w-[420px] h-[600px] max-h-[80vh]",
             // Mobile: full width
-            "max-sm:left-2 max-sm:right-2 max-sm:bottom-2 max-sm:w-auto"
+            "max-sm:left-2 max-sm:right-2 max-sm:bottom-[calc(var(--tabbar-h)+0.5rem)] max-sm:w-auto"
           )}
         >
           {/* Header */}

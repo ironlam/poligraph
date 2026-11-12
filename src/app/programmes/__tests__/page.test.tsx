@@ -106,7 +106,16 @@ describe("page programmes", () => {
     );
   });
 
-  it("conserve le répertoire sourcé sans promettre la comparaison avant le seuil du hub", async () => {
+  it("renvoie vers la page des candidatures au lieu de reproduire son répertoire", async () => {
+    render(await ProgrammesPage({ searchParams: Promise.resolve({}) }));
+
+    expect(
+      screen.getByRole("link", { name: /candidatures et personnalités suivies/ })
+    ).toHaveAttribute("href", "/elections/presidentielle-2027/candidats");
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+  });
+
+  it("garde l'accès aux candidatures sans promettre la comparaison avant le seuil du hub", async () => {
     vi.mocked(getHubMeasureContext).mockResolvedValue({
       ...context,
       hubPublishable: false,

@@ -17,7 +17,7 @@ import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { themeToSlug } from "@/lib/theme-utils";
 import { themeSeoPhrase } from "@/lib/seo/theme-metadata";
 import { SITE_URL } from "@/config/site";
-import { statsHref } from "@/config/routes";
+import { ROUTES, statsHref } from "@/config/routes";
 import type { VotingResult, Chamber, ThemeCategory, ScrutinType } from "@/types";
 import { parsePageParam, parseIntFilter } from "@/lib/data/query-params";
 
@@ -161,15 +161,22 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
         {/* Header */}
         <div className="mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-extrabold tracking-tight mb-1">
+            <h1 className="text-2xl font-display font-extrabold tracking-tight mb-1 sm:text-3xl">
               {pageTitle}
             </h1>
             <p className="text-muted-foreground text-sm">{pageSubtitle}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link
+              href={ROUTES.votesToday}
+              prefetch={false}
+              className="inline-flex min-h-11 items-center gap-2 px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-sm font-medium transition-colors"
+            >
+              Aujourd{"'"}hui
+            </Link>
+            <Link
               href={statsHref("legislatif")}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-sm font-medium transition-colors"
+              className="inline-flex min-h-11 items-center gap-2 px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-sm font-medium transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -210,12 +217,14 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
         {showThemeLandings && (
           <nav aria-label="Votes par thème" className="mb-6">
             <p className="text-sm text-muted-foreground mb-2">Explorer les votes par thème</p>
-            <ul className="flex flex-wrap gap-2">
+            {/* Below sm: one line that scrolls sideways. Wrapped, the links stood between the
+                filters and the first vote. They stay in the HTML either way. */}
+            <ul className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
               {themeCounts.map(({ theme: themeCategory, _count }) => (
-                <li key={themeCategory}>
+                <li key={themeCategory} className="shrink-0">
                   <Link
                     href={`/parlement/votes/themes/${themeToSlug(themeCategory)}`}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted transition-colors"
+                    className="inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md border px-3 py-1.5 text-sm hover:bg-muted transition-colors"
                   >
                     Votes sur {themeSeoPhrase(themeCategory)}
                     <span className="text-xs text-muted-foreground tabular-nums">

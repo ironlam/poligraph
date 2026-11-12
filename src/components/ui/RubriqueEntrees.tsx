@@ -30,15 +30,24 @@ export function RubriqueEntrees({
       <h2 id={titreId} className="font-display text-2xl font-extrabold text-primary">
         {titre}
       </h2>
-      <ul className={cn("mt-4 grid grid-cols-2 gap-3", COLONNES_LG[entrees.length])}>
+      {/* Below sm: one line that scrolls sideways, so the entries do not push the listing down. */}
+      <ul
+        className={cn(
+          "mt-4 -mx-4 flex gap-3 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 sm:grid sm:grid-cols-2",
+          COLONNES_LG[entrees.length]
+        )}
+      >
         {entrees.map(({ href, title, detail, icon: Icon }) => (
-          <li key={href} className="last:odd:col-span-2 lg:last:odd:col-span-1">
+          <li
+            key={href}
+            className="w-44 shrink-0 sm:w-auto sm:last:odd:col-span-2 lg:last:odd:col-span-1"
+          >
             <Link
               href={href}
               prefetch={false}
-              className="flex h-full min-h-11 flex-col gap-4 rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="flex h-full min-h-11 flex-col gap-2 rounded-xl sm:gap-4 border border-border bg-card p-4 hover:border-primary/40 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              <span className="flex items-center justify-between">
+              <span className="hidden items-center justify-between sm:flex">
                 <span
                   className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary"
                   aria-hidden="true"

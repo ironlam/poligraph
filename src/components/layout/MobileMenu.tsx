@@ -1,50 +1,41 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCommandPalette } from "@/components/search";
 import { MobileThemeToggle } from "@/components/theme/MobileThemeToggle";
 import { PageShareButton } from "@/components/ui/PageShareButton";
-import { NAV_ELECTIONS, NAV_PRIMARY, NAV_SECONDARY, filterNavItems } from "@/config/navigation";
 import {
-  BarChart3,
-  Users,
-  Scale,
+  NAV_ELECTIONS,
+  NAV_MENU_GROUPS,
+  filterNavGroups,
+  type NavGroup,
+} from "@/config/navigation";
+import {
   Vote,
   Landmark,
-  ArrowLeftRight,
   MapPin,
-  Building,
   Search,
-  Menu,
   X,
   ChevronRight,
   Heart,
-  BookOpen,
   Compass,
-  ShieldAlert,
-  SearchCheck,
+  MessageSquareWarning,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Logo } from "./Logo";
+import { useMobileMenu } from "./MobileMenuProvider";
 
+// Icons of the elections block, the only entries of the menu that carry one.
 const ICON_MAP: Record<string, LucideIcon> = {
-  barChart: BarChart3,
-  users: Users,
-  scale: Scale,
   vote: Vote,
   landmark: Landmark,
-  arrowLeftRight: ArrowLeftRight,
   mapPin: MapPin,
-  building: Building,
-  search: Search,
-  bookOpen: BookOpen,
-  compass: Compass,
-  shieldAlert: ShieldAlert,
-  searchCheck: SearchCheck,
 };
+
+const GROUP_TITLE_CLASS = "mb-2 text-[13px] font-bold text-muted-foreground-strong";
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(
@@ -67,9 +58,9 @@ export function MobileMenu({
   pastElectionSlugs,
   spotlightSlug = null,
 }: MobileMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  // Opened from the bottom tab bar, which sits outside of the header this component renders in.
+  const { isOpen, setIsOpen, triggerRef } = useMobileMenu();
   const menuRef = useRef<HTMLDivElement>(null);
-  const toggleRef = useRef<HTMLButtonElement>(null);
   const searchFieldRef = useRef<HTMLButtonElement>(null);
   // Set when the search screen hands back to the menu, so focus lands where the reader left.
   const returnToSearchFieldRef = useRef(false);
@@ -77,10 +68,10 @@ export function MobileMenu({
   const { open: openPalette, openWithBack: openPaletteWithBack } = useCommandPalette();
   const flagSet = new Set(enabledFlags);
 
-  const filteredPrimary = filterNavItems(NAV_PRIMARY, flagSet);
-  const filteredSecondary = NAV_SECONDARY.filter(
-    (item) => !item.featureFlag || flagSet.has(item.featureFlag)
-  );
+  // "Mes outils" closes the menu, after the elections; the other groups open it.
+  const groups = filterNavGroups(NAV_MENU_GROUPS, flagSet);
+  const primaryGroups = groups.slice(0, -1);
+  const toolGroups = groups.slice(-1);
   // The election put forward first, then upcoming, then held ones, each keeping its NAV_ELECTIONS
   // order. The spotlight slug only reorders: an election hidden by its own flag stays hidden.
   const pastSlugs = new Set(pastElectionSlugs);
@@ -106,8 +97,8 @@ export function MobileMenu({
 
   const close = useCallback(() => {
     setIsOpen(false);
-    toggleRef.current?.focus();
-  }, []);
+    triggerRef.current?.focus();
+  }, [setIsOpen, triggerRef]);
 
   // Keyboard handling
   useEffect(() => {
@@ -157,7 +148,7 @@ export function MobileMenu({
   // Close on route change
   useEffect(() => {
     setIsOpen(false);
-  }, [pathname]);
+  }, [pathname, setIsOpen]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -170,6 +161,40 @@ export function MobileMenu({
       document.body.style.overflow = "";
     };
   }, [isOpen]);
+
+  const renderGroup = (group: NavGroup, index: number) => {
+    const titleId = `mobile-menu-group-${group.label.replace(/\W+/g, "-").toLowerCase()}`;
+    return (
+      <section
+        key={group.label}
+        aria-labelledby={titleId}
+        className={index > 0 ? "mt-6" : undefined}
+      >
+        <h2 id={titleId} className={GROUP_TITLE_CLASS}>
+          {group.label}
+        </h2>
+        <ul className="grid grid-cols-2 gap-2">
+          {group.items.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={close}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex min-h-12 items-center rounded-xl border px-3 py-2 font-display text-[15px] font-bold leading-tight transition-colors ${
+                    isActive ? "bg-muted text-foreground" : "bg-card text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  };
 
   return (
     <>
@@ -186,18 +211,6 @@ export function MobileMenu({
         </button>
 
         <PageShareButton />
-
-        {/* Hamburger */}
-        <button
-          ref={toggleRef}
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center justify-center h-10 w-10 rounded-lg text-foreground/70 hover:text-foreground hover:bg-muted/50 transition-colors"
-          aria-label={isOpen ? "Fermer le menu" : "Ouvrir le menu"}
-          aria-expanded={isOpen}
-          aria-controls="mobile-menu"
-        >
-          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
       </div>
 
       {/* Full-screen menu overlay — portaled to body to escape header's backdrop-filter containing block */}
@@ -246,13 +259,12 @@ export function MobileMenu({
                 <span className="truncate">Élu, commune, vote...</span>
               </button>
 
-              {/* Elections surfaced above the rest: upcoming first, past last */}
+              {primaryGroups.map(renderGroup)}
+
+              {/* Upcoming elections first, past ones last */}
               {filteredElections.length > 0 && (
-                <section aria-labelledby="mobile-menu-elections" className="mb-6">
-                  <h2
-                    id="mobile-menu-elections"
-                    className="px-4 mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                  >
+                <section aria-labelledby="mobile-menu-elections" className="mt-6">
+                  <h2 id="mobile-menu-elections" className={GROUP_TITLE_CLASS}>
                     Élections
                   </h2>
                   <ul className="space-y-1">
@@ -268,7 +280,7 @@ export function MobileMenu({
                             href={item.href}
                             onClick={close}
                             aria-current={isActive ? "page" : undefined}
-                            className={`flex items-center justify-between gap-2 px-4 py-3.5 rounded-xl text-lg font-display font-semibold transition-colors ${
+                            className={`flex items-center justify-between gap-2 min-h-12 px-4 py-2.5 rounded-xl text-base font-display font-bold transition-colors ${
                               isSpotlight
                                 ? "border-2 border-primary bg-primary/5 text-primary hover:bg-primary/10"
                                 : isPast
@@ -302,122 +314,19 @@ export function MobileMenu({
                 </section>
               )}
 
-              <ul className="space-y-1">
-                {filteredPrimary.map((item) => {
-                  const Icon = item.icon ? ICON_MAP[item.icon] : null;
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                  // With sub-links, `aria-current` moves to the most specific matching child.
-                  const activeChildHref = item.children
-                    ?.filter((c) => pathname === c.href || pathname.startsWith(c.href + "/"))
-                    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
-                  const className = `flex items-center justify-between px-4 py-4 rounded-xl text-xl font-display font-semibold transition-colors ${
-                    item.highlight
-                      ? "border border-primary/40 text-primary"
-                      : isActive
-                        ? "bg-muted text-foreground"
-                        : "text-foreground/80 hover:bg-muted hover:text-foreground"
-                  }`;
-                  const children = (
-                    <>
-                      <span className="flex items-center gap-3">
-                        {Icon && <Icon className="h-6 w-6" />}
-                        {item.label}
-                        {item.highlight && (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/15 text-primary">
-                            En cours
-                          </span>
-                        )}
-                      </span>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                    </>
-                  );
-                  return (
-                    <li key={item.href}>
-                      {item.external ? (
-                        <a
-                          href={item.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`${item.label} (s'ouvre dans un nouvel onglet)`}
-                          onClick={close}
-                          className={className}
-                        >
-                          {children}
-                        </a>
-                      ) : (
-                        <Link
-                          href={item.href}
-                          onClick={close}
-                          aria-current={isActive && !item.children ? "page" : undefined}
-                          className={className}
-                        >
-                          {children}
-                        </Link>
-                      )}
-                      {item.children && (
-                        <ul className="mt-1 ml-8 space-y-1 border-l border-border pl-3">
-                          {item.children.map((child) => {
-                            const childActive = child.href === activeChildHref;
-                            return (
-                              <li key={child.href}>
-                                <Link
-                                  href={child.href}
-                                  onClick={close}
-                                  aria-current={childActive ? "page" : undefined}
-                                  className={`flex min-h-11 items-center rounded-lg px-3 text-base font-medium transition-colors ${
-                                    childActive
-                                      ? "bg-muted text-foreground"
-                                      : "text-foreground/80 hover:bg-muted hover:text-foreground"
-                                  }`}
-                                >
-                                  {child.label}
-                                </Link>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="mt-6">{toolGroups.map(renderGroup)}</div>
 
-              {/* Secondary links as pills */}
-              {filteredSecondary.length > 0 && (
-                <div className="mt-8 pt-6 border-t border-border">
-                  <div className="flex flex-wrap gap-3">
-                    {filteredSecondary.map((item) => {
-                      const Icon = item.icon ? ICON_MAP[item.icon] : null;
-                      const className =
-                        "inline-flex items-center gap-2 px-4 min-h-11 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors";
-                      return item.external ? (
-                        <a
-                          key={item.href}
-                          href={item.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`${item.label} (s'ouvre dans un nouvel onglet)`}
-                          onClick={close}
-                          className={className}
-                        >
-                          {Icon && <Icon className="h-4 w-4" />}
-                          {item.label}
-                        </a>
-                      ) : (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={close}
-                          className={className}
-                        >
-                          {Icon && <Icon className="h-4 w-4" />}
-                          {item.label}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              <Link
+                href="/signaler"
+                onClick={close}
+                className="mt-6 flex min-h-12 items-center justify-between gap-3 rounded-xl border border-primary px-4 py-2.5 font-display text-[15px] font-bold text-primary transition-colors hover:bg-primary/5"
+              >
+                <span className="flex items-center gap-3">
+                  <MessageSquareWarning className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  Signaler une erreur ou proposer une amélioration
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0" aria-hidden="true" />
+              </Link>
             </nav>
 
             {/* Bottom section: theme toggle + boussole + CTA.

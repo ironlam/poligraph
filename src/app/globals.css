@@ -60,6 +60,8 @@
 
 :root {
   --radius: 0.75rem;
+  /* Height of the mobile tab bar, so anything pinned to the bottom can sit above it. */
+  --tabbar-h: calc(4rem + env(safe-area-inset-bottom, 0px));
   --background: oklch(0.97 0 0);
   --foreground: oklch(0.15 0 0);
   --card: oklch(1 0 0);
@@ -111,6 +113,13 @@
   --vote-pour: #4a8a5c;
   --vote-contre: #9e5454;
   --vote-abstention: #8a8e96;
+}
+
+/* The tab bar only exists below `lg`: from there on nothing has to make room for it. */
+@media (min-width: 64rem) {
+  :root {
+    --tabbar-h: 0px;
+  }
 }
 
 .dark {

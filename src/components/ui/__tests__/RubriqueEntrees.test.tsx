@@ -40,10 +40,11 @@ describe("RubriqueEntrees", () => {
     expect(screen.getByRole("list")).toHaveClass("lg:grid-cols-5");
   });
 
-  it("étire la dernière tuile sur mobile quand le nombre est impair", () => {
+  // Below sm the tiles share one scrolling line, so there is no last row to fill.
+  it("étire la dernière tuile à partir de sm quand le nombre est impair", () => {
     render(<RubriqueEntrees titre="Explorer" titreId="t" entrees={entrees(5)} />);
     const items = screen.getAllByRole("listitem");
-    expect(items[items.length - 1]).toHaveClass("last:odd:col-span-2");
+    expect(items[items.length - 1]).toHaveClass("sm:last:odd:col-span-2");
     expect(items[items.length - 1]).toHaveClass("lg:last:odd:col-span-1");
   });
 });

@@ -136,14 +136,15 @@ export default async function PresidentialHubPage() {
       <div className="container mx-auto space-y-8 px-4 pt-4 pb-8">
         <PresidentialHubNav active="overview" />
 
-        <YoutubeBanner />
-
         <div className={activityLayout}>
           <HubLatestMeasures measures={latestMeasures} lastReviewedAt={context.lastReviewedAt} />
           <HubPress articles={press} />
         </div>
 
-        <HubPrimaryPaths candidacies={field} themeCount={themeCount} />
+        {/* From sm up: below it, the hub navigation above already carries these three paths. */}
+        <div className="hidden sm:block">
+          <HubPrimaryPaths candidacies={field} themeCount={themeCount} />
+        </div>
 
         {/* Below the gate the body says so too, instead of leaving the state in a meta tag. */}
         {!context.hubPublishable && (
@@ -160,6 +161,10 @@ export default async function PresidentialHubPage() {
         <HubReaderGuides guides={context.featuredReaderGuides} />
 
         <HubComparisonLauncher candidacies={field} themes={context.themes} />
+
+        {/* After the content: ahead of it, the banner stood between the navigation and the
+            latest measures. */}
+        <YoutubeBanner />
 
         {programmesEnabled && (
           <p className="text-sm text-muted-foreground">
