@@ -12,6 +12,7 @@ import { ClaimReviewJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
+import { FactCheckShareSheet } from "@/components/share/FactCheckShareSheet";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
@@ -93,15 +94,15 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
   const ratingLabel = FACTCHECK_RATING_LABELS[factCheck.verdictRating];
   const ratingColor = FACTCHECK_RATING_COLORS[factCheck.verdictRating];
 
+  const shareData = {
+    title: factCheck.title,
+    text: `${factCheck.title} - Verdict : ${ratingLabel}`,
+    url: `${SITE_URL}/factchecks/${factCheck.slug}`,
+  };
+
   return (
     <>
-      <ShareBar
-        data={{
-          title: factCheck.title,
-          text: `${factCheck.title} - Verdict : ${ratingLabel}`,
-          url: `${SITE_URL}/factchecks/${factCheck.slug}`,
-        }}
-      />
+      <ShareBar data={shareData} />
       <div className="container mx-auto px-4 pt-4 pb-8 max-w-3xl">
         <Breadcrumb
           items={[{ label: "Fact-checks", href: "/factchecks" }, { label: factCheck.title }]}
@@ -126,9 +127,21 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
         </h1>
 
         {/* Date */}
-        <p className="text-sm text-muted-foreground mb-6">
+        <p className="text-sm text-muted-foreground mb-4">
           Publié le {formatDate(factCheck.publishedAt)}
         </p>
+        <FactCheckShareSheet
+          slug={factCheck.slug ?? factCheck.id}
+          className="mb-6"
+          data={shareData}
+          card={{
+            claimText: factCheck.claimText,
+            claimant: factCheck.claimant,
+            verdictLabel: ratingLabel,
+            source: factCheck.source,
+            publishedLabel: formatDate(factCheck.publishedAt),
+          }}
+        />
 
         {/* Claim card */}
         <Card className="mb-6">
