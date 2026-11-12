@@ -98,6 +98,24 @@ describe("syncSenateGroupPresidencies", () => {
     expect(data.endDate).toBeInstanceOf(Date);
   });
 
+  it("closes nothing while a row of the source is unreadable", async () => {
+    // A sitting president whose start date went missing: the parser drops the row, and the base
+    // still holds it as open. Closing "what the source no longer lists" would erase them.
+    senateFile(
+      OPEN_ROW,
+      "00001A,5,4700,Exemple,Alix,GEX,Groupe d'exemple,2026-10-05 00:00:00.0,,Président,,"
+    );
+    const stats = await syncSenateGroupPresidencies(groups);
+
+    expect(stats.written).toBe(1);
+    expect(stats.closed).toBe(0);
+    expect(stats.errors).toEqual([
+      "Présidence Sénat illisible : 00001A / 4700",
+      expect.stringMatching(/1 ligne\(s\) illisible\(s\).*fermetures ignorées/),
+    ]);
+    expect(dbMock.parliamentaryGroupPresidency.updateMany).not.toHaveBeenCalled();
+  });
+
   it("writes nothing when the source names no sitting president", async () => {
     senateFile(ENDED_ROW);
     const stats = await syncSenateGroupPresidencies(groups);

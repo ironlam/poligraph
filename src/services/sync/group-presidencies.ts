@@ -64,11 +64,15 @@ async function politicianIdsByExternalId(
  * An open period is closed only when the source stops listing it, and the day it stopped is not
  * published then: the closing date is the day the sync saw it gone. The Sénat file keeps its
  * history, so there the end date normally arrives from the source through the upsert.
+ *
+ * A row the parser could not read is absent from `periods`: it may be a sitting president, so
+ * nothing is closed while one exists (the valid periods are still written).
  */
 async function writePresidencies(
   source: PresidencySource,
   sourceUrl: string,
   periods: readonly GroupPresidencyPeriod[],
+  unreadableRows: number,
   maps: ResolveMaps,
   stats: GroupPresidenciesSyncStats
 ): Promise<void> {
@@ -110,6 +114,13 @@ async function writePresidencies(
     stats.written++;
   }
 
+  if (unreadableRows > 0) {
+    stats.errors.push(
+      `${unreadableRows} ligne(s) illisible(s) dans ${sourceUrl} : fermetures ignorées`
+    );
+    return;
+  }
+
   const closed = await db.parliamentaryGroupPresidency.updateMany({
     where: {
       source,
@@ -138,11 +149,13 @@ export async function syncAnGroupPresidencies(): Promise<GroupPresidenciesSyncSt
 
     const acteurDir = path.join(tempDir, "json", "acteur");
     const periods: GroupPresidencyPeriod[] = [];
+    let unreadableRows = 0;
     for (const file of readdirSync(acteurDir).filter((name) => name.endsWith(".json"))) {
       const parsed = parseAnGroupPresidencies(
         safeJsonParseOrThrow<unknown>(readFileSync(path.join(acteurDir, file), "utf8"))
       );
       periods.push(...parsed.periods);
+      unreadableRows += parsed.invalid.length;
       stats.errors.push(...parsed.invalid.map((row) => `Présidence AN illisible : ${row}`));
     }
     stats.periodsFound = periods.length;
@@ -166,6 +179,7 @@ export async function syncAnGroupPresidencies(): Promise<GroupPresidenciesSyncSt
       DataSource.ASSEMBLEE_NATIONALE,
       AN_GROUP_PRESIDENCIES_SOURCE_URL,
       periods,
+      unreadableRows,
       { groupIds, politicianIds },
       stats
     );
@@ -212,6 +226,7 @@ export async function syncSenateGroupPresidencies(
       DataSource.SENAT,
       SENATE_GROUP_PRESIDENCIES_SOURCE_URL,
       parsed.periods,
+      parsed.invalid.length,
       { groupIds: codeToGroupId, politicianIds },
       stats
     );
