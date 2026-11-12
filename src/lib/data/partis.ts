@@ -133,6 +133,40 @@ export async function getPartyLeadership(partyId: string, partyName: string) {
   });
 }
 
+const PARLIAMENT_SEAT_TYPES = ["DEPUTE", "SENATEUR", "DEPUTE_EUROPEEN"] as const;
+
+export type PartySeatCounts = { deputes: number; senateurs: number; deputesEuropeens: number };
+
+/**
+ * Current members of the party sitting in each parliament, counted as people.
+ *
+ * `getParty` loads one current mandate per member, in no set order, so it cannot answer this: a
+ * senator who is also a mayor may come back as a mayor. One count per chamber asks the question
+ * directly, and counts a person once whatever the number of mandate rows.
+ */
+export async function getPartySeatCounts(partyId: string): Promise<PartySeatCounts> {
+  "use cache";
+  cacheTag(`party-seats:${partyId}`, "parties", "politicians");
+  cacheLife("synced");
+
+  const [deputes, senateurs, deputesEuropeens] = await Promise.all(
+    PARLIAMENT_SEAT_TYPES.map((type) =>
+      db.politician.count({
+        where: {
+          ...PUBLIC_POLITICIAN_WHERE,
+          currentPartyId: partyId,
+          mandates: { some: { isCurrent: true, type } },
+        },
+      })
+    )
+  );
+  return {
+    deputes: deputes ?? 0,
+    senateurs: senateurs ?? 0,
+    deputesEuropeens: deputesEuropeens ?? 0,
+  };
+}
+
 export async function getPartyRoles(partyId: string) {
   "use cache";
   cacheTag(`party-roles:${partyId}`, "parties");

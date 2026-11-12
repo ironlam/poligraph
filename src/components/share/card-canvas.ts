@@ -222,7 +222,7 @@ export function drawPortrait(
   ctx: CanvasRenderingContext2D,
   fonts: CardFonts,
   portrait: {
-    image: CanvasImageSource | null;
+    image: HTMLImageElement | null;
     initials: string;
     x: number;
     y: number;
