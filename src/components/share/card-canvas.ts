@@ -175,31 +175,37 @@ export function drawCardFooter(
   });
 }
 
-const TILE_HEIGHT = 150;
 const TILE_GAP = 16;
+/** Dense: for a card that stacks one more block above the tiles and must still clear the footer. */
+const TILE_METRICS = {
+  regular: { height: 150, figureSize: 56, figureBaseline: 72, labelTop: 88 },
+  dense: { height: 128, figureSize: 48, figureBaseline: 58, labelTop: 70 },
+} as const;
 
 /** Counters as tiles: the figure, and under it the words that say what it counts. */
 export function drawStatTiles(
   ctx: CanvasRenderingContext2D,
   fonts: CardFonts,
   stats: readonly CardStat[],
-  options: { top: number; columns: number }
+  options: { top: number; columns: number; dense?: boolean }
 ): number {
   if (stats.length === 0) return options.top;
+  const metrics = options.dense ? TILE_METRICS.dense : TILE_METRICS.regular;
+  const tileHeight = metrics.height;
   const width = (CARD_INNER - TILE_GAP * (options.columns - 1)) / options.columns;
   stats.forEach((stat, i) => {
     const x = CARD_MARGIN + (i % options.columns) * (width + TILE_GAP);
-    const y = options.top + Math.floor(i / options.columns) * (TILE_HEIGHT + TILE_GAP);
-    roundedRect(ctx, x, y, width, TILE_HEIGHT, 24);
+    const y = options.top + Math.floor(i / options.columns) * (tileHeight + TILE_GAP);
+    roundedRect(ctx, x, y, width, tileHeight, 24);
     ctx.fillStyle = TILE;
     ctx.fill();
     ctx.fillStyle = INK;
-    ctx.font = `800 56px ${fonts.display}`;
-    ctx.fillText(formatCardStat(stat), x + 24, y + 72);
+    ctx.font = `800 ${metrics.figureSize}px ${fonts.display}`;
+    ctx.fillText(formatCardStat(stat), x + 24, y + metrics.figureBaseline);
     ctx.fillStyle = INK;
     drawFittedText(ctx, stat.label, {
       x: x + 24,
-      top: y + 88,
+      top: y + metrics.labelTop,
       width: width - 48,
       font: (size) => `400 ${size}px ${fonts.body}`,
       steps: [
@@ -210,7 +216,7 @@ export function drawStatTiles(
     });
   });
   const rows = Math.ceil(stats.length / options.columns);
-  return options.top + rows * TILE_HEIGHT + (rows - 1) * TILE_GAP;
+  return options.top + rows * tileHeight + (rows - 1) * TILE_GAP;
 }
 
 function imageSize(image: HTMLImageElement): { width: number; height: number } {

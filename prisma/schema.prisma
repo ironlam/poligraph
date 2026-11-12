@@ -92,6 +92,7 @@ model Politician {
 
   // Relations
   mandates                  Mandate[]
+  groupPresidencies         ParliamentaryGroupPresidency[]
   affairs                   Affair[]
   declarations              Declaration[]
   partyHistory              PartyMembership[]
@@ -688,7 +689,8 @@ model ParliamentaryGroup {
   defaultPartyId String?
 
   // Relations
-  mandates MandateParliamentary[]
+  mandates     MandateParliamentary[]
+  presidencies ParliamentaryGroupPresidency[]
 
   // Reverse relations for parlement-riche
   scrutinPositions ScrutinGroupPosition[]
@@ -699,6 +701,34 @@ model ParliamentaryGroup {
 
   @@unique([code, chamber])
   @@unique([name, chamber])
+}
+
+// Presidency of a parliamentary group: one row per function period, as the chamber publishes it.
+// A group of the Assemblée belongs to one legislature, so its presidencies do too. The Sénat
+// re-opens a period at each renewal: readers chain consecutive periods of the same person.
+model ParliamentaryGroupPresidency {
+  id                   String             @id @default(cuid())
+  parliamentaryGroup   ParliamentaryGroup @relation(fields: [parliamentaryGroupId], references: [id], onDelete: Cascade)
+  parliamentaryGroupId String
+  politician           Politician         @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+  politicianId         String
+
+  startDate DateTime  @db.Date
+  endDate   DateTime? @db.Date // null: in office
+
+  // Provenance. externalId is the chamber's own identifier of the function period:
+  // the mandate uid at the Assemblée (PM...), "Id fonction occupée" at the Sénat.
+  source          DataSource
+  sourceUrl       String
+  externalId      String
+  lastConfirmedAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([source, externalId])
+  @@index([parliamentaryGroupId, endDate])
+  @@index([politicianId])
 }
 
 enum MandateType {

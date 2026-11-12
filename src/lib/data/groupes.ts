@@ -16,6 +16,7 @@ import {
 import type { GroupPosition, Chamber, PoliticalPosition } from "@/generated/prisma";
 import { POLITICAL_POSITION_ORDER } from "@/config/labels";
 import type { HemicyclePlacement } from "@/lib/share-card";
+import { currentPresidencies } from "@/lib/parlement/group-presidencies";
 import { getParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
 import {
   getGovernmentProjectPositionDataset,
@@ -446,6 +447,60 @@ export async function getGroupHemicyclePlacement(
     seats: self._count.mandates,
     total: count(ordered),
   };
+}
+
+export interface GroupPresident {
+  politician: {
+    slug: string;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+    civility: string | null;
+    photoUrl: string | null;
+    blobPhotoUrl: string | null;
+  };
+  /** Start of the uninterrupted presidency, see `currentPresidencies`. */
+  since: Date;
+  /** The official file the period was read from. */
+  sourceUrl: string;
+}
+
+/**
+ * Who presides a group today. Empty when the chamber publishes no sitting president for it (the
+ * non-inscrits have none) or when the person has no public profile: the page and the card then
+ * show nothing rather than a name without a source.
+ */
+export async function getGroupPresidents(groupId: string): Promise<GroupPresident[]> {
+  "use cache";
+  cacheTag("votes", "groupes");
+  cacheLife("synced");
+
+  const periods = await db.parliamentaryGroupPresidency.findMany({
+    where: { parliamentaryGroupId: groupId, politician: PUBLIC_POLITICIAN_WHERE },
+    select: {
+      politicianId: true,
+      startDate: true,
+      endDate: true,
+      sourceUrl: true,
+      politician: {
+        select: {
+          slug: true,
+          firstName: true,
+          lastName: true,
+          fullName: true,
+          civility: true,
+          photoUrl: true,
+          blobPhotoUrl: true,
+        },
+      },
+    },
+  });
+
+  return currentPresidencies(periods, new Date()).map(({ period, since }) => ({
+    politician: period.politician,
+    since,
+    sourceUrl: period.sourceUrl,
+  }));
 }
 
 export async function getGroupeDetail(slug: string) {

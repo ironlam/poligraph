@@ -20,6 +20,7 @@ import {
   UnknownSenateMatriculesError,
   type Elected2026,
 } from "./senate-unknown-matricules";
+import { syncSenateGroupPresidencies } from "./group-presidencies";
 
 const client = new HTTPClient({ rateLimitMs: SENAT_RATE_LIMIT_MS });
 
@@ -469,6 +470,7 @@ export async function syncSenateurs(): Promise<SenatSyncResult> {
     groupsUpdated: 0,
     senatorsCreated: 0,
     senatorsUpdated: 0,
+    groupPresidenciesWritten: 0,
     errors: [],
   };
 
@@ -508,6 +510,12 @@ export async function syncSenateurs(): Promise<SenatSyncResult> {
         );
       else result.errors.push(`${sen.prenom} ${sen.nom}`);
     }
+
+    // 3b. Who presides each group. After the senators, since it links them to the groups above.
+    console.log("Syncing senate group presidencies...");
+    const presidencies = await syncSenateGroupPresidencies(codeToGroupId);
+    result.groupPresidenciesWritten = presidencies.written;
+    result.errors.push(...presidencies.errors);
 
     if (unresolved.length > 0) {
       // An incomplete run closes nothing: before the switch of mandates, closing here would

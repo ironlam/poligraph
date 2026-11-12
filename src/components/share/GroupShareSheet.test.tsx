@@ -18,7 +18,8 @@ function open(
   hemicycle: {
     placement: { before: number; seats: number; total: number };
     seatNoun: string;
-  } | null = null
+  } | null = null,
+  president: { fullName: string; role: string; photoUrl: string | null } | null = null
 ) {
   render(
     <GroupShareSheet
@@ -27,6 +28,7 @@ function open(
       name="Groupe d'exemple"
       subline="GEX · Assemblée nationale · 17e législature"
       color="#336699"
+      president={president}
       seatCount={seatCount}
       hemicycle={hemicycle}
       indicators={indicators}
@@ -65,6 +67,7 @@ describe("GroupShareSheet", () => {
         name="Groupe d'exemple"
         subline="GEX · Assemblée nationale · 16e législature"
         color={null}
+        president={null}
         seatCount={0}
         hemicycle={null}
         indicators={[]}
@@ -74,6 +77,21 @@ describe("GroupShareSheet", () => {
     fireEvent.click(screen.getByRole("button", { name: "Partager ce groupe" }));
     expect(screen.queryByRole("img", { name: /Image à partager/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Copier le lien" })).toBeInTheDocument();
+  });
+
+  it("names who presides the group, with the function and the year it started", () => {
+    const name = open(64, null, {
+      fullName: "Alix Exemple",
+      role: "Présidente du groupe depuis 2024",
+      photoUrl: null,
+    });
+    expect(name).toContain(
+      "17e législature. Présidente du groupe depuis 2024 : Alix Exemple. 64 membres"
+    );
+  });
+
+  it("says nothing about a presidency when none is known", () => {
+    expect(open(64)).not.toMatch(/Présiden/);
   });
 
   it("says the hemicycle in words: seats, total and share", () => {

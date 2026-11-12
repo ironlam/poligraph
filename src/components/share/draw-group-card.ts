@@ -1,5 +1,6 @@
 import {
   hemicycleDots,
+  initialsOf,
   seatSharePct,
   type CardStat,
   type HemicyclePlacement,
@@ -9,9 +10,11 @@ import {
   CARD_MARGIN,
   INK,
   MUTED,
+  RULE,
   drawBrandHeader,
   drawCardFooter,
   drawFittedText,
+  drawPortrait,
   drawStatTiles,
   fillPage,
   roundedRect,
@@ -22,6 +25,19 @@ const FALLBACK_COLOR = "#64748b";
 const EMPTY_SEAT = "#d4d7dd";
 const HEMICYCLE_RADIUS = 250;
 const DOT_RADIUS = 7.5;
+/** The words beside the dots run lower than the dots do. */
+const HEMICYCLE_BLOCK_HEIGHT = 292;
+
+/**
+ * Vertical rhythm of the card. With a president the stack holds one more block: the gaps tighten
+ * and the hemicycle and tiles shrink, so that the longest group name with its three indicators
+ * still clears the footer.
+ */
+const LAYOUT = {
+  regular: { afterSubline: 56, hemicycleScale: 1, afterHemicycle: 17, denseTiles: false },
+  withPresident: { afterSubline: 32, hemicycleScale: 0.82, afterHemicycle: 20, denseTiles: true },
+} as const;
+const AFTER_PRESIDENT = 26;
 
 /**
  * The hemicycle and, beside it, the same share in words and figures: the picture never speaks
@@ -32,10 +48,15 @@ function drawHemicycle(
   fonts: CardFonts,
   hemicycle: { placement: HemicyclePlacement; seatNoun: string },
   color: string,
-  top: number
+  position: { top: number; scale: number }
 ): number {
   const { placement, seatNoun } = hemicycle;
-  const centreX = CARD_MARGIN + HEMICYCLE_RADIUS + DOT_RADIUS;
+  // Drawn in its own coordinates, then scaled as one block: dots and words shrink together.
+  ctx.save();
+  ctx.translate(CARD_MARGIN, position.top);
+  ctx.scale(position.scale, position.scale);
+  const top = 0;
+  const centreX = HEMICYCLE_RADIUS + DOT_RADIUS;
   const baseline = top + HEMICYCLE_RADIUS + DOT_RADIUS;
   for (const dot of hemicycleDots(placement)) {
     ctx.beginPath();
@@ -62,7 +83,58 @@ function drawHemicycle(
   // "Pourvus": the total is the seats filled today, not the legal size of the chamber.
   ctx.fillText(`soit ${seatSharePct(placement)} % des`, textX, top + 246);
   ctx.fillText("sièges pourvus", textX, top + 282);
-  return baseline + DOT_RADIUS;
+  ctx.restore();
+  return position.top + HEMICYCLE_BLOCK_HEIGHT * position.scale;
+}
+
+const PRESIDENT_BOX_HEIGHT = 124;
+const PRESIDENT_PORTRAIT = 96;
+
+/** Who presides the group: portrait, function with the year it started, name. */
+function drawPresident(
+  ctx: CanvasRenderingContext2D,
+  fonts: CardFonts,
+  president: { fullName: string; role: string },
+  portrait: HTMLImageElement | null,
+  top: number
+): number {
+  const padding = (PRESIDENT_BOX_HEIGHT - PRESIDENT_PORTRAIT) / 2;
+  roundedRect(ctx, CARD_MARGIN, top, CARD_INNER, PRESIDENT_BOX_HEIGHT, 28);
+  ctx.strokeStyle = RULE;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  drawPortrait(ctx, fonts, {
+    image: portrait,
+    initials: initialsOf(president.fullName),
+    x: CARD_MARGIN + 24,
+    y: top + padding,
+    size: PRESIDENT_PORTRAIT,
+  });
+  const textX = CARD_MARGIN + 24 + PRESIDENT_PORTRAIT + 28;
+  const textWidth = CARD_INNER - (textX - CARD_MARGIN) - 24;
+  ctx.fillStyle = MUTED;
+  drawFittedText(ctx, president.role, {
+    x: textX,
+    top: top + 20,
+    width: textWidth,
+    font: (size) => `400 ${size}px ${fonts.body}`,
+    steps: [
+      { size: 28, maxLines: 1 },
+      { size: 24, maxLines: 1 },
+    ],
+  });
+  ctx.fillStyle = INK;
+  drawFittedText(ctx, president.fullName, {
+    x: textX,
+    top: top + 58,
+    width: textWidth,
+    font: (size) => `700 ${size}px ${fonts.display}`,
+    steps: [
+      { size: 44, maxLines: 1 },
+      { size: 36, maxLines: 1 },
+    ],
+  });
+  return top + PRESIDENT_BOX_HEIGHT;
 }
 
 export interface GroupCardInput {
@@ -71,6 +143,8 @@ export interface GroupCardInput {
   subline: string;
   /** Decorative only: the group is always named in words beside it. */
   color: string | null;
+  /** The function, agreed and dated ("Présidente du groupe depuis 2024"). Null when unknown. */
+  president: { fullName: string; role: string } | null;
   /** Sitting members today, null when there are none: a group of a past legislature has none. */
   members: CardStat | null;
   /** Where the group sits, null when it has no declared place: the count is then a plain tile. */
@@ -92,7 +166,8 @@ export interface GroupCardInput {
 export function drawGroupCard(
   ctx: CanvasRenderingContext2D,
   input: GroupCardInput,
-  fonts: CardFonts
+  fonts: CardFonts,
+  presidentPortrait: HTMLImageElement | null
 ) {
   fillPage(ctx);
   drawBrandHeader(ctx, fonts, `Groupe parlementaire · au ${input.asOfLabel}`);
@@ -130,9 +205,17 @@ export function drawGroupCard(
   ctx.fillStyle = input.color ?? FALLBACK_COLOR;
   ctx.fill();
 
-  let y = sublineBottom + 56;
+  const layout = input.president ? LAYOUT.withPresident : LAYOUT.regular;
+  let y = sublineBottom + layout.afterSubline;
+  if (input.president) {
+    y = drawPresident(ctx, fonts, input.president, presidentPortrait, y) + AFTER_PRESIDENT;
+  }
   if (input.hemicycle) {
-    y = drawHemicycle(ctx, fonts, input.hemicycle, input.color ?? FALLBACK_COLOR, y) + 44;
+    y =
+      drawHemicycle(ctx, fonts, input.hemicycle, input.color ?? FALLBACK_COLOR, {
+        top: y,
+        scale: layout.hemicycleScale,
+      }) + layout.afterHemicycle;
   }
 
   // One grid of two columns: three tiles side by side would cut the labels, and a percentage
@@ -142,7 +225,11 @@ export function drawGroupCard(
     ...(input.members && !input.hemicycle ? [input.members] : []),
     ...input.indicators,
   ];
-  drawStatTiles(ctx, fonts, tiles, { top: y, columns: Math.min(2, tiles.length) });
+  drawStatTiles(ctx, fonts, tiles, {
+    top: y,
+    columns: Math.min(2, tiles.length),
+    dense: layout.denseTiles,
+  });
 
   drawCardFooter(ctx, fonts, {
     callToAction: "Membres et votes du groupe sur poligraph.fr",

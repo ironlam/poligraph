@@ -55,6 +55,7 @@ Data sources:
         groupsUpdated: result.groupsUpdated,
         senatorsCreated: result.senatorsCreated,
         senatorsUpdated: result.senatorsUpdated,
+        groupPresidenciesWritten: result.groupPresidenciesWritten,
       },
       errors: result.errors,
     };

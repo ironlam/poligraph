@@ -1894,3 +1894,14 @@ export const CHANGELOG_TYPE_LABELS: Record<ChangelogType, string> = {
   CORRECTION: "Correction",
   DONNEES: "Données",
 };
+
+/**
+ * Function of the person who presides a parliamentary group. A role, so it agrees with `civility`;
+ * when the base holds none, the noun names the function without stating a gender for the person
+ * (same reasoning as `candidacyRoleLabel`).
+ */
+export function groupPresidencyLabel(civility: string | null | undefined): string {
+  if (civility === "Mme") return "Présidente du groupe";
+  if (civility === "M.") return "Président du groupe";
+  return "Présidence du groupe";
+}

@@ -5,9 +5,15 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
-import { getGroupeDetail, getGroupHemicyclePlacement, getGroupKeyVotes } from "@/lib/data/groupes";
+import {
+  getGroupeDetail,
+  getGroupHemicyclePlacement,
+  getGroupKeyVotes,
+  getGroupPresidents,
+} from "@/lib/data/groupes";
 import { VoteCard } from "@/components/votes";
-import { CHAMBER_LABELS, CHAMBER_SHORT_LABELS } from "@/config/labels";
+import { CHAMBER_LABELS, CHAMBER_SHORT_LABELS, groupPresidencyLabel } from "@/config/labels";
+import { formatDate, normalizeImageUrl } from "@/lib/utils";
 import { GLOSSARY } from "@/config/glossary";
 import { GOVERNMENT_GROUP_CODE, SENATE_GOVERNMENT_GROUP_CODE } from "@/config/scrutin-importance";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
@@ -75,9 +81,10 @@ export default async function GroupeDetailPage({ params }: PageProps) {
   if (!group) notFound();
 
   const isNonInscritAN = group.chamber === "AN" && group.code === "NI";
-  const [groupKeyVotes, hemicyclePlacement, governmentProjects] = await Promise.all([
+  const [groupKeyVotes, hemicyclePlacement, presidents, governmentProjects] = await Promise.all([
     getGroupKeyVotes(group.id),
     getGroupHemicyclePlacement(group.id, group.chamber),
+    getGroupPresidents(group.id),
     group.chamber === "AN" && !isNonInscritAN
       ? getGovernmentProjectPositionsForGroup(group.code)
       : null,
@@ -108,6 +115,9 @@ export default async function GroupeDetailPage({ params }: PageProps) {
   ]
     .filter(Boolean)
     .join(" · ");
+  // The card has room for one portrait. A shared presidency stays on the page, which lists
+  // everyone: picking one of them for the image would be an editorial choice.
+  const cardPresident = presidents.length === 1 ? presidents[0]! : null;
   // The reference group agrees with itself on every vote: printing its 100 % would say nothing.
   const isReferenceGroup = group.code === referenceGroupCode;
   const cardIndicators = stats
@@ -174,6 +184,48 @@ export default async function GroupeDetailPage({ params }: PageProps) {
           <Users className="h-4 w-4" />
           {group.seatCount} membre{group.seatCount > 1 ? "s" : ""}
         </p>
+        {presidents.length > 0 && (
+          <div className="mt-4">
+            <ul className="flex flex-wrap gap-3">
+              {presidents.map((president) => (
+                <li key={president.politician.slug}>
+                  <Link
+                    href={`/politiques/${president.politician.slug}`}
+                    prefetch={false}
+                    className="flex min-h-11 items-center gap-3 rounded-lg border p-2 pr-4 hover:bg-muted transition-colors"
+                  >
+                    <PoliticianAvatar
+                      photoUrl={president.politician.photoUrl}
+                      blobPhotoUrl={president.politician.blobPhotoUrl}
+                      firstName={president.politician.firstName}
+                      lastName={president.politician.lastName}
+                      size="sm"
+                    />
+                    <span className="flex flex-col">
+                      <span className="text-xs text-muted-foreground">
+                        {groupPresidencyLabel(president.politician.civility)} depuis le{" "}
+                        {formatDate(president.since)}
+                      </span>
+                      <span className="text-sm font-medium">{president.politician.fullName}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Source :{" "}
+              <a
+                href={presidents[0]!.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+                aria-label={`Données ouvertes, ${chamberLabel} (fichier officiel, nouvel onglet)`}
+              >
+                données ouvertes, {chamberLabel}
+              </a>
+            </p>
+          </div>
+        )}
         <GroupShareSheet
           slug={slug}
           className="mt-4"
@@ -185,6 +237,15 @@ export default async function GroupeDetailPage({ params }: PageProps) {
           name={group.name}
           subline={cardSubline}
           color={group.color}
+          president={
+            cardPresident && {
+              fullName: cardPresident.politician.fullName,
+              role: `${groupPresidencyLabel(cardPresident.politician.civility)} depuis ${cardPresident.since.getUTCFullYear()}`,
+              photoUrl: normalizeImageUrl(
+                cardPresident.politician.blobPhotoUrl ?? cardPresident.politician.photoUrl
+              ),
+            }
+          }
           seatCount={group.seatCount}
           hemicycle={
             hemicyclePlacement && {

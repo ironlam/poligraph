@@ -51,6 +51,7 @@ Data source: data.gouv.fr (Datan dataset, updated daily)
         deputiesCreated: result.deputiesCreated,
         deputiesUpdated: result.deputiesUpdated,
         deputiesDeactivated: result.deputiesDeactivated,
+        groupPresidenciesWritten: result.groupPresidenciesWritten,
       },
       errors: result.errors,
     };
