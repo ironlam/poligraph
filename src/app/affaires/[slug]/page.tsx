@@ -45,6 +45,8 @@ import type { AffairCategory } from "@/types";
 import type { Prisma } from "@/generated/prisma";
 import { SITE_URL } from "@/config/site";
 import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
+import { buildAffairShareCard } from "@/lib/affairs/share-card";
+import { AffairShareSheet } from "@/components/share/AffairShareSheet";
 import { buildPublicAffairLookupWheres, pickPublicLinkedAffair } from "@/lib/affairs/affair-lookup";
 import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
@@ -457,6 +459,30 @@ export default async function AffairDetailPage({ params }: PageProps) {
             className="mb-6"
           />
         )}
+
+        {/* The image is decided by `buildAffairShareCard`: none for a person the procedure does not
+            target, where the link alone is offered. The share text carries the title only, never
+            the status, for the same reason. */}
+        <AffairShareSheet
+          slug={affair.slug}
+          className="mb-6"
+          data={{
+            title: affair.title,
+            text: `${affair.title} : sources et chronologie sur Poligraph`,
+            url: `${SITE_URL}/affaires/${affair.slug}`,
+          }}
+          card={buildAffairShareCard({
+            involvement: affair.involvement,
+            status: affair.status,
+            jurisdictionOrder: affair.jurisdictionOrder,
+            category: affair.category,
+            title: affair.title,
+            sentence: affair.sentence,
+            fullName: affair.politician.fullName,
+            partyAtTime: partyDisplay.kind === "at-time" ? partyDisplay.party.name : null,
+            sourceCount: affair.sources.length,
+          })}
+        />
 
         {/* Linked affair cross-reference */}
         {linked && (
