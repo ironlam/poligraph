@@ -80,9 +80,12 @@ describe("architecture d'invalidation du cache des votes", () => {
     expect(dailyWorkflow).toContain("NEXT_PUBLIC_BASE_URL:");
     expect(dailyWorkflow).toContain("run: npm run sync:daily");
     expectInOrder(dailyScript, [
+      // The marker is read before either sync, or the purge has nothing to compare against.
+      "scrutinWriteGate.capture()",
       "scripts/sync-scrutins-an.ts --since-days=",
       "scripts/sync-scrutins-senat.ts",
       'name: "Votes cache revalidation"',
+      "await scrutinWriteGate.scrutinsWritten()",
       'revalidateRemoteCache(["votes"])',
       'name: "Législation (active, 3j)"',
     ]);
