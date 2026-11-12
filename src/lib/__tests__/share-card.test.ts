@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   fitLines,
+  formatCardStat,
+  legislatureLabel,
   initialsOf,
   pickCardStats,
   shareCardFileName,
@@ -125,5 +127,19 @@ describe("shareCardFileName", () => {
   it("keeps the name safe for a file system", () => {
     expect(shareCardFileName("vote", "../é t/x")).toBe("poligraph-vote-t-x.png");
     expect(shareCardFileName("candidat", "")).toBe("poligraph-candidat-carte.png");
+  });
+});
+
+describe("formatCardStat", () => {
+  it("prints the figure the French way, with its unit when it has one", () => {
+    expect(formatCardStat({ value: 87, label: "de cohésion", suffix: " %" })).toBe("87 %");
+    expect(formatCardStat({ value: 12, label: "membres" })).toBe("12");
+  });
+});
+
+describe("legislatureLabel", () => {
+  it("names a legislature with its ordinal", () => {
+    expect(legislatureLabel(17)).toBe("17e législature");
+    expect(legislatureLabel(1)).toBe("1re législature");
   });
 });
