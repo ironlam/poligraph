@@ -189,6 +189,7 @@ export type ShareCardKind =
   | "parti"
   | "groupe"
   | "elu"
+  | "affaire"
   | "factcheck";
 
 /** File name of the downloaded card: stable, ASCII, tied to what it shows. */
