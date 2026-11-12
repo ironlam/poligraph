@@ -8,8 +8,8 @@ vi.mock("next/cache", () => ({
   revalidatePath: (path: string, type: string) => revalidatePathSpy(path, type),
 }));
 
-import { invalidateEntity, revalidateAll, ALL_TAGS } from "@/lib/cache";
-import { SELECTABLE_TAGS } from "@/lib/cache-tags";
+import { invalidateEntity, revalidateAll, revalidateTags, ALL_TAGS } from "@/lib/cache";
+import { SELECTABLE_TAGS, scrutinAnalysisTag } from "@/lib/cache-tags";
 import { SITEMAP_SHARD_TAGS, AFFAIR_BEARING_SHARDS } from "@/lib/seo/sitemap-tags";
 import { revalidateCacheSchema } from "@/lib/security/schemas/admin";
 
@@ -184,5 +184,36 @@ describe("changelog tag", () => {
   it("is selectable by an operator and reaches the sitemap shard that lists /changelog", () => {
     expect(SELECTABLE_TAGS).toContain("changelog");
     expect(SITEMAP_SHARD_TAGS[0]).toContain("changelog");
+  });
+});
+
+describe("profils des purges en masse (ISR writes)", () => {
+  it("revalidateAll garde l'ancienne fenêtre sur les affaires et passe le reste en max", () => {
+    revalidateAll();
+    // Principe 9 : une affaire dépubliée ne doit pas rester servable via une fenêtre longue.
+    expect(revalidateTagSpy).toHaveBeenCalledWith("affairs", "minutes");
+    expect(revalidateTagSpy).toHaveBeenCalledWith("elections", "hours");
+    expect(revalidateTagSpy).toHaveBeenCalledWith("votes", "max");
+    expect(revalidateTagSpy).toHaveBeenCalledWith("politicians", "max");
+  });
+
+  it("revalidateTags applique le profil de chaque tag, sauf profil explicite", () => {
+    revalidateTags(["votes", "affairs"]);
+    expect(revalidateTagSpy).toHaveBeenCalledWith("votes", "max");
+    expect(revalidateTagSpy).toHaveBeenCalledWith("affairs", "minutes");
+
+    revalidateTagSpy.mockClear();
+    revalidateTags(["affairs"], "hours");
+    expect(revalidateTagSpy).toHaveBeenCalledWith("affairs", "hours");
+  });
+
+  it("les éditions admin (invalidateEntity) gardent leur profil", () => {
+    invalidateEntity("vote");
+    expect(revalidateTagSpy).toHaveBeenCalledWith("votes", "minutes");
+  });
+
+  it("le tag d'analyse est par scrutin et sélectionnable globalement", () => {
+    expect(scrutinAnalysisTag("abc")).toBe("scrutin-analysis:abc");
+    expect(SELECTABLE_TAGS).toContain("scrutin-analysis");
   });
 });

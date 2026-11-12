@@ -105,6 +105,8 @@ if (SENTRY_ENABLED) {
       "Network request failed",
       "NetworkError",
       "AbortError",
+      // Firefox for iOS reader-mode script injected into every page, not our code (POLIGRAPH-3B).
+      /__firefox__/,
     ],
   });
 }

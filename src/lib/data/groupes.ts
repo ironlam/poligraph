@@ -18,6 +18,7 @@ import { POLITICAL_POSITION_ORDER } from "@/config/labels";
 import type { HemicyclePlacement } from "@/lib/share-card";
 import { currentPresidencies } from "@/lib/parlement/group-presidencies";
 import { getParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
+import { scrutinAnalysisTag } from "@/lib/cache-tags";
 import {
   getGovernmentProjectPositionDataset,
   type GovernmentProjectGroupSummary,
@@ -226,7 +227,7 @@ async function resolveReasons(payload: ReasonsPayload, votingDate: Date): Promis
 
 export async function getScrutinAnalysis(scrutinId: string): Promise<ScrutinAnalysisData | null> {
   "use cache";
-  cacheTag("votes");
+  cacheTag("votes", "scrutin-analysis", scrutinAnalysisTag(scrutinId));
   cacheLife("synced");
 
   const row = await db.scrutinAnalysis.findUnique({
