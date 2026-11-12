@@ -15,6 +15,7 @@
 import "dotenv/config";
 import { execSync } from "child_process";
 import { revalidateRemoteCache } from "./lib/revalidate-cache";
+import { createScrutinWriteGate } from "./lib/scrutin-write-gate";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const dryRunFlag = DRY_RUN ? " --dry-run" : "";
@@ -46,7 +47,18 @@ interface SyncStep {
 
 const AN_RECENT_DAYS = 7;
 
+const scrutinWriteGate = createScrutinWriteGate();
+
 const steps: SyncStep[] = [
+  ...(!DRY_RUN
+    ? [
+        {
+          name: "Repère des scrutins",
+          command: "max(Scrutin.updatedAt)",
+          run: () => scrutinWriteGate.capture(),
+        },
+      ]
+    : []),
   {
     // A 7-day window, not today only: the AN open data publishes a day's votes one or
     // two days late, and a today-only run never sees them once they land.
@@ -62,9 +74,17 @@ const steps: SyncStep[] = [
   ...(!DRY_RUN
     ? [
         {
+          // "votes" is carried by most readers of the site: purging it when both syncs found
+          // nothing new regenerated every profile and listing three times a day for no change.
           name: "Votes cache revalidation",
-          command: "POST /api/cron/revalidate (votes)",
-          run: () => revalidateRemoteCache(["votes"]),
+          command: "POST /api/cron/revalidate (votes), si un scrutin a été écrit",
+          run: async () => {
+            if (await scrutinWriteGate.scrutinsWritten()) {
+              await revalidateRemoteCache(["votes"]);
+            } else {
+              console.log("Aucun scrutin écrit par les deux synchros : purge de votes ignorée.");
+            }
+          },
         },
       ]
     : []),
