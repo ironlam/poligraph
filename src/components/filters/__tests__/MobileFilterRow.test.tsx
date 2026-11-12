@@ -23,7 +23,8 @@ describe("MobileFilterRow", () => {
       />
     );
     const group = screen.getByRole("group", { name: "Filtres actifs" });
-    expect(group).toHaveClass("overflow-x-auto");
+    // The chips and the shortcuts scroll together, in the container that holds both.
+    expect(group.parentElement).toHaveClass("overflow-x-auto");
     expect(group).not.toContainElement(screen.getByRole("button", { name: "Filtres" }));
     expect(group).toHaveTextContent("RN");
   });
@@ -58,5 +59,23 @@ describe("MobileFilterRow", () => {
     expect(onRemove).toHaveBeenCalledWith("certainty");
     fireEvent.click(screen.getByRole("button", { name: "Tout effacer" }));
     expect(onClearAll).toHaveBeenCalled();
+  });
+
+  it("offers one-tap shortcuts beside the trigger, as buttons", () => {
+    const onSelect = vi.fn();
+    render(
+      <MobileFilterRow
+        trigger={trigger}
+        filters={[]}
+        onRemove={() => {}}
+        onClearAll={() => {}}
+        shortcuts={[{ key: "senat", label: "Sénat", onSelect }]}
+      />
+    );
+    const quick = screen.getByRole("group", { name: "Filtres rapides" });
+    expect(quick).not.toContainElement(screen.getByRole("button", { name: "Filtres" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sénat" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

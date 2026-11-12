@@ -295,6 +295,25 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
     </>
   );
 
+  // The two picks a phone reader makes most, one tap away. A shortcut leaves the row once its
+  // filter is set: the active chip then says it.
+  const mobileShortcuts = [
+    ...(hasMultipleChambers && !current.chamber
+      ? options.chambers.map((c) => ({
+          key: `chamber-${c.chamber}`,
+          label: CHAMBER_LABELS[c.chamber],
+          onSelect: () => set({ chamber: c.chamber }),
+        }))
+      : []),
+    ...(current.result
+      ? []
+      : RESULT_OPTIONS.filter((option) => option.value !== "").map((option) => ({
+          key: `result-${option.value}`,
+          label: option.label,
+          onSelect: () => set({ result: option.value }),
+        }))),
+  ];
+
   return (
     <FilterBarShell isPending={isPending} className="space-y-4">
       {/* Desktop / tablet layout */}
@@ -339,6 +358,7 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
             filters={activeFilters}
             onRemove={removeFilter}
             onClearAll={clearAll}
+            shortcuts={mobileShortcuts}
             trigger={
               <Dialog.Trigger asChild>
                 <button
