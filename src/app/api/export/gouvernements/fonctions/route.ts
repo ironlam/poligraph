@@ -4,7 +4,8 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
 import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
-import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
+import { queryGovernmentMemberAffairs } from "@/lib/data/government-affairs";
+import { AFFAIRS_FILTERS } from "@/lib/governments/affairs";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { filteredMembers, FUNCTION_COLUMNS, functionRows } from "@/lib/governments/export";
 
@@ -32,21 +33,26 @@ export const GET = withPublicRoute(async (request) => {
     return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   }
 
+  const searchParams = request.nextUrl.searchParams;
+  const raw = Object.fromEntries(searchParams.entries());
+  const judicialFilters = searchParams
+    .getAll("affaires")
+    .filter((value) => AFFAIRS_FILTERS.some((filter) => filter === value));
+  const hasJudicialFilter = judicialFilters.some((filter) => filter === raw.affaires);
   const [govs, data, affairs] = await Promise.all([
     getPublishedGovernments(),
     getGovernmentEpisodes(),
-    getGovernmentMemberAffairs(),
+    hasJudicialFilter ? queryGovernmentMemberAffairs() : undefined,
   ]);
   const govById = new Map(govs.map((g) => [g.id, g]));
-  const raw = Object.fromEntries(request.nextUrl.searchParams.entries());
   const found = filteredMembers(govs, data, raw, affairs);
 
   const rows = found ? functionRows(found.rows, govById) : [];
   const csv = toCSV(rows, FUNCTION_COLUMNS, { neutralizeFormulas: true });
   const filename = `membres-gouvernements-fonctions-${new Date().toISOString().split("T")[0]}.csv`;
 
-  return withCache(createCSVResponse(csv, filename), "export", [
-    EXPORT_CACHE_TAGS.governments,
-    EXPORT_ROLLUP_TAG,
-  ]);
+  const response = createCSVResponse(csv, filename);
+  // A shared cache can normalize duplicate query parameters before matching an entry.
+  if (judicialFilters.length > 0) return withCache(response, "export-uncached");
+  return withCache(response, "export", [EXPORT_CACHE_TAGS.governments, EXPORT_ROLLUP_TAG]);
 });

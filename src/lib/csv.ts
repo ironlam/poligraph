@@ -36,10 +36,6 @@ export function toCSV<T extends Record<string, unknown>>(
   columns: { key: keyof T; header: string }[],
   options?: { neutralizeFormulas?: boolean }
 ): string {
-  if (data.length === 0) {
-    return columns.map((c) => c.header).join(",");
-  }
-
   // Header row
   const header = columns.map((c) => escapeCSV(c.header)).join(",");
 

@@ -17,6 +17,11 @@ export async function getGovernmentMemberAffairs(): Promise<MemberAffairsMap> {
   cacheTag("gouvernements", "affairs");
   cacheLife("synced");
 
+  return queryGovernmentMemberAffairs();
+}
+
+/** CSV withdrawal reads the current publication state on every judicial export. */
+export async function queryGovernmentMemberAffairs(): Promise<MemberAffairsMap> {
   const rows = await db.affair.findMany({
     where: {
       ...getAdverseAffairWhere(),

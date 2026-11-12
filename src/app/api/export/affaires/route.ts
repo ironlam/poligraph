@@ -19,7 +19,6 @@ import { parsePagination } from "@/lib/api/pagination";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
-import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 import { resolveDecisionField } from "@/lib/affairs/decision-fields";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
@@ -198,10 +197,5 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `affaires-${new Date().toISOString().split("T")[0]}.csv`;
 
-  // Cached 24h at the edge. Admin writes do not wait for expiry: `invalidateEntity`
-  // hard-deletes the tag below, so a depublished affair leaves the CSV at once.
-  return withCache(createCSVResponse(csv, filename), "export", [
-    EXPORT_CACHE_TAGS.affairs,
-    EXPORT_ROLLUP_TAG,
-  ]);
+  return withCache(createCSVResponse(csv, filename), "export-uncached");
 });
