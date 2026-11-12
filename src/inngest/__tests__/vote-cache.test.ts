@@ -11,6 +11,8 @@ vi.mock("@/lib/politicians/profile-snapshot/events", async (importActual) => ({
 
 import { runVoteSyncWithCacheInvalidation } from "../vote-cache";
 
+const NOTHING_WRITTEN = { scrutinsCreated: 0, scrutinsUpdated: 0, votesCreated: 0 };
+
 describe("runVoteSyncWithCacheInvalidation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,7 +37,7 @@ describe("runVoteSyncWithCacheInvalidation", () => {
       expect(readCoverage()).toEqual(initialCoverage);
       await runVoteSyncWithCacheInvalidation(async () => {
         corpus.push(addedChamber);
-        return { votesCreated: 1 };
+        return { ...NOTHING_WRITTEN, scrutinsCreated: 1, votesCreated: 1 };
       });
 
       expect(revalidateTags).toHaveBeenCalledExactlyOnceWith(["votes"], "max");
@@ -52,8 +54,29 @@ describe("runVoteSyncWithCacheInvalidation", () => {
     expect(revalidateTags).not.toHaveBeenCalled();
   });
 
+  it("n'invalide pas quand la synchronisation n'a rien écrit", async () => {
+    // Unchanged archive (HTTP 304 or same hash) or nothing new past the Senate cursor: purging
+    // "votes" here restaled every profile and listing of the site for no data change.
+    const result = await runVoteSyncWithCacheInvalidation(async () => ({
+      ...NOTHING_WRITTEN,
+      scrutinsSkipped: 12,
+      votesSkipped: 4000,
+    }));
+
+    expect(revalidateTags).not.toHaveBeenCalled();
+    expect(result.scrutinsSkipped).toBe(12);
+  });
+
+  it.each(["scrutinsCreated", "scrutinsUpdated", "votesCreated"] as const)(
+    "invalide dès que %s est non nul",
+    async (counter) => {
+      await runVoteSyncWithCacheInvalidation(async () => ({ ...NOTHING_WRITTEN, [counter]: 1 }));
+      expect(revalidateTags).toHaveBeenCalledExactlyOnceWith(["votes"], "max");
+    }
+  );
+
   it("demande un rattrapage des fiches après le sync", async () => {
-    await runVoteSyncWithCacheInvalidation(async () => ({ votesCreated: 1 }));
+    await runVoteSyncWithCacheInvalidation(async () => ({ ...NOTHING_WRITTEN, votesCreated: 1 }));
     expect(requestProfileReconcile).toHaveBeenCalledExactlyOnceWith("sync-scrutins");
   });
 
