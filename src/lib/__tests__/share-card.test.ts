@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { voteCardFileName, voteShares, wrapLines } from "../share-card";
+import {
+  fitLines,
+  initialsOf,
+  pickCardStats,
+  shareCardFileName,
+  voteShares,
+  wrapLines,
+} from "../share-card";
 
 // One unit per character: enough to exercise the wrapping without a canvas.
 const measure = (text: string) => text.length;
@@ -52,15 +59,71 @@ describe("voteShares", () => {
   });
 });
 
-describe("voteCardFileName", () => {
-  it("names the file after the scrutin", () => {
-    expect(voteCardFileName("2025-01-15-projet-loi-finances-2025")).toBe(
+describe("fitLines", () => {
+  const measureAt = (size: number, text: string) => text.length * size;
+  const steps = [
+    { size: 4, maxLines: 1 },
+    { size: 2, maxLines: 2 },
+    { size: 1, maxLines: 2 },
+  ];
+
+  it("keeps the largest size when the text holds on its lines", () => {
+    expect(fitLines(measureAt, "abc", 12, steps)).toEqual({ size: 4, lines: ["abc"] });
+  });
+
+  it("steps down until the text fits", () => {
+    expect(fitLines(measureAt, "abc def", 12, steps)).toEqual({ size: 2, lines: ["abc", "def"] });
+  });
+
+  it("ends on the last step with an ellipsis rather than overflowing", () => {
+    const fitted = fitLines(measureAt, "un deux trois quatre cinq six sept huit", 12, steps);
+    expect(fitted.size).toBe(1);
+    expect(fitted.lines).toHaveLength(2);
+    expect(fitted.lines[1]).toMatch(/…$/);
+  });
+});
+
+describe("pickCardStats", () => {
+  it("drops zeros and keeps the order", () => {
+    expect(
+      pickCardStats(
+        [
+          { value: 3, label: "mandats" },
+          { value: 0, label: "mesures" },
+          { value: 12, label: "votes" },
+        ],
+        6
+      )
+    ).toEqual([
+      { value: 3, label: "mandats" },
+      { value: 12, label: "votes" },
+    ]);
+  });
+
+  it("caps the list", () => {
+    const stats = [1, 2, 3].map((value) => ({ value, label: `n${value}` }));
+    expect(pickCardStats(stats, 2)).toHaveLength(2);
+  });
+});
+
+describe("initialsOf", () => {
+  it("takes the first and the last word", () => {
+    expect(initialsOf("Jean-Luc de la Fontaine")).toBe("JF");
+    expect(initialsOf("  élise  ")).toBe("É");
+    expect(initialsOf("")).toBe("");
+  });
+});
+
+describe("shareCardFileName", () => {
+  it("names the file after its kind and what it shows", () => {
+    expect(shareCardFileName("vote", "2025-01-15-projet-loi-finances-2025")).toBe(
       "poligraph-vote-2025-01-15-projet-loi-finances-2025.png"
     );
+    expect(shareCardFileName("parti", "les-exemples")).toBe("poligraph-parti-les-exemples.png");
   });
 
   it("keeps the name safe for a file system", () => {
-    expect(voteCardFileName("../é t/x")).toBe("poligraph-vote-t-x.png");
-    expect(voteCardFileName("")).toBe("poligraph-vote-scrutin.png");
+    expect(shareCardFileName("vote", "../é t/x")).toBe("poligraph-vote-t-x.png");
+    expect(shareCardFileName("candidat", "")).toBe("poligraph-candidat-carte.png");
   });
 });

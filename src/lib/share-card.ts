@@ -63,11 +63,61 @@ export function voteShares(
   };
 }
 
-/** File name of the downloaded card: stable, ASCII, tied to the scrutin. */
-export function voteCardFileName(slug: string): string {
+export interface FitStep {
+  size: number;
+  maxLines: number;
+}
+
+/**
+ * The largest type size whose wrapped text holds on its allowed lines, so a short text fills the
+ * card and a long one still fits. The last step always wins, ellipsis included.
+ */
+export function fitLines(
+  measureAt: (size: number, text: string) => number,
+  text: string,
+  maxWidth: number,
+  steps: readonly FitStep[]
+): { size: number; lines: string[] } {
+  const last = steps[steps.length - 1]!;
+  for (const step of steps.slice(0, -1)) {
+    const lines = wrapLines((t) => measureAt(step.size, t), text, maxWidth, step.maxLines + 1);
+    if (lines.length <= step.maxLines) return { size: step.size, lines };
+  }
+  return {
+    size: last.size,
+    lines: wrapLines((t) => measureAt(last.size, t), text, maxWidth, last.maxLines),
+  };
+}
+
+export interface CardStat {
+  value: number;
+  label: string;
+}
+
+/**
+ * The counters a card may print. A zero is dropped, for every person and every party alike: on an
+ * image that travels alone, "0" reads as a verdict where it only states the limit of our coverage.
+ */
+export function pickCardStats(stats: readonly CardStat[], max: number): CardStat[] {
+  return stats.filter((stat) => stat.value > 0).slice(0, max);
+}
+
+/** Two initials for the portrait fallback, from the first and the last word of the name. */
+export function initialsOf(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  const first = words[0]![0] ?? "";
+  const last = words.length > 1 ? (words[words.length - 1]![0] ?? "") : "";
+  return `${first}${last}`.toLocaleUpperCase("fr");
+}
+
+export type ShareCardKind = "vote" | "candidat" | "mesure" | "parti";
+
+/** File name of the downloaded card: stable, ASCII, tied to what it shows. */
+export function shareCardFileName(kind: ShareCardKind, slug: string): string {
   const safe = slug
     .replace(/[^a-z0-9-]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
-  return `poligraph-vote-${safe || "scrutin"}.png`;
+  return `poligraph-${kind}-${safe || "carte"}.png`;
 }
