@@ -50,6 +50,13 @@ export function CondamnationsStatsTable({
           ni l{"'"}autre ne suffit seul, et un taux calculé sur moins de {SEUIL_SUIVIS_TAUX}{" "}
           responsables suivis n{"'"}est pas jugé significatif («&nbsp;n.s.&nbsp;»).
         </p>
+        {/* Both sides of the division count the same people, the party's members today. Counting
+            convictions under the party held at the time of the facts would divide two different
+            populations, so the limit of the choice is stated rather than hidden. */}
+        <p>
+          Une condamnation est comptée dans le parti actuel de la personne. Il peut différer du
+          parti auquel elle appartenait au moment des faits, indiqué sur la fiche de chaque affaire.
+        </p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm" aria-describedby="stats-caption">

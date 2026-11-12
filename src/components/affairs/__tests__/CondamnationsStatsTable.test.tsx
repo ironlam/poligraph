@@ -96,4 +96,10 @@ describe("CondamnationsStatsTable", () => {
     ).toBeInTheDocument();
     expect(within(table).getByRole("rowheader", { name: /Les Républicains/ })).toBeInTheDocument();
   });
+
+  it("dit que la condamnation est comptée dans le parti actuel de la personne", () => {
+    render(<CondamnationsStatsTable rows={rows} />);
+    expect(screen.getByText(/comptée dans le parti actuel de la personne/)).toBeInTheDocument();
+    expect(screen.getByText(/au moment des faits/)).toBeInTheDocument();
+  });
 });
