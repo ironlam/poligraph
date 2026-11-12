@@ -72,4 +72,17 @@ describe("Breadcrumb", () => {
     expect(jsonLd.itemListElement[1].name).toBe("Politiques");
     expect(jsonLd.itemListElement[2].name).toBe("Marine Le Pen");
   });
+
+  it("keeps only the parent step visible below sm, every step staying in the HTML", () => {
+    render(
+      <Breadcrumb items={[{ label: "Partis", href: "/partis" }, { label: "Parti d'exemple" }]} />
+    );
+    const items = screen.getByLabelText("Fil d'Ariane").querySelectorAll("li");
+    expect(items).toHaveLength(3);
+    expect(items[0]?.className).toContain("max-sm:hidden");
+    expect(items[1]?.className).not.toContain("max-sm:hidden");
+    expect(items[2]?.className).toContain("max-sm:hidden");
+    // The way back is a full-height target on a phone.
+    expect(items[1]?.querySelector("a")?.className).toContain("max-sm:min-h-11");
+  });
 });
