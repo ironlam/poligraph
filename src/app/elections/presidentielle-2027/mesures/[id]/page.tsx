@@ -8,6 +8,7 @@ import { MarkdownText } from "@/components/ui/markdown";
 import { MeasureParliamentLinks } from "@/components/measures/MeasureParliamentLinks";
 import { VoteRelationBadge } from "@/components/measures/VoteRelationBadge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
+import { MeasureShareSheet } from "@/components/share/MeasureShareSheet";
 import {
   CHAMBER_LABELS,
   MEASURE_SOURCE_KIND_LABELS,
@@ -103,6 +104,10 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
     details: measure.details,
   });
   const titleClass = measureTitleClass(measure.text);
+  // The card cites the primary source when there is one, like the list below puts it first in
+  // words: a secondary source is named as such, never promoted.
+  const cardSource =
+    measure.sources.find((source) => source.tier === "PRIMARY") ?? measure.sources[0] ?? null;
 
   return (
     <main className="pb-14">
@@ -168,6 +173,26 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
               Voir la méthode
             </Link>
           </p>
+          <MeasureShareSheet
+            slug={measure.slug}
+            className="mt-4"
+            data={{
+              title: `${measure.candidate.name} : ${truncateAtWord(measure.text, 72)}`,
+              text: `${measure.candidate.name}, présidentielle 2027, ${themeLabel.toLocaleLowerCase("fr")} : ${truncateAtWord(measure.text, 140)}`,
+              url: `${SITE_URL}${canonical}`,
+            }}
+            card={
+              cardSource && {
+                candidateName: measure.candidate.name,
+                partyLabel: measure.candidate.party,
+                themeLabel,
+                text: measure.text,
+                sourceLine: `${SOURCE_TIER_LABELS[cardSource.tier]} : ${MEASURE_SOURCE_KIND_LABELS[cardSource.sourceKind]}, ${formatDate(cardSource.publishedAt)}`,
+                sourceCount: measure.sources.length,
+                attributionLabel: MEASURE_ATTRIBUTION_LABELS[measure.attribution],
+              }
+            }
+          />
         </header>
 
         <aside

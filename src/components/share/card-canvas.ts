@@ -134,7 +134,12 @@ export function drawPresidentialBand(
     ctx.font = `400 28px ${fonts.body}`;
     ctx.fillText(band.side.label, right, 232);
     ctx.fillStyle = "#ffffff";
-    ctx.font = `700 40px ${fonts.display}`;
+    // A long value steps down rather than running into the year on the left.
+    const size = [40, 34, 28].find((candidate) => {
+      ctx.font = `700 ${candidate}px ${fonts.display}`;
+      return ctx.measureText(band.side!.value).width <= 520;
+    });
+    ctx.font = `700 ${size ?? 28}px ${fonts.display}`;
     ctx.fillText(band.side.value, right, 282);
     ctx.textAlign = "left";
   }
