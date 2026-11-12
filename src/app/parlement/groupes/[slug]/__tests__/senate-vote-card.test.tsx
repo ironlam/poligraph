@@ -6,12 +6,14 @@ const mocks = vi.hoisted(() => ({
   getGroupKeyVotes: vi.fn(),
   getGovernmentProjectPositionsForGroup: vi.fn(async () => null),
   voteCard: vi.fn(),
+  presidents: [] as unknown[],
 }));
 
 vi.mock("@/lib/data/groupes", () => ({
   getGroupeDetail: (slug: string) => mocks.getGroupeDetail(slug),
   getGroupKeyVotes: (groupId: string) => mocks.getGroupKeyVotes(groupId),
   getGroupHemicyclePlacement: async () => null,
+  getGroupPresidents: async () => mocks.presidents,
 }));
 vi.mock("@/lib/data/government-project-positions", () => ({
   getGovernmentProjectPositionsForGroup: mocks.getGovernmentProjectPositionsForGroup,
@@ -71,6 +73,69 @@ describe("/parlement/groupes/[slug] cartes de votes", () => {
         sourceUrl: "https://www.senat.fr/scrutin-public/2026/scrutin-42.html",
       })
     );
+  });
+
+  it("nomme la présidence du groupe, accordée et datée, avec sa source", async () => {
+    mocks.getGroupeDetail.mockResolvedValue({
+      id: "group-senat",
+      name: "Groupe du Sénat",
+      shortName: "GS",
+      code: "GS",
+      chamber: "SENAT",
+      legislature: null,
+      color: null,
+      seatCount: 12,
+      stats: [],
+      members: [],
+    });
+    mocks.getGroupKeyVotes.mockResolvedValue([]);
+    mocks.presidents = [
+      {
+        politician: {
+          slug: "alix-exemple",
+          firstName: "Alix",
+          lastName: "Exemple",
+          fullName: "Alix Exemple",
+          civility: "Mme",
+          photoUrl: null,
+          blobPhotoUrl: null,
+        },
+        since: new Date("2023-10-03T00:00:00Z"),
+        sourceUrl: "https://data.senat.fr/data/senateurs/ODSEN_HISTOGROUPES.csv",
+      },
+    ];
+
+    render(await GroupeDetailPage({ params: Promise.resolve({ slug: "gs-senat" }) }));
+
+    const link = screen.getByRole("link", { name: /Alix Exemple/ });
+    expect(link).toHaveAttribute("href", "/politiques/alix-exemple");
+    expect(link).toHaveTextContent("Présidente du groupe depuis le 3 octobre 2023");
+    expect(screen.getByRole("link", { name: /Données ouvertes, Sénat/ })).toHaveAttribute(
+      "href",
+      "https://data.senat.fr/data/senateurs/ODSEN_HISTOGROUPES.csv"
+    );
+    mocks.presidents = [];
+  });
+
+  it("n'affiche aucune présidence quand elle est inconnue", async () => {
+    mocks.getGroupeDetail.mockResolvedValue({
+      id: "group-senat",
+      name: "Groupe du Sénat",
+      shortName: "GS",
+      code: "GS",
+      chamber: "SENAT",
+      legislature: null,
+      color: null,
+      seatCount: 12,
+      stats: [],
+      members: [],
+    });
+    mocks.getGroupKeyVotes.mockResolvedValue([]);
+
+    render(await GroupeDetailPage({ params: Promise.resolve({ slug: "gs-senat" }) }));
+
+    expect(screen.queryByText(/Présiden/)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Données ouvertes/ })).toBeNull();
   });
 
   it("explique l'absence de position calculée pour les non-inscrits AN", async () => {
