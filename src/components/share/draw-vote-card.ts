@@ -1,40 +1,21 @@
-import { BRAND_NAVY, BRAND_RED } from "@/config/brand";
 import { COLORS } from "@/config/colors";
-import { voteShares, wrapLines, type VoteCardInput } from "@/lib/share-card";
-
-/** 4:5, the portrait format the social networks keep whole in a feed. */
-export const VOTE_CARD_WIDTH = 1080;
-export const VOTE_CARD_HEIGHT = 1350;
-
-const MARGIN = 80;
-const INK = "#111111";
-const MUTED = "#555555";
-const RULE = "#d9d9d9";
-
-export interface CardFonts {
-  display: string;
-  body: string;
-}
-
-function roundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
+import { voteShares, type VoteCardInput } from "@/lib/share-card";
+import {
+  CARD_INNER,
+  CARD_MARGIN,
+  INK,
+  MUTED,
+  RULE,
+  drawBrandHeader,
+  drawCardFooter,
+  drawFittedText,
+  fillPage,
+  roundedRect,
+  type CardFonts,
+} from "./card-canvas";
 
 /**
- * Draws the card of one scrutin. Always light, whatever the theme: the image leaves the site.
+ * Draws the card of one scrutin.
  *
  * What leaves the site obeys the same rules as the page: the result is written out, the three
  * counts carry their labels (the bar never speaks alone), and the source and date are on the image.
@@ -45,68 +26,37 @@ export function drawVoteCard(
   fonts: CardFonts,
   footer: { callToAction: string; source: string }
 ) {
-  const W = VOTE_CARD_WIDTH;
-  const H = VOTE_CARD_HEIGHT;
-  const inner = W - MARGIN * 2;
   const number = (n: number) => n.toLocaleString("fr-FR");
 
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, W, H);
-
-  const band = ctx.createLinearGradient(0, 0, W, 0);
-  band.addColorStop(0, BRAND_RED);
-  band.addColorStop(1, BRAND_NAVY);
-  ctx.fillStyle = band;
-  ctx.fillRect(0, 0, W, 14);
-
-  ctx.textBaseline = "alphabetic";
-
-  // Wordmark and context line.
-  ctx.fillStyle = BRAND_NAVY;
-  ctx.font = `800 52px ${fonts.display}`;
-  ctx.textAlign = "left";
-  ctx.fillText("Poligraph", MARGIN, 130);
-  ctx.fillStyle = MUTED;
-  ctx.font = `400 30px ${fonts.body}`;
-  ctx.textAlign = "right";
-  ctx.fillText(`${input.chamberLabel} · ${input.dateLabel}`, W - MARGIN, 126);
-  ctx.textAlign = "left";
+  fillPage(ctx);
+  drawBrandHeader(ctx, fonts, `${input.chamberLabel} · ${input.dateLabel}`);
 
   // Result, as a word.
   const result = input.adopted ? "Adopté" : "Rejeté";
   ctx.font = `700 36px ${fonts.body}`;
   const pillWidth = ctx.measureText(result).width + 56;
-  roundedRect(ctx, MARGIN, 190, pillWidth, 68, 34);
+  roundedRect(ctx, CARD_MARGIN, 190, pillWidth, 68, 34);
   ctx.fillStyle = "#f3f4f6";
   ctx.fill();
   ctx.strokeStyle = RULE;
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.fillStyle = INK;
-  ctx.fillText(result, MARGIN + 28, 237);
+  ctx.fillText(result, CARD_MARGIN + 28, 237);
 
-  // Title: the largest of three sizes that holds on its lines, so a short title fills the card
-  // and a long one still fits.
-  const fit = (size: number, maxLines: number) => {
-    ctx.font = `800 ${size}px ${fonts.display}`;
-    return wrapLines((t) => ctx.measureText(t).width, input.title, inner, maxLines + 1);
-  };
-  let size = 84;
-  let lines = fit(size, 3);
-  if (lines.length > 3) {
-    size = 68;
-    lines = fit(size, 5);
-  }
-  if (lines.length > 5) {
-    size = 56;
-    ctx.font = `800 ${size}px ${fonts.display}`;
-    lines = wrapLines((t) => ctx.measureText(t).width, input.title, inner, 6);
-  }
-  const lineHeight = size * 1.14;
-  const titleTop = 300 + size;
   ctx.fillStyle = INK;
-  lines.forEach((line, i) => ctx.fillText(line, MARGIN, titleTop + i * lineHeight));
-  const titleBottom = titleTop + (lines.length - 1) * lineHeight;
+  const titleBottom = drawFittedText(ctx, input.title, {
+    x: CARD_MARGIN,
+    top: 300,
+    width: CARD_INNER,
+    font: (size) => `800 ${size}px ${fonts.display}`,
+    steps: [
+      { size: 84, maxLines: 3 },
+      { size: 68, maxLines: 5 },
+      { size: 56, maxLines: 6 },
+    ],
+    lineHeight: 1.14,
+  });
 
   // Breakdown bar and counts follow the title, without rising above the middle of the card.
   const shares = voteShares(input);
@@ -118,13 +68,13 @@ export function drawVoteCard(
     { share: shares.abstention, color: COLORS.vote.abstention.light },
   ];
   ctx.save();
-  roundedRect(ctx, MARGIN, barY, inner, barH, barH / 2);
+  roundedRect(ctx, CARD_MARGIN, barY, CARD_INNER, barH, barH / 2);
   ctx.clip();
   ctx.fillStyle = "#ececec";
-  ctx.fillRect(MARGIN, barY, inner, barH);
-  let x = MARGIN;
+  ctx.fillRect(CARD_MARGIN, barY, CARD_INNER, barH);
+  let x = CARD_MARGIN;
   for (const segment of segments) {
-    const w = inner * segment.share;
+    const w = CARD_INNER * segment.share;
     ctx.fillStyle = segment.color;
     ctx.fillRect(x, barY, w, barH);
     x += w;
@@ -136,9 +86,9 @@ export function drawVoteCard(
     { value: input.votesAgainst, label: "contre" },
     { value: input.votesAbstain, label: input.votesAbstain > 1 ? "abstentions" : "abstention" },
   ];
-  const column = inner / 3;
+  const column = CARD_INNER / 3;
   counts.forEach(({ value, label }, i) => {
-    const cx = MARGIN + column * i;
+    const cx = CARD_MARGIN + column * i;
     ctx.fillStyle = INK;
     ctx.font = `800 72px ${fonts.display}`;
     ctx.fillText(number(value), cx, barY + barH + 100);
@@ -147,17 +97,5 @@ export function drawVoteCard(
     ctx.fillText(label, cx, barY + barH + 150);
   });
 
-  // Footer: where to go next, and where the figures come from.
-  ctx.strokeStyle = RULE;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(MARGIN, H - 190);
-  ctx.lineTo(W - MARGIN, H - 190);
-  ctx.stroke();
-  ctx.fillStyle = BRAND_NAVY;
-  ctx.font = `800 40px ${fonts.display}`;
-  ctx.fillText(footer.callToAction, MARGIN, H - 120);
-  ctx.fillStyle = MUTED;
-  ctx.font = `400 28px ${fonts.body}`;
-  ctx.fillText(footer.source, MARGIN, H - 70);
+  drawCardFooter(ctx, fonts, { callToAction: footer.callToAction, note: footer.source });
 }
