@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { cn } from "@/lib/utils";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { SelectFilter } from "@/components/filters";
 import { Spinner } from "@/components/ui/spinner";
@@ -51,6 +52,8 @@ interface FilterBarProps {
     maires: number;
   };
   onLoadingChange?: (loading: boolean) => void;
+  /** Below sm, hides the conviction filters: the parent folds them with the party filter. */
+  secondaryFolded?: boolean;
 }
 
 export function FilterBar({
@@ -62,6 +65,7 @@ export function FilterBar({
   financingCount,
   counts,
   onLoadingChange,
+  secondaryFolded = false,
 }: FilterBarProps) {
   const { isPending, updateParams } = useFilterParams();
 
@@ -141,7 +145,10 @@ export function FilterBar({
       {/* Conviction filters: probité et financement politique, cumulés en « l'un ou l'autre » */}
       <label
         htmlFor="conviction-toggle"
-        className="flex items-center gap-2 min-h-11 text-sm text-muted-foreground cursor-pointer sm:whitespace-nowrap"
+        className={cn(
+          "flex items-center gap-2 min-h-11 text-sm text-muted-foreground cursor-pointer sm:whitespace-nowrap",
+          secondaryFolded && "max-sm:hidden"
+        )}
         title="Condamnation définitive pour atteinte à la probité"
       >
         <input
@@ -155,7 +162,10 @@ export function FilterBar({
       </label>
       <label
         htmlFor="financing-toggle"
-        className="flex items-center gap-2 min-h-11 text-sm text-muted-foreground cursor-pointer sm:whitespace-nowrap"
+        className={cn(
+          "flex items-center gap-2 min-h-11 text-sm text-muted-foreground cursor-pointer sm:whitespace-nowrap",
+          secondaryFolded && "max-sm:hidden"
+        )}
         title="Condamnation définitive pour financement illégal de campagne ou de parti"
       >
         <input

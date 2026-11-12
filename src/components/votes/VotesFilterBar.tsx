@@ -338,7 +338,7 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
         <ActiveFilterChips filters={activeFilters} onRemove={removeFilter} onClearAll={clearAll} />
       </div>
 
-      {/* Mobile layout: quick-access theme rail + "Filtres" bottom-sheet */}
+      {/* Mobile layout: scope toggle + "Filtres" bottom-sheet */}
       <div className="md:hidden space-y-3">
         {/* Outside of the sheet: by default the listing leaves amendments out, and a reader who
             does not open the sheet cannot tell why a vote is missing. */}
@@ -351,7 +351,8 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
             className="flex-nowrap"
           />
         </div>
-        {themeGroup("rail")}
+        {/* No theme rail here: the theme filter is in the sheet, and the page lists the theme
+            pages right under this bar. Two rows of themes cost the first result its place. */}
 
         <Dialog.Root open={sheetOpen} onOpenChange={setSheetOpen}>
           <MobileFilterRow

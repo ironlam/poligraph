@@ -99,7 +99,7 @@ export default async function PresidentialHubPage() {
       />
       <RubriqueBandeau labelledBy="hub-title" className="relative">
         <HexPattern className="pointer-events-none absolute inset-0 text-white opacity-[0.06]" />
-        <div className="relative space-y-6">
+        <div className="relative space-y-3 sm:space-y-6">
           <BandeauFilAriane
             items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
           />
@@ -107,11 +107,11 @@ export default async function PresidentialHubPage() {
             <BandeauSurtitre>Présidentielle 2027</BandeauSurtitre>
             <h1
               id="hub-title"
-              className="font-display text-3xl font-extrabold leading-tight tracking-tight md:text-5xl"
+              className="font-display text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl md:text-5xl"
             >
               Présidentielle 2027 : programmes et mesures
             </h1>
-            <p className="max-w-2xl text-sm leading-relaxed text-white/85 md:text-lg">
+            <p className="max-w-2xl text-sm leading-relaxed text-white/85 max-sm:sr-only md:text-lg">
               Explorez les mesures publiées par candidat et par thème, avec leurs sources et les
               votes parlementaires disponibles.
             </p>

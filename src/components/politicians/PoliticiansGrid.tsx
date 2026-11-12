@@ -1,6 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+import { ChevronDown } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PoliticianCard } from "./PoliticianCard";
 import { FilterBar, type SortOption, type MandateFilter } from "./FilterBar";
@@ -87,10 +88,17 @@ export function PoliticiansGrid({
     Boolean
   ).length;
 
+  // Below sm, sort and mandate stay in view and the rest folds, so the first person of the list is
+  // on the first screen. It opens by itself when one of the folded filters is set: an active
+  // filter is never out of sight.
+  const [moreOpen, setMoreOpen] = useState(
+    Boolean(partyFilter) || convictionFilter || financingFilter
+  );
+
   return (
     <>
       {/* Filters and sort */}
-      <div className="mb-6 rounded-lg border bg-muted/40 p-4 space-y-3">
+      <div className="mb-4 rounded-lg border bg-muted/40 p-3 space-y-3 sm:mb-6 sm:p-4">
         {/* Sort and mandate/status filters */}
         <FilterBar
           currentSort={sortOption}
@@ -107,10 +115,27 @@ export function PoliticiansGrid({
             dirigeants: counts.dirigeants,
             maires: counts.maires,
           }}
+          secondaryFolded={!moreOpen}
         />
+        <button
+          type="button"
+          aria-expanded={moreOpen}
+          aria-controls="politiques-filtres-secondaires"
+          onClick={() => setMoreOpen((open) => !open)}
+          className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring sm:hidden"
+        >
+          {moreOpen ? "Moins de filtres" : "Parti et condamnations"}
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-4 w-4 transition-transform motion-reduce:transition-none ${moreOpen ? "rotate-180" : ""}`}
+          />
+        </button>
 
         {/* Party filter */}
-        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4 pt-1 border-t">
+        <div
+          id="politiques-filtres-secondaires"
+          className={`flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4 pt-1 border-t ${moreOpen ? "" : "max-sm:hidden"}`}
+        >
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
             <span className="text-sm text-muted-foreground whitespace-nowrap">Parti:</span>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrer par parti">

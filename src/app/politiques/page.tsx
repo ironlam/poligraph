@@ -578,16 +578,16 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
               <BandeauSurtitre>Politiques</BandeauSurtitre>
               <h1
                 id="politiques-titre"
-                className="mt-4 font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl"
+                className="font-display text-2xl font-extrabold leading-tight tracking-tight sm:mt-4 sm:text-5xl"
               >
                 Représentants politiques
               </h1>
-              <p className="mt-4 max-w-2xl text-base text-white/85 sm:text-lg">
+              <p className="mt-4 max-w-2xl text-base text-white/85 max-sm:sr-only sm:text-lg">
                 Mandats, votes, déclarations d{"'"}intérêts et affaires judiciaires. Chaque
                 information renvoie à sa source.
               </p>
-              <div className="mt-6 max-w-xl">{searchForm("marine")}</div>
-              <p className="mt-4 text-sm text-white/85">
+              <div className="mt-3 max-w-xl sm:mt-6">{searchForm("marine")}</div>
+              <p className="mt-3 text-sm text-white/85 sm:mt-4">
                 <strong className="font-bold text-white">
                   {counts.total.toLocaleString("fr-FR")}
                 </strong>{" "}
@@ -597,7 +597,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
                 <Link
                   href="/mon-depute"
                   prefetch={false}
-                  className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-white underline underline-offset-4 hover:no-underline"
+                  className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-white underline sm:mt-2 underline-offset-4 hover:no-underline"
                 >
                   <MapPin className="h-4 w-4" aria-hidden="true" />
                   Trouver mon député par code postal
@@ -611,7 +611,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
       )}
       <div className="container mx-auto px-4 pt-4 pb-8">
         {isLanding ? (
-          <div className="mt-4 mb-8 space-y-8">
+          <div className="mb-4 space-y-4 sm:mt-4 sm:mb-8 sm:space-y-8">
             <RubriqueEntrees
               titre="Explorer par mandat"
               titreId="explorer-par-mandat"
@@ -622,10 +622,10 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
               <SurChaqueFiche />
             </div>
             <div>
-              <h2 className="font-display text-2xl font-extrabold text-primary">
+              <h2 className="font-display text-lg font-extrabold text-primary sm:text-2xl">
                 Tous les représentants
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
                 Toute personne mise en cause dans une procédure judiciaire est présumée innocente
                 jusqu{"'"}à ce qu{"'"}elle ait été déclarée coupable par une décision de justice
                 définitive.

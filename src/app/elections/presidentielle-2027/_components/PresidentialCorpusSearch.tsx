@@ -181,7 +181,10 @@ export function PresidentialCorpusSearch() {
             submitFullResults();
           }}
         >
-          <label htmlFor="presidential-corpus-query" className="mb-2 block font-bold text-white">
+          <label
+            htmlFor="presidential-corpus-query"
+            className="mb-2 block font-bold text-white max-sm:sr-only"
+          >
             Rechercher une mesure, un thème ou un candidat
           </label>
           <div className="flex min-h-14 items-center rounded-2xl border border-border bg-card text-foreground shadow-sm focus-within:ring-2 focus-within:ring-white focus-within:ring-offset-2 focus-within:ring-offset-transparent">
@@ -411,7 +414,7 @@ export function PresidentialCorpusSearch() {
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 text-xs text-white/85">
-        <span>Recherche dans les contenus publiés par Poligraph.</span>
+        <span className="max-sm:hidden">Recherche dans les contenus publiés par Poligraph.</span>
         <details>
           <summary className="inline-flex min-h-11 cursor-pointer list-none items-center font-medium text-white underline underline-offset-4 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [&::-webkit-details-marker]:hidden">
             Comment fonctionne la recherche ?
