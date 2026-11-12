@@ -70,6 +70,7 @@ export interface SyncResult {
   deputiesCreated: number;
   deputiesUpdated: number;
   deputiesDeactivated: number;
+  groupPresidenciesWritten: number;
   errors: string[];
 }
 
@@ -139,6 +140,7 @@ export interface SenatSyncResult {
   groupsUpdated: number;
   senatorsCreated: number;
   senatorsUpdated: number;
+  groupPresidenciesWritten: number;
   errors: string[];
 }
 

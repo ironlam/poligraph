@@ -9,6 +9,7 @@ import { ASSEMBLY_GROUPS, type ParliamentaryGroupConfig } from "@/config/parliam
 import { HTTPClient } from "@/lib/api/http-client";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { upsertPoliticianExternalId } from "@/lib/prisma-helpers";
+import { syncAnGroupPresidencies } from "./group-presidencies";
 
 const client = new HTTPClient({ rateLimitMs: DATA_GOUV_RATE_LIMIT_MS });
 
@@ -443,6 +444,7 @@ export async function syncDeputes(): Promise<SyncResult> {
     deputiesCreated: 0,
     deputiesUpdated: 0,
     deputiesDeactivated: 0,
+    groupPresidenciesWritten: 0,
     errors: [],
   };
 
@@ -471,6 +473,12 @@ export async function syncDeputes(): Promise<SyncResult> {
     console.log("Checking for stale mandates...");
     const activeAnIds = new Set(deputies.map((d) => d.id));
     result.deputiesDeactivated = await deactivateStaleMandates(activeAnIds);
+
+    // 5. Who presides each group. Last, since it links deputies and groups written above.
+    console.log("Syncing group presidencies...");
+    const presidencies = await syncAnGroupPresidencies();
+    result.groupPresidenciesWritten = presidencies.written;
+    result.errors.push(...presidencies.errors);
 
     result.success = true;
     console.log("Sync completed:", result);
