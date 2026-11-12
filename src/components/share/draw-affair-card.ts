@@ -1,3 +1,4 @@
+import { BRAND_NAVY } from "@/config/brand";
 import type { CertaintyLevel } from "@/config/certainty";
 import type { AffairCardInput } from "@/lib/affairs/share-card";
 import { fitLines } from "@/lib/share-card";
@@ -5,6 +6,7 @@ import {
   CARD_HEIGHT,
   CARD_INNER,
   CARD_MARGIN,
+  CARD_WIDTH,
   INK,
   MUTED,
   drawBrandHeader,
@@ -24,6 +26,30 @@ const PILL: Record<CertaintyLevel, { border: string; fill: string; ink: string }
   CLOS_FAVORABLE: { border: "#86efac", fill: "#f0fdf4", ink: "#166534" },
 };
 
+/** The scales of justice, as an outline on a 24 by 24 grid. */
+const SCALES_PATH =
+  "m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1ZM2 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1ZM7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2";
+const SCALES_SIZE = 860;
+
+/**
+ * A very pale pair of scales behind the text: it says what the card is about, never how the
+ * procedure ended. Same drawing, same navy and same place on every card, whatever the status:
+ * tinting it by outcome would turn a backdrop into a visual verdict.
+ */
+function drawScalesBackdrop(ctx: CanvasRenderingContext2D) {
+  const scale = SCALES_SIZE / 24;
+  ctx.save();
+  ctx.translate(CARD_WIDTH + 140 - SCALES_SIZE, CARD_HEIGHT - 150 - SCALES_SIZE);
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = 0.055;
+  ctx.strokeStyle = BRAND_NAVY;
+  ctx.lineWidth = 1.1;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.stroke(new Path2D(SCALES_PATH));
+  ctx.restore();
+}
+
 const BOX_PADDING = 30;
 const FOOTER_RULE = CARD_HEIGHT - 190;
 
@@ -41,6 +67,7 @@ export function drawAffairCard(
   asOfLabel: string
 ) {
   fillPage(ctx);
+  drawScalesBackdrop(ctx);
   drawBrandHeader(ctx, fonts, `Affaire judiciaire · statut au ${asOfLabel}`);
 
   // Status, in words.
