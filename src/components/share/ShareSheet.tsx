@@ -53,6 +53,8 @@ function canvasToFile(canvas: HTMLCanvasElement, name: string): Promise<File | n
 export function ShareSheet({ label, description, data, card, className }: ShareSheetProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Export is only offered once the card is painted: an early toBlob() yields a blank PNG.
+  const [ready, setReady] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const draw = card?.draw;
 
@@ -61,6 +63,7 @@ export function ShareSheet({ label, description, data, card, className }: ShareS
     let cancelled = false;
     // The dialog content mounts on open: wait for it, and for the fonts the card is set in.
     const frame = requestAnimationFrame(async () => {
+      setReady(false);
       const fonts = { display: cssFont("--font-display"), body: cssFont("--font-body") };
       await Promise.all([
         document.fonts.load(`800 68px ${fonts.display}`),
@@ -71,6 +74,7 @@ export function ShareSheet({ label, description, data, card, className }: ShareS
       const ctx = canvasRef.current?.getContext("2d");
       if (cancelled || !ctx) return;
       await draw(ctx, fonts);
+      if (!cancelled) setReady(true);
     });
     return () => {
       cancelled = true;
@@ -125,7 +129,13 @@ export function ShareSheet({ label, description, data, card, className }: ShareS
   }, [data.url]);
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setReady(false);
+      }}
+    >
       <Dialog.Trigger asChild>
         <button type="button" className={cn(ACTION_CLASS, "w-full px-4 sm:w-auto", className)}>
           <Share2 className="h-4 w-4" aria-hidden="true" />
@@ -167,12 +177,18 @@ export function ShareSheet({ label, description, data, card, className }: ShareS
                   <button
                     type="button"
                     onClick={shareImage}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                    disabled={!ready}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none"
                   >
                     <Share2 className="h-4 w-4" aria-hidden="true" />
                     Partager l{"'"}image
                   </button>
-                  <button type="button" onClick={saveImage} className={ACTION_CLASS}>
+                  <button
+                    type="button"
+                    onClick={saveImage}
+                    disabled={!ready}
+                    className={cn(ACTION_CLASS, "disabled:opacity-50 disabled:pointer-events-none")}
+                  >
                     <Download className="h-4 w-4" aria-hidden="true" />
                     Enregistrer
                   </button>
