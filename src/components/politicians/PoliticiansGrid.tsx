@@ -168,7 +168,7 @@ export function PoliticiansGrid({
       {politicians.length > 0 ? (
         <>
           <div
-            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 transition-opacity duration-200 ${
+            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4 transition-opacity duration-200 ${
               isPending ? "opacity-50 pointer-events-none" : ""
             }`}
           >

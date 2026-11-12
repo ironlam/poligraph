@@ -19,7 +19,15 @@ import {
   CHAMBER_LABELS,
 } from "@/config/labels";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { ArrowLeft, ExternalLink, Calendar, Users, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  ExternalLink,
+  Calendar,
+  Users,
+  FileText,
+  MapPin,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/legislation";
 import { ArticleJsonLd } from "@/components/seo/JsonLd";
@@ -507,6 +515,30 @@ export default async function ScrutinPage({ params }: PageProps) {
               }
             />
           </div>
+          {/* Two steps, and the wording says so: the search finds the deputy sitting today, who
+              is not always the one who sat on the day of this vote. Promising "their vote on this
+              scrutin" in one tap would be wrong for every seat that changed hands since. */}
+          {scrutin.chamber === "AN" && monDeputeEnabled && (
+            <Link
+              href="/mon-depute"
+              prefetch={false}
+              className="mb-8 flex min-h-14 items-center gap-3 rounded-xl border bg-card p-3 outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-primary"
+              >
+                <MapPin className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display font-bold">Et mon député ?</span>
+                <span className="block text-sm text-muted-foreground">
+                  Trouvez-le par code postal, puis consultez ses votes
+                </span>
+              </span>
+              <ChevronRight aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </Link>
+          )}
         </ScrutinVideoLayout>
 
         {/* Synthèse PoliGraph, enjeux et B. Votes individuels (tabbed) */}

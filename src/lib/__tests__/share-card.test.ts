@@ -8,6 +8,7 @@ import {
   initialsOf,
   pickCardStats,
   shareCardFileName,
+  storyFileName,
   voteShares,
   wrapLines,
 } from "../share-card";
@@ -183,5 +184,11 @@ describe("seatSharePct", () => {
   it("does not round a sitting group down to zero", () => {
     expect(seatSharePct({ before: 0, seats: 1, total: 577 })).toBe(1);
     expect(seatSharePct({ before: 0, seats: 0, total: 577 })).toBe(0);
+  });
+});
+
+describe("storyFileName", () => {
+  it("marks the tall export without changing the rest of the name", () => {
+    expect(storyFileName("poligraph-vote-2025-plf.png")).toBe("poligraph-vote-2025-plf-story.png");
   });
 });

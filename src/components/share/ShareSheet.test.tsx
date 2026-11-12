@@ -41,4 +41,29 @@ describe("ShareSheet export", () => {
     expect(screen.getByRole("button", { name: /Partager l'image/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Enregistrer" })).toBeEnabled();
   });
+
+  it("offers the story format, the publication one being the default", async () => {
+    render(
+      <ShareSheet
+        label="Partager"
+        description="d"
+        data={data}
+        card={{ fileName: "a.png", alt: "alt", note: "n", draw: () => undefined }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Partager" }));
+
+    const post = screen.getByRole("button", { name: "Publication (4:5)" });
+    const story = screen.getByRole("button", { name: "Story (9:16)" });
+    expect(post).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(story);
+    expect(story).toHaveAttribute("aria-pressed", "true");
+    expect(post).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("has no format to choose when there is no image", () => {
+    render(<ShareSheet label="Partager" description="d" data={data} card={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Partager" }));
+    expect(screen.queryByRole("group", { name: "Format de l'image" })).toBeNull();
+  });
 });

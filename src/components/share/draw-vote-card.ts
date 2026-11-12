@@ -1,14 +1,13 @@
-import { COLORS } from "@/config/colors";
-import { voteShares, type VoteCardInput } from "@/lib/share-card";
+import type { VoteCardInput } from "@/lib/share-card";
 import {
   CARD_INNER,
   CARD_MARGIN,
   INK,
-  MUTED,
   RULE,
   drawBrandHeader,
   drawCardFooter,
   drawFittedText,
+  drawVoteBreakdown,
   fillPage,
   roundedRect,
   type CardFonts,
@@ -26,8 +25,6 @@ export function drawVoteCard(
   fonts: CardFonts,
   footer: { callToAction: string; source: string }
 ) {
-  const number = (n: number) => n.toLocaleString("fr-FR");
-
   fillPage(ctx);
   drawBrandHeader(ctx, fonts, `${input.chamberLabel} · ${input.dateLabel}`);
 
@@ -59,43 +56,8 @@ export function drawVoteCard(
   });
 
   // Breakdown bar and counts follow the title, without rising above the middle of the card.
-  const shares = voteShares(input);
   const barY = Math.min(860, Math.max(700, titleBottom + 130));
-  const barH = 44;
-  const segments = [
-    { share: shares.pour, color: COLORS.vote.pour.light },
-    { share: shares.contre, color: COLORS.vote.contre.light },
-    { share: shares.abstention, color: COLORS.vote.abstention.light },
-  ];
-  ctx.save();
-  roundedRect(ctx, CARD_MARGIN, barY, CARD_INNER, barH, barH / 2);
-  ctx.clip();
-  ctx.fillStyle = "#ececec";
-  ctx.fillRect(CARD_MARGIN, barY, CARD_INNER, barH);
-  let x = CARD_MARGIN;
-  for (const segment of segments) {
-    const w = CARD_INNER * segment.share;
-    ctx.fillStyle = segment.color;
-    ctx.fillRect(x, barY, w, barH);
-    x += w;
-  }
-  ctx.restore();
-
-  const counts = [
-    { value: input.votesFor, label: "pour" },
-    { value: input.votesAgainst, label: "contre" },
-    { value: input.votesAbstain, label: input.votesAbstain > 1 ? "abstentions" : "abstention" },
-  ];
-  const column = CARD_INNER / 3;
-  counts.forEach(({ value, label }, i) => {
-    const cx = CARD_MARGIN + column * i;
-    ctx.fillStyle = INK;
-    ctx.font = `800 72px ${fonts.display}`;
-    ctx.fillText(number(value), cx, barY + barH + 100);
-    ctx.fillStyle = MUTED;
-    ctx.font = `400 34px ${fonts.body}`;
-    ctx.fillText(label, cx, barY + barH + 150);
-  });
+  drawVoteBreakdown(ctx, fonts, input, { top: barY, numberSize: 72 });
 
   drawCardFooter(ctx, fonts, { callToAction: footer.callToAction, note: footer.source });
 }

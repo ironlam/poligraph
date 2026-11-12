@@ -6,11 +6,11 @@ import {
   MUTED,
   drawCardFooter,
   drawFittedText,
+  drawJusticeNote,
   drawPortrait,
   drawPresidentialBand,
   drawStatTiles,
   fillPage,
-  roundedRect,
   type CardFonts,
 } from "./card-canvas";
 
@@ -24,9 +24,6 @@ export interface CandidateCardInput {
   /** Already filtered: only what Poligraph holds for this person. */
   stats: readonly CardStat[];
 }
-
-export const CANDIDATE_CARD_JUSTICE_NOTE =
-  "Les procédures que Poligraph a pu documenter se consultent sur la fiche, avec leur statut et leurs sources.";
 
 /**
  * Draws the card of one presidential candidacy.
@@ -95,24 +92,7 @@ export function drawCandidateCard(
       }) + 28;
   }
 
-  const boxHeight = 150;
-  roundedRect(ctx, CARD_MARGIN, y, CARD_INNER, boxHeight, 24);
-  ctx.fillStyle = "#f8fafc";
-  ctx.fill();
-  ctx.strokeStyle = "#e2e8f0";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = "#334155";
-  ctx.font = `700 30px ${fonts.body}`;
-  ctx.fillText("Justice", CARD_MARGIN + 28, y + 50);
-  drawFittedText(ctx, CANDIDATE_CARD_JUSTICE_NOTE, {
-    x: CARD_MARGIN + 28,
-    top: y + 62,
-    width: CARD_INNER - 56,
-    font: (size) => `400 ${size}px ${fonts.body}`,
-    steps: [{ size: 27, maxLines: 2 }],
-    lineHeight: 1.3,
-  });
+  drawJusticeNote(ctx, fonts, y);
 
   drawCardFooter(ctx, fonts, {
     callToAction: "La fiche complète sur poligraph.fr",
