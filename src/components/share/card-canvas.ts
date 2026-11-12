@@ -1,5 +1,12 @@
 import { BRAND_NAVY, BRAND_RED } from "@/config/brand";
-import { fitLines, formatCardStat, type CardStat, type FitStep } from "@/lib/share-card";
+import { COLORS } from "@/config/colors";
+import {
+  fitLines,
+  formatCardStat,
+  voteShares,
+  type CardStat,
+  type FitStep,
+} from "@/lib/share-card";
 
 /**
  * Shared pieces of the share cards. Every card is drawn in the browser from data its page already
@@ -282,5 +289,90 @@ export function loadPortrait(url: string | null): Promise<HTMLImageElement | nul
     image.onload = () => resolve(image);
     image.onerror = () => resolve(null);
     image.src = `/_next/image?url=${encodeURIComponent(url)}&w=256&q=75`;
+  });
+}
+
+export interface VoteCounts {
+  votesFor: number;
+  votesAgainst: number;
+  votesAbstain: number;
+}
+
+/**
+ * A pour / contre / abstention bar with its three labelled counts under it: the bar never speaks
+ * alone, and the colours are doubled by words. Returns the last baseline.
+ */
+export function drawVoteBreakdown(
+  ctx: CanvasRenderingContext2D,
+  fonts: CardFonts,
+  counts: VoteCounts,
+  options: { top: number; numberSize: number }
+): number {
+  const shares = voteShares(counts);
+  const barH = 44;
+  const segments = [
+    { share: shares.pour, color: COLORS.vote.pour.light },
+    { share: shares.contre, color: COLORS.vote.contre.light },
+    { share: shares.abstention, color: COLORS.vote.abstention.light },
+  ];
+  ctx.save();
+  roundedRect(ctx, CARD_MARGIN, options.top, CARD_INNER, barH, barH / 2);
+  ctx.clip();
+  ctx.fillStyle = "#ececec";
+  ctx.fillRect(CARD_MARGIN, options.top, CARD_INNER, barH);
+  let x = CARD_MARGIN;
+  for (const segment of segments) {
+    const w = CARD_INNER * segment.share;
+    ctx.fillStyle = segment.color;
+    ctx.fillRect(x, options.top, w, barH);
+    x += w;
+  }
+  ctx.restore();
+
+  const labelled = [
+    { value: counts.votesFor, label: "pour" },
+    { value: counts.votesAgainst, label: "contre" },
+    { value: counts.votesAbstain, label: counts.votesAbstain > 1 ? "abstentions" : "abstention" },
+  ];
+  const column = CARD_INNER / 3;
+  const numberBaseline = options.top + barH + 28 + options.numberSize;
+  labelled.forEach(({ value, label }, i) => {
+    const cx = CARD_MARGIN + column * i;
+    ctx.fillStyle = INK;
+    ctx.font = `800 ${options.numberSize}px ${fonts.display}`;
+    ctx.fillText(value.toLocaleString("fr-FR"), cx, numberBaseline);
+    ctx.fillStyle = MUTED;
+    ctx.font = `400 34px ${fonts.body}`;
+    ctx.fillText(label, cx, numberBaseline + 50);
+  });
+  return numberBaseline + 50;
+}
+
+export const CARD_JUSTICE_NOTE =
+  "Les procédures que Poligraph a pu documenter se consultent sur la fiche, avec leur statut et leurs sources.";
+
+/**
+ * The one thing a card about a person says on justice: where to read it. Never a count. A number
+ * of procedures printed beside a face weighs on the reader with nothing to tell a conviction from
+ * a mention, so the same sentence is drawn for everyone, whatever the fiche holds.
+ */
+export function drawJusticeNote(ctx: CanvasRenderingContext2D, fonts: CardFonts, top: number) {
+  const height = 150;
+  roundedRect(ctx, CARD_MARGIN, top, CARD_INNER, height, 24);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fill();
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#334155";
+  ctx.font = `700 30px ${fonts.body}`;
+  ctx.fillText("Justice", CARD_MARGIN + 28, top + 50);
+  drawFittedText(ctx, CARD_JUSTICE_NOTE, {
+    x: CARD_MARGIN + 28,
+    top: top + 62,
+    width: CARD_INNER - 56,
+    font: (size) => `400 ${size}px ${fonts.body}`,
+    steps: [{ size: 27, maxLines: 2 }],
+    lineHeight: 1.3,
   });
 }

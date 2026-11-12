@@ -5,8 +5,8 @@ import type { ShareData } from "@/lib/share";
 import { pickCardStats, shareCardFileName, type CardStat } from "@/lib/share-card";
 import { formatDate } from "@/lib/utils";
 import { ShareSheet, type ShareSheetCard } from "./ShareSheet";
-import { loadPortrait } from "./card-canvas";
-import { CANDIDATE_CARD_JUSTICE_NOTE, drawCandidateCard } from "./draw-candidate-card";
+import { CARD_JUSTICE_NOTE, loadPortrait } from "./card-canvas";
+import { drawCandidateCard } from "./draw-candidate-card";
 
 interface CandidateShareSheetProps {
   slug: string;
@@ -39,7 +39,7 @@ export function CandidateShareSheet({
     const counters = shown.map((stat) => `${stat.value} ${stat.label}`).join(", ");
     return {
       fileName: shareCardFileName("candidat", slug),
-      alt: `${fullName}${partyLabel ? `, ${partyLabel}` : ""}, élection présidentielle 2027.${counters ? ` Ce que Poligraph documente : ${counters}.` : ""} ${CANDIDATE_CARD_JUSTICE_NOTE}`,
+      alt: `${fullName}${partyLabel ? `, ${partyLabel}` : ""}, élection présidentielle 2027.${counters ? ` Ce que Poligraph documente : ${counters}.` : ""} ${CARD_JUSTICE_NOTE}`,
       note: "L'image est datée du jour. Elle ne porte ni statut de candidature ni décompte judiciaire : la fiche les détaille avec leurs sources.",
       draw: async (ctx, fonts) => {
         const portrait = await loadPortrait(photoUrl);

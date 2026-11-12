@@ -182,7 +182,7 @@ export function seatSharePct(placement: HemicyclePlacement): number {
   return Math.max(1, Math.round((placement.seats / placement.total) * 100));
 }
 
-export type ShareCardKind = "vote" | "candidat" | "mesure" | "parti" | "groupe";
+export type ShareCardKind = "vote" | "candidat" | "mesure" | "parti" | "groupe" | "elu";
 
 /** File name of the downloaded card: stable, ASCII, tied to what it shows. */
 export function shareCardFileName(kind: ShareCardKind, slug: string): string {

@@ -42,6 +42,8 @@ const IDENTITY = {
   declarations: [],
   externalIds: [],
   partyHistory: [],
+  // Always present on a real identity: the share card reads its fact-check counter.
+  _count: { affairs: 0, factCheckMentions: 0 },
   updatedAt: new Date("2026-01-01"),
 } as never;
 

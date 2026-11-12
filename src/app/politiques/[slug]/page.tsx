@@ -17,6 +17,8 @@ import {
   loadPoliticianPage,
 } from "./page-data";
 import { ShareBar } from "@/components/ui/ShareBar";
+import { PoliticianShareSheet } from "@/components/share/PoliticianShareSheet";
+import { normalizeImageUrl } from "@/lib/utils";
 import { DeepLinkHighlighter } from "@/components/politicians/DeepLinkHighlighter";
 import { CandidacyNotice } from "@/components/politicians/CandidacyNotice";
 import { isFicheCandidatPublishable } from "@/config/publication-gates";
@@ -98,7 +100,22 @@ export default async function PoliticianPage({ params }: PageProps) {
         <ProfileReturnLink slug={politician.slug} />
 
         {/* Header */}
-        <PoliticianHeader politician={politician} currentGroup={model.currentGroup} />
+        <PoliticianHeader
+          politician={politician}
+          currentGroup={model.currentGroup}
+          share={
+            <PoliticianShareSheet
+              slug={politician.slug}
+              data={model.share}
+              fullName={politician.fullName}
+              mandateLabel={model.card.mandateLabel}
+              partyLabel={politician.currentParty?.name ?? null}
+              photoUrl={normalizeImageUrl(politician.blobPhotoUrl ?? politician.photoUrl ?? null)}
+              votes={model.card.votes}
+              stats={model.card.stats}
+            />
+          }
+        />
 
         {/* Full width, under the badges, above the tabs, at both widths. Never a badge in the
             party/mandate row: there it would read as a qualification awarded by Poligraph. */}

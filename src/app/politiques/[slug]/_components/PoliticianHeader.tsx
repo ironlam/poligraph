@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
@@ -57,9 +57,11 @@ interface PoliticianHeaderProps {
   };
   /** The page derives this from the mandate list, so it can be absent as well as null. */
   currentGroup: { name: string; code: string; color: string | null } | null | undefined;
+  /** The share control, placed under the identity it shares. */
+  share?: ReactNode;
 }
 
-export function PoliticianHeader({ politician, currentGroup }: PoliticianHeaderProps) {
+export function PoliticianHeader({ politician, currentGroup, share }: PoliticianHeaderProps) {
   const { currentParty } = politician;
 
   // Roles still held, minus plain membership, which the party badge already says.
@@ -178,6 +180,8 @@ export function PoliticianHeader({ politician, currentGroup }: PoliticianHeaderP
             <CopyableId value={politician.publicId} />
           </div>
         )}
+
+        {share && <div className="mt-4">{share}</div>}
       </div>
     </div>
   );

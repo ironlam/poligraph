@@ -224,7 +224,36 @@ export function derivePoliticianPageModel(
     aria: `Voir ${statsLabel} pour comparer ${identity.firstName} ${identity.lastName}`,
   };
 
+  // What the share card prints. The judicial counters of the identity stay off it on purpose: see
+  // `drawJusticeNote`. The parliamentary mandate headlines the card for the reason given above.
+  const votingStats = voteStats?.voteData.stats ?? null;
+  const plural = (count: number, one: string, many: string) => {
+    if (count > 1) return many;
+    return one;
+  };
+  const factChecks = identity._count.factCheckMentions;
+  const card = {
+    mandateLabel: (currentParliamentaryMandate ?? currentMandate)?.title ?? null,
+    votes: votingStats && {
+      votesFor: votingStats.pour,
+      votesAgainst: votingStats.contre,
+      votesAbstain: votingStats.abstention,
+    },
+    stats: [
+      {
+        value: identity.mandates.length,
+        label: plural(identity.mandates.length, "mandat exercé", "mandats exercés"),
+      },
+      {
+        value: identity.declarations.length,
+        label: plural(identity.declarations.length, "déclaration HATVP", "déclarations HATVP"),
+      },
+      { value: factChecks, label: plural(factChecks, "fact-check", "fact-checks") },
+    ],
+  };
+
   return {
+    card,
     currentMandate,
     currentParliamentaryMandate,
     currentGroup,
