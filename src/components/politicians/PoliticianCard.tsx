@@ -62,10 +62,11 @@ export function PoliticianCard({
       className="block group focus-visible:outline-none"
     >
       <Card
-        className={`h-full transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/30 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${hasCritiqueAffair ? "ring-1 ring-red-200 dark:ring-red-900/50" : ""}`}
+        className={`h-full max-sm:gap-0 max-sm:py-3 transition-all duration-300 hover:shadow-xl sm:hover:-translate-y-1 hover:border-primary/30 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${hasCritiqueAffair ? "ring-1 ring-red-200 dark:ring-red-900/50" : ""}`}
       >
-        <CardContent className="pt-6">
-          <div className="flex items-start gap-4">
+        {/* Below `sm` the card is a compact row: more people per screen, same content and link. */}
+        <CardContent className="max-sm:px-3 sm:pt-6">
+          <div className="flex items-start gap-3 sm:gap-4">
             <div className="relative">
               <div className="transition-transform duration-300 group-hover:scale-110">
                 <PoliticianAvatar
@@ -87,7 +88,7 @@ export function PoliticianCard({
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-lg group-hover:text-primary transition-colors duration-200">
+              <p className="font-semibold text-base sm:text-lg group-hover:text-primary transition-colors duration-200">
                 {politician.fullName}
               </p>
               {(mandateDisplay || roleDisplay) && (
@@ -95,7 +96,7 @@ export function PoliticianCard({
                   {mandateDisplay || roleDisplay}
                 </p>
               )}
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <div className="flex items-center gap-2 mt-1.5 sm:mt-3 flex-wrap">
                 {politician.currentParty && (
                   <Badge
                     variant="secondary"

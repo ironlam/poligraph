@@ -30,7 +30,7 @@ interface FactChecksFilterBarProps {
 }
 
 const selectClassName =
-  "h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors";
+  "h-9 max-sm:h-11 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors";
 
 export function FactChecksFilterBar({
   currentFilters,
