@@ -182,7 +182,14 @@ export function seatSharePct(placement: HemicyclePlacement): number {
   return Math.max(1, Math.round((placement.seats / placement.total) * 100));
 }
 
-export type ShareCardKind = "vote" | "candidat" | "mesure" | "parti" | "groupe" | "elu";
+export type ShareCardKind =
+  | "vote"
+  | "candidat"
+  | "mesure"
+  | "parti"
+  | "groupe"
+  | "elu"
+  | "factcheck";
 
 /** File name of the downloaded card: stable, ASCII, tied to what it shows. */
 export function shareCardFileName(kind: ShareCardKind, slug: string): string {
@@ -191,4 +198,11 @@ export function shareCardFileName(kind: ShareCardKind, slug: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
   return `poligraph-${kind}-${safe || "carte"}.png`;
+}
+
+export type ShareCardFormat = "post" | "story";
+
+/** File name of the story export of a card: the same name, marked as the tall version. */
+export function storyFileName(fileName: string): string {
+  return fileName.replace(/\.png$/, "-story.png");
 }

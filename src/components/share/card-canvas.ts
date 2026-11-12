@@ -376,3 +376,25 @@ export function drawJusticeNote(ctx: CanvasRenderingContext2D, fonts: CardFonts,
     lineHeight: 1.3,
   });
 }
+
+/** 9:16, the full-screen format of stories. */
+export const STORY_WIDTH = 1080;
+export const STORY_HEIGHT = 1920;
+
+/**
+ * The story version of a card: the same 4:5 image, whole, centred on a navy page.
+ *
+ * Nothing is redrawn and nothing is added. The bands above and below are where story apps lay
+ * their own controls, so anything written there would be covered: they stay plain on purpose.
+ */
+export function toStoryCanvas(card: HTMLCanvasElement): HTMLCanvasElement {
+  const story = document.createElement("canvas");
+  story.width = STORY_WIDTH;
+  story.height = STORY_HEIGHT;
+  const ctx = story.getContext("2d");
+  if (!ctx) return card;
+  ctx.fillStyle = BRAND_NAVY;
+  ctx.fillRect(0, 0, STORY_WIDTH, STORY_HEIGHT);
+  ctx.drawImage(card, 0, (STORY_HEIGHT - CARD_HEIGHT) / 2);
+  return story;
+}

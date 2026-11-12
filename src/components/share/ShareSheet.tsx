@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { SHARE_PLATFORMS } from "@/components/ui/share-platforms";
 import { buildShareUrl, shareOrCopy, type ShareData } from "@/lib/share";
 import { cn } from "@/lib/utils";
-import { CARD_HEIGHT, CARD_WIDTH, type CardDraw } from "./card-canvas";
+import { storyFileName, type ShareCardFormat } from "@/lib/share-card";
+import { CARD_HEIGHT, CARD_WIDTH, toStoryCanvas, type CardDraw } from "./card-canvas";
 
 export interface ShareSheetCard {
   fileName: string;
@@ -28,6 +29,11 @@ interface ShareSheetProps {
   card: ShareSheetCard | null;
   className?: string;
 }
+
+const FORMATS: { value: ShareCardFormat; label: string }[] = [
+  { value: "post", label: "Publication (4:5)" },
+  { value: "story", label: "Story (9:16)" },
+];
 
 const ACTION_CLASS =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring";
@@ -82,11 +88,18 @@ export function ShareSheet({ label, description, data, card, className }: ShareS
     };
   }, [open, draw]);
 
-  const fileName = card?.fileName ?? "";
+  // The format changes the export only: the preview stays the card, which the story holds whole.
+  const [format, setFormat] = useState<ShareCardFormat>("post");
+  const fileName =
+    format === "story" ? storyFileName(card?.fileName ?? "") : (card?.fileName ?? "");
+  const exportFile = useCallback(async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    return canvasToFile(format === "story" ? toStoryCanvas(canvas) : canvas, fileName);
+  }, [fileName, format]);
 
   const shareImage = useCallback(async () => {
-    const canvas = canvasRef.current;
-    const file = canvas ? await canvasToFile(canvas, fileName) : null;
+    const file = await exportFile();
     if (file && typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: data.title, text: data.text, url: data.url });
@@ -101,11 +114,10 @@ export function ShareSheet({ label, description, data, card, className }: ShareS
     const outcome = await shareOrCopy(data);
     if (outcome === "copied") toast.success("Lien copié");
     if (outcome === "failed") toast.error("Impossible de partager le lien");
-  }, [data, fileName]);
+  }, [data, exportFile]);
 
   const saveImage = useCallback(async () => {
-    const canvas = canvasRef.current;
-    const file = canvas ? await canvasToFile(canvas, fileName) : null;
+    const file = await exportFile();
     if (!file) {
       toast.error("Impossible d'enregistrer l'image");
       return;
@@ -116,7 +128,7 @@ export function ShareSheet({ label, description, data, card, className }: ShareS
     link.download = fileName;
     link.click();
     URL.revokeObjectURL(href);
-  }, [fileName]);
+  }, [exportFile, fileName]);
 
   const copyLink = useCallback(async () => {
     try {
@@ -173,6 +185,28 @@ export function ShareSheet({ label, description, data, card, className }: ShareS
                   aria-label={`Image à partager : ${card.alt}`}
                   className="mx-auto block h-auto w-44 rounded-lg border"
                 />
+                <div
+                  role="group"
+                  aria-label="Format de l'image"
+                  className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+                >
+                  {FORMATS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={format === option.value}
+                      onClick={() => setFormat(option.value)}
+                      className={cn(
+                        "min-h-11 rounded-md px-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                        format === option.value
+                          ? "border bg-background font-semibold text-foreground"
+                          : "text-muted-foreground-strong hover:text-foreground"
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
