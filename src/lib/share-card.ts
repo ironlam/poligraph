@@ -92,6 +92,19 @@ export function fitLines(
 export interface CardStat {
   value: number;
   label: string;
+  /** Printed after the figure, e.g. " %". */
+  suffix?: string;
+}
+
+/** A stat as it reads on the card and in its text alternative. */
+export function formatCardStat(stat: CardStat): string {
+  return `${stat.value.toLocaleString("fr-FR")}${stat.suffix ?? ""}`;
+}
+
+/** "17e législature". French ordinals take "re" for the first, "e" for every other. */
+export function legislatureLabel(legislature: number): string {
+  const ordinal = legislature === 1 ? "re" : "e";
+  return `${legislature}${ordinal} législature`;
 }
 
 /**
@@ -111,7 +124,7 @@ export function initialsOf(fullName: string): string {
   return `${first}${last}`.toLocaleUpperCase("fr");
 }
 
-export type ShareCardKind = "vote" | "candidat" | "mesure" | "parti";
+export type ShareCardKind = "vote" | "candidat" | "mesure" | "parti" | "groupe";
 
 /** File name of the downloaded card: stable, ASCII, tied to what it shows. */
 export function shareCardFileName(kind: ShareCardKind, slug: string): string {

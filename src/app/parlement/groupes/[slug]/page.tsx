@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { getGroupeDetail, getGroupKeyVotes } from "@/lib/data/groupes";
 import { VoteCard } from "@/components/votes";
-import { CHAMBER_SHORT_LABELS } from "@/config/labels";
+import { CHAMBER_LABELS, CHAMBER_SHORT_LABELS } from "@/config/labels";
 import { GLOSSARY } from "@/config/glossary";
 import { GOVERNMENT_GROUP_CODE, SENATE_GOVERNMENT_GROUP_CODE } from "@/config/scrutin-importance";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
@@ -18,6 +18,9 @@ import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { getGovernmentProjectPositionsForGroup } from "@/lib/data/government-project-positions";
 import { GovernmentProjectPositionBreakdown } from "@/components/groupes/GovernmentProjectPositionBreakdown";
 import { ROUTES } from "@/config/routes";
+import { GroupShareSheet } from "@/components/share/GroupShareSheet";
+import { legislatureLabel } from "@/lib/share-card";
+import { SITE_URL } from "@/config/site";
 
 export const revalidate = 3600;
 
@@ -74,7 +77,7 @@ export default async function GroupeDetailPage({ params }: PageProps) {
   ]);
   const stats = group.stats[0];
 
-  const chamberLabel = group.chamber === "AN" ? "Assemblée nationale" : "Sénat";
+  const chamberLabel = CHAMBER_LABELS[group.chamber];
   // Same string as the meta description: the JSON-LD must not describe the group
   // differently from the page (and must not promise a stat the page cannot show).
   const seo = buildGroupeSeo({
@@ -88,6 +91,40 @@ export default async function GroupeDetailPage({ params }: PageProps) {
     group.chamber === "AN" ? GOVERNMENT_GROUP_CODE : SENATE_GOVERNMENT_GROUP_CODE;
   const concordanceVotesTooltip = `${GLOSSARY.concordanceVotesGroupes} Groupe de référence pour cette chambre : ${referenceGroupCode}.`;
   const concordanceTextesTooltip = `${GLOSSARY.concordanceTextesLoi} Groupe de référence pour cette chambre : ${referenceGroupCode}.`;
+
+  // What the share card prints. A group belongs to a legislature at the Assemblée (its slug carries
+  // it); the Sénat is renewed by halves and has none, so nothing is invented for it.
+  const cardSubline = [
+    group.code,
+    chamberLabel,
+    group.legislature !== null ? legislatureLabel(group.legislature) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  // The reference group agrees with itself on every vote: printing its 100 % would say nothing.
+  const isReferenceGroup = group.code === referenceGroupCode;
+  const cardIndicators = stats
+    ? [
+        { value: Math.round(stats.cohesionPct), suffix: " %", label: "de cohésion interne" },
+        ...(isReferenceGroup
+          ? []
+          : [
+              {
+                value: Math.round(stats.governmentAlignmentPct),
+                suffix: " %",
+                label: `de votes identiques au groupe ${referenceGroupCode}`,
+              },
+              {
+                value: Math.round(stats.finalVoteAlignmentPct),
+                suffix: " %",
+                label: `de votes finaux identiques au groupe ${referenceGroupCode}`,
+              },
+            ]),
+      ]
+    : [];
+  const cardScope = stats
+    ? `Scrutins ${group.chamber === "AN" ? `de la ${legislatureLabel(stats.legislature)}` : "du Sénat"}. Le groupe ${referenceGroupCode} sert d'indicateur de la position gouvernementale. Source : ${chamberLabel}.`
+    : `Source : ${chamberLabel}. Les données présentées peuvent être incomplètes.`;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -130,6 +167,21 @@ export default async function GroupeDetailPage({ params }: PageProps) {
           <Users className="h-4 w-4" />
           {group.seatCount} membre{group.seatCount > 1 ? "s" : ""}
         </p>
+        <GroupShareSheet
+          slug={slug}
+          className="mt-4"
+          data={{
+            title: group.name,
+            text: `${group.name} (${cardSubline}) : membres et votes sur Poligraph`,
+            url: `${SITE_URL}/parlement/groupes/${slug}`,
+          }}
+          name={group.name}
+          subline={cardSubline}
+          color={group.color}
+          seatCount={group.seatCount}
+          indicators={cardIndicators}
+          scope={cardScope}
+        />
       </div>
 
       {/* Stats row */}

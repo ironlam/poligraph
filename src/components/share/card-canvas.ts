@@ -1,5 +1,5 @@
 import { BRAND_NAVY, BRAND_RED } from "@/config/brand";
-import { fitLines, type CardStat, type FitStep } from "@/lib/share-card";
+import { fitLines, formatCardStat, type CardStat, type FitStep } from "@/lib/share-card";
 
 /**
  * Shared pieces of the share cards. Every card is drawn in the browser from data its page already
@@ -195,7 +195,7 @@ export function drawStatTiles(
     ctx.fill();
     ctx.fillStyle = INK;
     ctx.font = `800 56px ${fonts.display}`;
-    ctx.fillText(stat.value.toLocaleString("fr-FR"), x + 24, y + 72);
+    ctx.fillText(formatCardStat(stat), x + 24, y + 72);
     ctx.fillStyle = INK;
     drawFittedText(ctx, stat.label, {
       x: x + 24,
