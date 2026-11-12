@@ -124,6 +124,64 @@ export function initialsOf(fullName: string): string {
   return `${first}${last}`.toLocaleUpperCase("fr");
 }
 
+/** Where a group sits in its chamber: seats before it on the benches, its own, and all of them. */
+export interface HemicyclePlacement {
+  before: number;
+  seats: number;
+  total: number;
+}
+
+export interface HemicycleDot {
+  /** Unit coordinates: centre of the arcs at (0, 0), x in [-1, 1], y in [0, 1] going up. */
+  x: number;
+  y: number;
+  on: boolean;
+}
+
+const HEMICYCLE_ROWS = [0.46, 0.57, 0.68, 0.79, 0.9, 1];
+const HEMICYCLE_DOT_SPACING = 0.074;
+
+/**
+ * A hemicycle as rows of dots, the group's share lit where it sits, benches read left to right.
+ *
+ * The dots are a picture of a proportion, not one dot per seat: the card prints the exact count
+ * beside it. A group too small to light a dot still gets the nearest one, so it never vanishes.
+ */
+export function hemicycleDots(placement: HemicyclePlacement): HemicycleDot[] {
+  const from = placement.before / placement.total;
+  const to = (placement.before + placement.seats) / placement.total;
+  const middle = (from + to) / 2;
+  const dots: HemicycleDot[] = [];
+  let nearest = 0;
+  let nearestGap = Infinity;
+
+  for (const radius of HEMICYCLE_ROWS) {
+    const count = Math.round((Math.PI * radius) / HEMICYCLE_DOT_SPACING);
+    for (let k = 0; k < count; k++) {
+      const fraction = (k + 0.5) / count;
+      const angle = Math.PI * (1 - fraction);
+      const gap = Math.abs(fraction - middle);
+      if (gap < nearestGap) {
+        nearestGap = gap;
+        nearest = dots.length;
+      }
+      dots.push({
+        x: radius * Math.cos(angle),
+        y: radius * Math.sin(angle),
+        on: fraction >= from && fraction < to,
+      });
+    }
+  }
+  if (placement.seats > 0 && !dots.some((dot) => dot.on)) dots[nearest]!.on = true;
+  return dots;
+}
+
+/** Share of the filled seats, as a whole percentage, never rounded down to a misleading zero. */
+export function seatSharePct(placement: HemicyclePlacement): number {
+  if (placement.total <= 0 || placement.seats <= 0) return 0;
+  return Math.max(1, Math.round((placement.seats / placement.total) * 100));
+}
+
 export type ShareCardKind = "vote" | "candidat" | "mesure" | "parti" | "groupe";
 
 /** File name of the downloaded card: stable, ASCII, tied to what it shows. */

@@ -5,7 +5,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
-import { getGroupeDetail, getGroupKeyVotes } from "@/lib/data/groupes";
+import { getGroupeDetail, getGroupHemicyclePlacement, getGroupKeyVotes } from "@/lib/data/groupes";
 import { VoteCard } from "@/components/votes";
 import { CHAMBER_LABELS, CHAMBER_SHORT_LABELS } from "@/config/labels";
 import { GLOSSARY } from "@/config/glossary";
@@ -42,6 +42,12 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+function seatNoun(chamber: "AN" | "SENAT", seats: number): string {
+  const noun = chamber === "AN" ? "député" : "sénateur";
+  if (seats > 1) return `${noun}s`;
+  return noun;
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const group = await getGroupeDetail(slug);
@@ -69,8 +75,9 @@ export default async function GroupeDetailPage({ params }: PageProps) {
   if (!group) notFound();
 
   const isNonInscritAN = group.chamber === "AN" && group.code === "NI";
-  const [groupKeyVotes, governmentProjects] = await Promise.all([
+  const [groupKeyVotes, hemicyclePlacement, governmentProjects] = await Promise.all([
     getGroupKeyVotes(group.id),
+    getGroupHemicyclePlacement(group.id, group.chamber),
     group.chamber === "AN" && !isNonInscritAN
       ? getGovernmentProjectPositionsForGroup(group.code)
       : null,
@@ -179,6 +186,12 @@ export default async function GroupeDetailPage({ params }: PageProps) {
           subline={cardSubline}
           color={group.color}
           seatCount={group.seatCount}
+          hemicycle={
+            hemicyclePlacement && {
+              placement: hemicyclePlacement,
+              seatNoun: seatNoun(group.chamber, hemicyclePlacement.seats),
+            }
+          }
           indicators={cardIndicators}
           scope={cardScope}
         />

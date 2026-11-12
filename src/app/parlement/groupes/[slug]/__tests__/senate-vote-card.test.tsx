@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/data/groupes", () => ({
   getGroupeDetail: (slug: string) => mocks.getGroupeDetail(slug),
   getGroupKeyVotes: (groupId: string) => mocks.getGroupKeyVotes(groupId),
+  getGroupHemicyclePlacement: async () => null,
 }));
 vi.mock("@/lib/data/government-project-positions", () => ({
   getGovernmentProjectPositionsForGroup: mocks.getGovernmentProjectPositionsForGroup,

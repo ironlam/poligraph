@@ -13,7 +13,13 @@ const indicators = [
   { value: 42, suffix: " %", label: "de votes identiques au groupe EPR" },
 ];
 
-function open(seatCount: number) {
+function open(
+  seatCount: number,
+  hemicycle: {
+    placement: { before: number; seats: number; total: number };
+    seatNoun: string;
+  } | null = null
+) {
   render(
     <GroupShareSheet
       slug="gex-17"
@@ -22,6 +28,7 @@ function open(seatCount: number) {
       subline="GEX · Assemblée nationale · 17e législature"
       color="#336699"
       seatCount={seatCount}
+      hemicycle={hemicycle}
       indicators={indicators}
       scope="Scrutins de la 17e législature. Source : Assemblée nationale."
     />
@@ -59,6 +66,7 @@ describe("GroupShareSheet", () => {
         subline="GEX · Assemblée nationale · 16e législature"
         color={null}
         seatCount={0}
+        hemicycle={null}
         indicators={[]}
         scope="Source : Assemblée nationale."
       />
@@ -66,5 +74,13 @@ describe("GroupShareSheet", () => {
     fireEvent.click(screen.getByRole("button", { name: "Partager ce groupe" }));
     expect(screen.queryByRole("img", { name: /Image à partager/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Copier le lien" })).toBeInTheDocument();
+  });
+
+  it("says the hemicycle in words: seats, total and share", () => {
+    const name = open(64, {
+      placement: { before: 120, seats: 64, total: 575 },
+      seatNoun: "députés",
+    });
+    expect(name).toContain("64 députés sur 575, soit 11 % des sièges pourvus");
   });
 });
