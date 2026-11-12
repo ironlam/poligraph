@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   fitLines,
   formatCardStat,
+  hemicycleDots,
+  seatSharePct,
   legislatureLabel,
   initialsOf,
   pickCardStats,
@@ -141,5 +143,45 @@ describe("legislatureLabel", () => {
   it("names a legislature with its ordinal", () => {
     expect(legislatureLabel(17)).toBe("17e législature");
     expect(legislatureLabel(1)).toBe("1re législature");
+  });
+});
+
+describe("hemicycleDots", () => {
+  const share = (dots: { on: boolean }[]) => dots.filter((dot) => dot.on).length / dots.length;
+
+  it("lights a share of the dots close to the share of the seats", () => {
+    const dots = hemicycleDots({ before: 100, seats: 150, total: 500 });
+    expect(share(dots)).toBeGreaterThan(0.27);
+    expect(share(dots)).toBeLessThan(0.33);
+  });
+
+  it("places the first benches on the left and the last on the right", () => {
+    const left = hemicycleDots({ before: 0, seats: 100, total: 500 }).filter((dot) => dot.on);
+    const right = hemicycleDots({ before: 400, seats: 100, total: 500 }).filter((dot) => dot.on);
+    expect(left.every((dot) => dot.x < 0)).toBe(true);
+    expect(right.every((dot) => dot.x > 0)).toBe(true);
+  });
+
+  it("never lets a very small group vanish", () => {
+    const dots = hemicycleDots({ before: 300, seats: 1, total: 577 });
+    expect(dots.filter((dot) => dot.on)).toHaveLength(1);
+  });
+
+  it("stays inside the half disc", () => {
+    for (const dot of hemicycleDots({ before: 0, seats: 10, total: 20 })) {
+      expect(Math.hypot(dot.x, dot.y)).toBeLessThanOrEqual(1.0001);
+      expect(dot.y).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+describe("seatSharePct", () => {
+  it("rounds to a whole percentage", () => {
+    expect(seatSharePct({ before: 0, seats: 64, total: 575 })).toBe(11);
+  });
+
+  it("does not round a sitting group down to zero", () => {
+    expect(seatSharePct({ before: 0, seats: 1, total: 577 })).toBe(1);
+    expect(seatSharePct({ before: 0, seats: 0, total: 577 })).toBe(0);
   });
 });

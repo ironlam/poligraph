@@ -2,7 +2,13 @@
 
 import { useMemo } from "react";
 import type { ShareData } from "@/lib/share";
-import { formatCardStat, shareCardFileName, type CardStat } from "@/lib/share-card";
+import {
+  formatCardStat,
+  seatSharePct,
+  shareCardFileName,
+  type CardStat,
+  type HemicyclePlacement,
+} from "@/lib/share-card";
 import { formatDate } from "@/lib/utils";
 import { ShareSheet, type ShareSheetCard } from "./ShareSheet";
 import { drawGroupCard } from "./draw-group-card";
@@ -14,6 +20,8 @@ interface GroupShareSheetProps {
   subline: string;
   color: string | null;
   seatCount: number;
+  /** Null for a group with no declared place on the benches: no hemicycle is drawn then. */
+  hemicycle: { placement: HemicyclePlacement; seatNoun: string } | null;
   indicators: readonly CardStat[];
   scope: string;
   className?: string;
@@ -27,6 +35,7 @@ export function GroupShareSheet({
   subline,
   color,
   seatCount,
+  hemicycle,
   indicators,
   scope,
   className,
@@ -38,9 +47,12 @@ export function GroupShareSheet({
     if (!members && indicators.length === 0) return null;
     const stats = [members, ...indicators].filter((stat): stat is CardStat => stat !== null);
     const counters = stats.map((stat) => `${formatCardStat(stat)} ${stat.label}`).join(", ");
+    const share = hemicycle
+      ? ` ${hemicycle.placement.seats} ${hemicycle.seatNoun} sur ${hemicycle.placement.total}, soit ${seatSharePct(hemicycle.placement)} % des sièges pourvus, montrés dans un hémicycle.`
+      : "";
     return {
       fileName: shareCardFileName("groupe", slug),
-      alt: `${name}, ${subline}.${counters ? ` ${counters}.` : ""} ${scope}`,
+      alt: `${name}, ${subline}.${counters ? ` ${counters}.` : ""}${share} ${scope}`,
       note: "L'image est datée du jour et précise la chambre, la législature et ce que mesurent ses pourcentages.",
       draw: (ctx, fonts) =>
         drawGroupCard(
@@ -50,6 +62,7 @@ export function GroupShareSheet({
             subline,
             color,
             members,
+            hemicycle,
             indicators,
             scope,
             // Read when the card is drawn, so the image carries the day it was made.
@@ -58,7 +71,7 @@ export function GroupShareSheet({
           fonts
         ),
     };
-  }, [color, indicators, name, scope, seatCount, slug, subline]);
+  }, [color, hemicycle, indicators, name, scope, seatCount, slug, subline]);
 
   return (
     <ShareSheet
