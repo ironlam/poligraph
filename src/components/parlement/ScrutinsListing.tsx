@@ -157,14 +157,14 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
         url={`${SITE_URL}/parlement/votes`}
         numberOfItems={total}
       />
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 pb-8 sm:pt-8">
         {/* Header */}
-        <div className="mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div className="mb-3 flex flex-col gap-2 sm:mb-6 sm:gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-2xl font-display font-extrabold tracking-tight mb-1 sm:text-3xl">
               {pageTitle}
             </h1>
-            <p className="text-muted-foreground text-sm">{pageSubtitle}</p>
+            <p className="text-muted-foreground text-sm max-sm:sr-only">{pageSubtitle}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link

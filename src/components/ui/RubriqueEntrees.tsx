@@ -27,25 +27,25 @@ export function RubriqueEntrees({
 }) {
   return (
     <section aria-labelledby={titreId}>
-      <h2 id={titreId} className="font-display text-2xl font-extrabold text-primary">
+      <h2 id={titreId} className="font-display text-2xl font-extrabold text-primary max-sm:sr-only">
         {titre}
       </h2>
       {/* Below sm: one line that scrolls sideways, so the entries do not push the listing down. */}
       <ul
         className={cn(
-          "mt-4 -mx-4 flex gap-3 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 sm:grid sm:grid-cols-2",
+          "-mx-4 flex gap-2 overflow-x-auto px-4 sm:mt-4 sm:gap-3 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 sm:grid sm:grid-cols-2",
           COLONNES_LG[entrees.length]
         )}
       >
         {entrees.map(({ href, title, detail, icon: Icon }) => (
           <li
             key={href}
-            className="w-44 shrink-0 sm:w-auto sm:last:odd:col-span-2 lg:last:odd:col-span-1"
+            className="shrink-0 sm:w-auto sm:last:odd:col-span-2 lg:last:odd:col-span-1"
           >
             <Link
               href={href}
               prefetch={false}
-              className="flex h-full min-h-11 flex-col gap-2 rounded-xl sm:gap-4 border border-border bg-card p-4 hover:border-primary/40 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="flex h-full min-h-11 items-center rounded-full border border-border bg-card px-4 hover:border-primary/40 sm:flex-col sm:items-stretch sm:gap-4 sm:rounded-xl sm:p-4 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               <span className="hidden items-center justify-between sm:flex">
                 <span
@@ -56,9 +56,14 @@ export function RubriqueEntrees({
                 </span>
                 <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </span>
-              <span className="block">
-                <span className="block font-display text-lg font-bold text-primary">{title}</span>
-                <span className="mt-1 block text-sm text-muted-foreground">{detail}</span>
+              {/* Below sm: a one-line pill, title then figure. From sm: the tile. */}
+              <span className="flex items-baseline gap-2 whitespace-nowrap sm:block sm:whitespace-normal">
+                <span className="block font-display text-sm font-bold text-primary sm:text-lg">
+                  {title}
+                </span>
+                <span className="block text-xs text-muted-foreground sm:mt-1 sm:text-sm">
+                  {detail}
+                </span>
               </span>
             </Link>
           </li>

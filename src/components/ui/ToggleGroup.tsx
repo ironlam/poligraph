@@ -78,7 +78,7 @@ export function ToggleGroup({ label, value, options, onChange, className }: Togg
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={cn(
-              "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium outline-none transition-colors motion-reduce:transition-none",
+              "inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium outline-none transition-colors motion-reduce:transition-none",
               "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
               selected
                 ? "bg-primary text-primary-foreground"
