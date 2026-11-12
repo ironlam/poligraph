@@ -12,6 +12,7 @@
 
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import {
   MANDATE_WEIGHTS,
   PARTY_ROLE_WEIGHTS,
@@ -41,7 +42,6 @@ export interface ProminenceStats {
 
 interface PoliticianData {
   id: string;
-  fullName: string;
   mandates: {
     type: string;
     isCurrent: boolean;
@@ -55,7 +55,6 @@ interface PoliticianData {
     votes: number;
     pressMentions: number;
     factCheckMentions: number;
-    affairs: number;
   };
 }
 
@@ -138,16 +137,14 @@ function calcRecencyBonus(p: PoliticianData): number {
 // Main service
 // ---------------------------------------------------------------------------
 
-export async function recalculateProminence(
-  options: ProminenceOptions = {}
-): Promise<ProminenceStats> {
-  const { dryRun = false } = options;
-
-  // 1. Fetch all politicians with relations and counts
+async function queryProminenceScores(
+  politicianIds?: string[]
+): Promise<{ id: string; score: number }[]> {
+  const politicianScope = politicianIds ? { in: politicianIds } : undefined;
   const politicians = await db.politician.findMany({
+    where: politicianScope ? { id: politicianScope } : undefined,
     select: {
       id: true,
-      fullName: true,
       mandates: {
         select: { type: true, isCurrent: true, endDate: true },
       },
@@ -159,7 +156,6 @@ export async function recalculateProminence(
           votes: true,
           pressMentions: true,
           factCheckMentions: true,
-          affairs: true,
         },
       },
     },
@@ -173,13 +169,14 @@ export async function recalculateProminence(
     db.pressArticleMention.groupBy({
       by: ["politicianId"],
       where: {
+        politicianId: politicianScope,
         article: { publishedAt: { gte: threeMonthsAgo } },
       },
       _count: { politicianId: true },
     }),
     db.affair.groupBy({
       by: ["politicianId", "severity"],
-      where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
+      where: { ...getPublishedAffairWhere(), politicianId: politicianScope, involvement: "DIRECT" },
       _count: true,
     }),
   ]);
@@ -197,10 +194,7 @@ export async function recalculateProminence(
     affairSeverityMap.set(row.politicianId, existing);
   }
 
-  // 3. Calculate scores
-  const updates: { id: string; score: number }[] = [];
-
-  for (const p of politicians) {
+  return politicians.map((p) => {
     const mandateWeight = calcMandateWeight(p);
     const activityScore = calcActivityScore(p);
     const recentCount = recentMentionMap.get(p.id) ?? 0;
@@ -214,8 +208,29 @@ export async function recalculateProminence(
       SCORE_CAPS.total
     );
 
-    updates.push({ id: p.id, score: total });
+    return { id: p.id, score: total };
+  });
+}
+
+/** The public CSV needs a current score, including only affairs still published at read time. */
+export async function getExportProminenceScores(
+  politicianIds: string[]
+): Promise<Map<string, number>> {
+  const scores = new Map<string, number>();
+  // Keep the ID filter below PostgreSQL's parameter limit, including for a full 50k-row CSV.
+  const batchSize = 10000;
+  for (let start = 0; start < politicianIds.length; start += batchSize) {
+    const batch = await queryProminenceScores(politicianIds.slice(start, start + batchSize));
+    for (const { id, score } of batch) scores.set(id, score);
   }
+  return scores;
+}
+
+export async function recalculateProminence(
+  options: ProminenceOptions = {}
+): Promise<ProminenceStats> {
+  const { dryRun = false } = options;
+  const updates = await queryProminenceScores();
 
   // 4. Batch update using parameterized raw SQL (avoids Prisma transaction timeout on serverless)
   if (!dryRun) {

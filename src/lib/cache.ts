@@ -10,7 +10,7 @@ import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tag
 
 // ─── Cache tiers for API responses ────────────────────────────────
 
-export type CacheTier = "static" | "daily" | "stats" | "export" | "none";
+export type CacheTier = "static" | "daily" | "stats" | "export" | "export-uncached" | "none";
 
 const CACHE_HEADERS: Record<CacheTier, string> = {
   static: "public, s-maxage=3600, stale-while-revalidate=600",
@@ -19,6 +19,7 @@ const CACHE_HEADERS: Record<CacheTier, string> = {
   // 24h fresh, 7d served stale while revalidating. Aligned on the 04:00 daily
   // sync; admin writes do not wait for it, they purge by tag (see invalidateEntity).
   export: "public, s-maxage=86400, stale-while-revalidate=604800",
+  "export-uncached": "no-store",
   none: "no-store",
 };
 
@@ -33,7 +34,7 @@ export function withCache(response: Response, tier: CacheTier, tags?: readonly s
 
   // The export routes are `force-dynamic`, where the client-facing Cache-Control
   // is not what the Vercel edge reads. This header is the authoritative one.
-  if (tier === "export") {
+  if (tier === "export" || tier === "export-uncached") {
     response.headers.set("Vercel-CDN-Cache-Control", CACHE_HEADERS[tier]);
   }
 
@@ -130,6 +131,7 @@ function purgeExportTag(tag: string): void {
 /**
  * Entities whose writes make one or more CSV exports stale.
  *
+ * Retain the affairs and politicians tags to allow purging copies from earlier deployments.
  * Deliberately not one-to-one, because the exports embed each other. Verified against the
  * route selects: the politiques export counts published affairs and public factcheck
  * mentions and serializes `currentParty`; the affaires export serializes the politician,

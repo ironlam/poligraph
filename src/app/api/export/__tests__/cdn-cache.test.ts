@@ -2,35 +2,26 @@ import { describe, it, expect, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 /**
- * The four CSV exports are the heaviest public routes: each one scans a whole
- * table and, being `force-dynamic`, used to reach the function on every call.
- * They now declare a CDN policy, and a route that silently loses it costs real
- * money without failing anything else. Route tests elsewhere stub `withCache`
- * to identity, so nothing would catch it: this file deliberately does not.
+ * These CSV exports retain shared caching. Keep the real `withCache` here so
+ * a change to the response headers is visible to this test.
  *
  * Every route issues a single `findMany`; an empty result is enough to reach
  * the response, which is all this file asserts on.
  */
 vi.mock("@/lib/db", () => ({
   db: {
-    affair: { findMany: vi.fn().mockResolvedValue([]) },
     scrutin: { findMany: vi.fn().mockResolvedValue([]) },
-    politician: { findMany: vi.fn().mockResolvedValue([]) },
     factCheck: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 
 const ROUTES = [
-  ["affaires", () => import("@/app/api/export/affaires/route")],
   ["votes", () => import("@/app/api/export/votes/route")],
-  ["politiques", () => import("@/app/api/export/politiques/route")],
   ["factchecks", () => import("@/app/api/export/factchecks/route")],
 ] as const;
 
 const EXPECTED_TAG: Record<string, string> = {
-  affaires: "export:affairs",
   votes: "export:votes",
-  politiques: "export:politicians",
   factchecks: "export:factchecks",
 };
 

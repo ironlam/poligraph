@@ -4,6 +4,7 @@ const findMany = vi.fn().mockResolvedValue([]);
 vi.mock("@/lib/db", () => ({
   db: { politician: { findMany: (...a: unknown[]) => findMany(...a) } },
 }));
+vi.mock("@/services/sync/prominence", () => ({ getExportProminenceScores: async () => new Map() }));
 
 import { NextRequest } from "next/server";
 import { GET } from "@/app/api/export/politiques/route";

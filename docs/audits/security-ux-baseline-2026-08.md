@@ -14,7 +14,7 @@ finding.
 | Baseline date         | August 8, 2026                                                                     |
 | Inspected revision    | `a24fcc13`                                                                         |
 | Reference branch      | `origin/main`                                                                      |
-| Registry last updated | August 8, 2026                                                                     |
+| Registry last updated | November 12, 2026                                                                  |
 | Required protocol     | [`docs/engineering/agentic-remediation.md`](../engineering/agentic-remediation.md) |
 
 The evidence below consists of starting points observed in the repository. The Scout for each work
@@ -49,6 +49,7 @@ change marks it `Closed`. Accepted risks retain their rationale and next review 
 | `SEC-04`   | P1                 | Authentication        | Closed         | @ironlam   | Private Security Advisory                                                   | [#715](https://github.com/ironlam/poligraph/pull/715) | 2026-08-13   |
 | `SEC-06`   | P2                 | Database security     | Closed         | @ironlam   | Private Security Advisory                                                   | [#728](https://github.com/ironlam/poligraph/pull/728) | 2026-08-16   |
 | `SEC-07`   | P2                 | Application security  | To investigate | Unassigned | [Context](#sec-07-csp-hardening-without-sacrificing-rendering-architecture) | None                                                  | 2026-08-08   |
+| `SEC-08`   | P1                 | Editorial withdrawal  | In remediation | @ironlam   | [Evidence](#sec-08-withdraw-judicial-data-from-public-csv-exports)          | [#1269][sec-08-pr]                                    | 2026-11-12   |
 | `CI-01`    | P1                 | CI                    | Closed         | @ironlam   | [Context](#ci-01-make-security-guards-trustworthy)                          | [#733](https://github.com/ironlam/poligraph/pull/733) | 2026-08-18   |
 | `CI-02`    | P1                 | Quality               | To investigate | Unassigned | [Context](#ci-02-bring-scripts-under-static-analysis)                       | None                                                  | 2026-08-08   |
 | `SEC-05`   | P1                 | Software supply chain | To investigate | Unassigned | [Context](#sec-05-software-supply-chain-baseline)                           | None                                                  | 2026-08-08   |
@@ -57,6 +58,8 @@ change marks it `Closed`. Accepted risks retain their rationale and next review 
 | `DB-03`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-03-evaluate-foreign-key-indexing-from-measured-workloads)     | None                                                  | 2026-08-08   |
 | `UX-01`    | P1                 | UX and quality        | To investigate | Unassigned | [Context](#ux-01-convert-recurring-ux-defects-into-semantic-contracts)      | None                                                  | 2026-08-08   |
 | `AGENT-01` | P1                 | Governance            | To investigate | Unassigned | [Context](#agent-01-make-agentsmd-executableverifiable)                     | None                                                  | 2026-08-08   |
+
+[sec-08-pr]: https://github.com/ironlam/poligraph/pull/1269
 
 ## P0 findings
 
@@ -180,6 +183,27 @@ architectural impact.
 
 **Closure criteria.** A measured decision is documented and covered by CSP tests. CSP remains
 defense in depth and is not treated as a substitute for correcting injection sinks.
+
+### SEC-08: Withdraw judicial data from public CSV exports
+
+**Target invariant.** Once the fix is active on every public deployment serving the affected
+exports, the first successful request started after the editorial commit reflects the withdrawal.
+The shared-cache retention budget for these responses is zero. The contract covers affair rows,
+politician counts and selection, the judicial contribution to prominence, and judicially filtered
+government membership. It applies to requests served by Poligraph after cutover.
+
+**Evidence.** The baseline is `95ec20a57875e99f989636e66fa2c24c0fd59cb2`. The
+[defensive CSV contract](../../src/app/api/export/__tests__/judicial-withdrawal.test.ts) uses
+fictional records and a cache double. The
+[government export tests](../../src/app/api/export/gouvernements/__tests__/exports.test.ts) check
+fresh selection and the cache policy for filtered and unfiltered requests. The
+[transaction tests](../../src/app/api/admin/affaires/__tests__/depublication-commit.test.ts) cover
+commit-before-invalidation and rollback. The four defensive CSV assertions fail on the baseline
+and pass with the candidate. Hosted behavior and origin costs have yet to be measured.
+
+**Closure criteria.** Independent verification and GitHub CI pass. Confirm the new deployment
+serves the affected public aliases, prior deployments are protected or retired, and each affected
+response uses the withdrawal policy. Track origin usage for the affected exports after cutover.
 
 ## Performance
 

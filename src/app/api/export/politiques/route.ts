@@ -7,13 +7,13 @@ import { pickEnumValue } from "@/lib/data/enum-guards";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
-import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 import {
   getMandateStartDatePublicationStatus,
   getPublicFactCheckWhere,
 } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { parsePagination } from "@/lib/api/pagination";
+import { getExportProminenceScores } from "@/services/sync/prominence";
 
 export const dynamic = "force-dynamic";
 
@@ -157,6 +157,7 @@ export const GET = withPublicRoute(async (request) => {
     console.warn(`[export] plafond de ${limit} politiques atteint, l'export est tronqué`);
   }
 
+  const scores = await getExportProminenceScores(politicians.map(({ id }) => id));
   const data = politicians.map((p) => {
     const mandate = p.mandates[0];
     const gender = p.civility === "M." ? "M" : p.civility === "Mme" ? "F" : "";
@@ -188,7 +189,7 @@ export const GET = withPublicRoute(async (request) => {
       departmentCode: mandate?.departmentCode ?? "",
       affairsCount: p._count.affairs,
       factcheckMentionsCount: p._count.factCheckMentions,
-      prominenceScore: p.prominenceScore,
+      prominenceScore: scores.get(p.id) ?? 0,
       wikidataId: p.externalIds[0]?.externalId ?? "",
       photoUrl: p.blobPhotoUrl ?? p.photoUrl ?? "",
       profileUrl: `${SITE_URL}/politiques/${p.slug}`,
@@ -235,10 +236,6 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `politiques-${new Date().toISOString().split("T")[0]}.csv`;
 
-  // Cached 24h at the edge. Admin writes do not wait for expiry: `invalidateEntity`
-  // hard-deletes the tag below, so an edited politician leaves the CSV at once.
-  return withCache(createCSVResponse(csv, filename), "export", [
-    EXPORT_CACHE_TAGS.politicians,
-    EXPORT_ROLLUP_TAG,
-  ]);
+  // Every variant includes a count of published affairs.
+  return withCache(createCSVResponse(csv, filename), "export-uncached");
 });

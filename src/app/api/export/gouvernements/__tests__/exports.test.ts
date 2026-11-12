@@ -3,9 +3,9 @@ import { NextRequest } from "next/server";
 import type { GovernmentEpisode, PersonCard, PublishedGovernment } from "@/lib/governments/mapping";
 import { compositionAt, consultableRange } from "@/lib/governments/composition";
 
-vi.mock("@/lib/db", () => ({ db: {} }));
+const findAffairs = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/db", () => ({ db: { affair: { findMany: findAffairs } } }));
 vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: vi.fn() }));
-vi.mock("@/lib/data/government-affairs", () => ({ getGovernmentMemberAffairs: vi.fn() }));
 vi.mock("@/lib/data/governments", () => ({
   getPublishedGovernments: vi.fn(),
   getGovernmentEpisodes: vi.fn(),
@@ -18,7 +18,6 @@ import {
   getGovernmentEpisodesFor,
   getPublishedGovernments,
 } from "@/lib/data/governments";
-import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import { GET as getPersonnes } from "../personnes/route";
 import { GET as getFonctions } from "../fonctions/route";
 import { GET as getComposition } from "../[slug]/route";
@@ -194,7 +193,7 @@ beforeEach(() => {
     const all = await getGovernmentEpisodes();
     return { episodes: all.episodes.filter((e) => e.governmentId === id), people: all.people };
   });
-  vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({});
+  findAffairs.mockReset().mockResolvedValue([]);
 });
 
 const BASE = "https://poligraph.fr/api/export/gouvernements";
@@ -272,9 +271,7 @@ describe("export des personnes", () => {
   });
 
   it("suit le filtre affaires de la page et le garde dans le lien de détail", async () => {
-    vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({
-      p5: { definitive: 1, nonDefinitive: 0, ongoing: 0 },
-    });
+    findAffairs.mockResolvedValue([{ politicianId: "p5", status: "CONDAMNATION_DEFINITIVE" }]);
     const { rows } = await lines(
       await call(getPersonnes, `${BASE}/personnes?affaires=condamnation-definitive`)
     );
@@ -301,9 +298,47 @@ describe("export des personnes", () => {
     const tags = res.headers.get("Vercel-Cache-Tag")?.split(",") ?? [];
     expect(tags).toContain("export:governments");
     expect(tags).toContain("exports");
+    expect(findAffairs).not.toHaveBeenCalled();
     expect(res.headers.get("Content-Disposition")).toMatch(
       /^attachment; filename="membres-gouvernements-personnes-\d{4}-\d{2}-\d{2}\.csv"$/
     );
+  });
+});
+
+describe("retrait d'une affaire dans les exports gouvernementaux", () => {
+  it.each([
+    ["personnes", getPersonnes],
+    ["fonctions", getFonctions],
+  ] as const)("actualise les lignes de %s après le commit", async (path, get) => {
+    const url = `${BASE}/${path}?affaires=invalide&affaires=condamnation-definitive`;
+    findAffairs.mockResolvedValueOnce([{ politicianId: "p5", status: "CONDAMNATION_DEFINITIVE" }]);
+    const before = await call(get, url);
+    expect(before.headers.get("Cache-Control")).toBe("no-store");
+    expect(before.headers.get("Vercel-CDN-Cache-Control")).toBe("no-store");
+    const { rows, text } = await lines(before);
+    expect(text).toContain("Eli Sorti");
+    if (path === "personnes") {
+      const detail = new URL(rows[0]!.split(",")[9]!);
+      expect(detail.searchParams.get("affaires")).toBe("condamnation-definitive");
+    }
+
+    const after = await call(get, url);
+    expect((await lines(after)).rows).toEqual([]);
+    expect(findAffairs).toHaveBeenCalledTimes(2);
+    expect(findAffairs).toHaveBeenLastCalledWith({
+      where: expect.objectContaining({
+        publicationStatus: "PUBLISHED",
+        politician: expect.objectContaining({ publicationStatus: "PUBLISHED" }),
+      }),
+      select: { politicianId: true, status: true },
+    });
+  });
+
+  it("évite le cache sans appliquer le filtre lorsque la dernière occurrence est invalide", async () => {
+    const res = await call(getPersonnes, `${BASE}/personnes?affaires=toutes&affaires=invalide`);
+    expect(res.headers.get("Vercel-CDN-Cache-Control")).toBe("no-store");
+    expect((await lines(res)).text).toContain("Eli Sorti");
+    expect(findAffairs).not.toHaveBeenCalled();
   });
 });
 
