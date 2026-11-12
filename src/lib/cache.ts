@@ -80,6 +80,22 @@ export interface InvalidateOptions {
 const DEFAULT_PROFILE = "minutes";
 const ELECTION_PROFILE = "hours";
 
+// Bulk purges after a sync. The profile sets how long a purged entry may still be served while it
+// regenerates, not how often it regenerates: with "minutes" a long-tail page purged by a sync and
+// first visited more than an hour later was rebuilt while the visitor waited, on every sync. "max"
+// is what the Next 16 docs recommend for on-demand refresh.
+const SYNC_PROFILE = "max";
+
+// Affair tags keep the shorter window even in bulk: a depublished affair must not stay servable
+// (AGENTS.md, principe 9).
+const STRICT_SYNC_TAGS: ReadonlySet<string> = new Set(["affairs", "affair-duplicates"]);
+
+function syncProfileFor(tag: string): string {
+  if (tag === "elections") return ELECTION_PROFILE;
+  if (STRICT_SYNC_TAGS.has(tag)) return DEFAULT_PROFILE;
+  return SYNC_PROFILE;
+}
+
 /**
  * Purge one export tag at the edge.
  *
@@ -286,7 +302,7 @@ export type { CacheTag, SelectableCacheTag } from "@/lib/cache-tags";
  */
 export function revalidateAll(): void {
   for (const tag of ALL_TAGS) {
-    revalidateTag(tag, tag === "elections" ? ELECTION_PROFILE : DEFAULT_PROFILE);
+    revalidateTag(tag, syncProfileFor(tag));
   }
   // The sync path never goes through `invalidateEntity`, so the exports would otherwise
   // stay cached for the full 24h tier after each daily sync.
@@ -316,15 +332,15 @@ const EXPORT_TAGS_BY_CACHE_TAG: Record<string, readonly string[]> = {
 };
 
 /**
- * Revalidate specific tags by name. Defaults to the "minutes" cacheLife
- * profile; pass `profile` to override for slow-changing data.
+ * Revalidate specific tags by name, from a sync or an operator. Without `profile`, each tag gets its
+ * bulk profile (`syncProfileFor`).
  */
 export function revalidateTags(
   tags: string[],
-  profile: Parameters<typeof revalidateTag>[1] = DEFAULT_PROFILE
+  profile?: Parameters<typeof revalidateTag>[1]
 ): void {
   for (const tag of tags) {
-    revalidateTag(tag, profile);
+    revalidateTag(tag, profile ?? syncProfileFor(tag));
   }
 
   // The daily sync refreshes through this function, never through `invalidateEntity`

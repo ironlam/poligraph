@@ -28,8 +28,14 @@ const nextConfig: NextConfig = {
   // 24h backstop rather than the driver of freshness. The built-in "minutes"
   // profile (revalidate 60s) was regenerating the whole long-tail every minute
   // on crawler traffic, which dominated ISR write cost.
+  // `expire` is how long an entry may go without traffic before the next request rebuilds it
+  // synchronously, with a full ISR write since nothing is left to compare against. At 7 days most of
+  // the long tail (communes, profiles, scrutins), crawled less often than weekly, was rewritten in
+  // full on each visit. 30 days stays under the 31 days after which Vercel drops an unread ISR entry
+  // anyway; past that, a visit serves the stale page once and refreshes it in the background, where
+  // an unchanged result costs no write. Data changes still arrive through revalidateTag.
   cacheLife: {
-    synced: { stale: 3600, revalidate: 86400, expire: 604800 },
+    synced: { stale: 3600, revalidate: 86400, expire: 2_592_000 },
   },
   outputFileTracingIncludes: {
     "/territoires/departements/[slug]/opengraph-image": ["./public/data/departements.geojson"],

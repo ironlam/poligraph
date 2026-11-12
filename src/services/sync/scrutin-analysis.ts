@@ -104,7 +104,14 @@ export async function generateScrutinAnalysis(
     /** Restrict processing to these scrutin ids (scoped first in the WHERE). */
     scrutinIds?: string[];
   } = {}
-): Promise<{ generated: number; skipped: number; skippedIncoherent: number; errors: string[] }> {
+): Promise<{
+  generated: number;
+  /** Scrutins whose analysis was written, so the caller can purge exactly those pages. */
+  generatedScrutinIds: string[];
+  skipped: number;
+  skippedIncoherent: number;
+  errors: string[];
+}> {
   const { limit = 10, force = false, dryRun = false, scrutinIds } = options;
   const errors: string[] = [];
 
@@ -138,6 +145,7 @@ export async function generateScrutinAnalysis(
   let modelCalls = 0;
   const transcriptCache: DebateTranscriptCache = new Map();
   let generated = 0;
+  const generatedScrutinIds: string[] = [];
   let skipped = 0;
   let skippedIncoherent = 0;
 
@@ -435,6 +443,7 @@ export async function generateScrutinAnalysis(
         }
 
         generated++;
+        generatedScrutinIds.push(s.id);
       } catch (e) {
         errors.push(`${s.id}: ${e instanceof Error ? e.message : String(e)}`);
         skipped++;
@@ -443,7 +452,13 @@ export async function generateScrutinAnalysis(
   }
   if (persistCursor)
     await syncMetadata.markCompleted(scanKey, { cursor: cursor ? JSON.stringify(cursor) : null });
-  return { generated, skipped, skippedIncoherent, errors: errors.slice(0, 20) };
+  return {
+    generated,
+    generatedScrutinIds,
+    skipped,
+    skippedIncoherent,
+    errors: errors.slice(0, 20),
+  };
 }
 
 // ============================================

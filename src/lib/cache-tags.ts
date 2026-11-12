@@ -43,6 +43,9 @@ export const FROZEN_TAGS = ["elections-municipales-2026"] as const;
 // "historical-group-positions" is the dated group counts of the scrutin page
 // (src/lib/data/historical-group-positions.ts). Selectable so that a revoked run can be taken off
 // the pages at once, without the site-wide "votes" purge.
+// "scrutin-analysis" is the debate analysis of the scrutin page (`getScrutinAnalysis`), its only
+// reader. The daily sync regenerates a few analyses per run: purging "votes" for them restaled every
+// profile, listing and comparison of the site, which is where most ISR writes came from.
 export const NARROW_TAGS = [
   "votes-key",
   "homepage",
@@ -50,7 +53,13 @@ export const NARROW_TAGS = [
   "territoires",
   "historical-group-positions",
   "changelog",
+  "scrutin-analysis",
 ] as const;
+
+/** Per-scrutin tag of the debate analysis, so one regenerated analysis restales one page. */
+export function scrutinAnalysisTag(scrutinId: string): string {
+  return `scrutin-analysis:${scrutinId}`;
+}
 
 /** Every tag an operator may name explicitly (admin endpoint, cron endpoint). */
 export const SELECTABLE_TAGS = [...ALL_TAGS, ...FROZEN_TAGS, ...NARROW_TAGS] as const;

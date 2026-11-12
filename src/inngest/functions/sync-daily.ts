@@ -2,6 +2,7 @@ import { inngest } from "../client";
 import { POLICY_TITLE_CRON } from "@/config/policy-titles";
 import { syncMetadata } from "@/lib/sync/sync-metadata";
 import { revalidateTags } from "@/lib/cache";
+import { scrutinAnalysisTag } from "@/lib/cache-tags";
 import { isIngestionAnomaly } from "@/lib/monitoring/amendment-link-freshness";
 import { linkableUnlinkedVoteWhere } from "@/lib/monitoring/amendment-link-query";
 import { runVoteSyncWithCacheInvalidation } from "../vote-cache";
@@ -316,7 +317,9 @@ const DAILY_STEPS: DailyStep[] = [
       const { syncDebateTranscripts } = await import("@/services/sync/debate-transcripts");
       const result = await syncDebateTranscripts();
       if (result.errors.length) throw new Error(result.errors.join("; "));
-      if (result.downloaded || result.refreshed) await revalidateTags(["votes"]);
+      // Transcripts have no public reader. A refreshed one deletes the analyses built on it, and
+      // those analyses only reach the scrutin page, so the purge stays on that narrow tag.
+      if (result.refreshed) revalidateTags(["scrutin-analysis"], "max");
       return result;
     },
   },
@@ -344,7 +347,8 @@ const DAILY_STEPS: DailyStep[] = [
       if (!process.env.MISTRAL_API_KEY) return { skipped: "no MISTRAL_API_KEY" };
       const { generateScrutinAnalysis } = await import("@/services/sync/scrutin-analysis");
       const result = await generateScrutinAnalysis({ limit: 5 });
-      if (result.generated) await revalidateTags(["votes"]);
+      if (result.generatedScrutinIds.length > 0)
+        revalidateTags(result.generatedScrutinIds.map(scrutinAnalysisTag), "max");
       return result;
     },
   },
