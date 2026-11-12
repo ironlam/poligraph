@@ -3,13 +3,13 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { getParty, getPartyLeadership, getPartyRoles } from "@/lib/data/partis";
+import { getParty, getPartyLeadership, getPartyRoles, getPartySeatCounts } from "@/lib/data/partis";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { getPartyPlatform } from "@/lib/data/platforms";
 import { ProgrammeCTA, ProgrammeCTAEmpty } from "@/components/programmes/ProgrammeCTA";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
+import { formatDate, normalizeImageUrl } from "@/lib/utils";
 import { PARTY_ROLE_LABELS, feminizePartyRole, POLITICAL_POSITION_LABELS } from "@/config/labels";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { PoliticalPositionBadge } from "@/components/partis/PoliticalPositionBadge";
@@ -23,6 +23,7 @@ import { FollowButton } from "@/components/politicians/FollowButton";
 import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 import { PartyAffairsCard } from "./_components/PartyAffairsCard";
 import { PartySidebar } from "./_components/PartySidebar";
+import { PartyShareSheet } from "@/components/share/PartyShareSheet";
 
 export async function generateStaticParams() {
   const parties = await db.party.findMany({
@@ -39,6 +40,11 @@ export async function generateStaticParams() {
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+}
+
+function plural(count: number, one: string, many: string): string {
+  if (count > 1) return many;
+  return one;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -92,10 +98,11 @@ export default async function PartyPage({ params }: PageProps) {
     notFound();
   }
 
-  const [leadershipMandates, partyRoles, pressEnabled, programmeEnabled, partyPlatform] =
+  const [leadershipMandates, partyRoles, seats, pressEnabled, programmeEnabled, partyPlatform] =
     await Promise.all([
       getPartyLeadership(party.id, party.name),
       getPartyRoles(party.id),
+      getPartySeatCounts(party.id),
       isFeatureEnabled("PRESS_SECTION"),
       isFeatureEnabled("PROGRAMMES_ENABLED"),
       getPartyPlatform(slug),
@@ -123,6 +130,29 @@ export default async function PartyPage({ params }: PageProps) {
       },
       [] as typeof party.partyMemberships
     );
+
+  // What the share card prints. The judicial counts of this page stay off it on purpose: see
+  // `drawPartyCard`.
+  const cardLeader = currentLeaders[0] ?? null;
+  const cardSubline = [
+    party.shortName,
+    party.foundedDate ? `Fondé en ${party.foundedDate.getFullYear()}` : null,
+    party.dissolvedDate ? `dissous en ${party.dissolvedDate.getFullYear()}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const cardStats = [
+    { value: seats.deputes, label: plural(seats.deputes, "député", "députés") },
+    { value: seats.senateurs, label: plural(seats.senateurs, "sénateur", "sénateurs") },
+    {
+      value: seats.deputesEuropeens,
+      label: plural(seats.deputesEuropeens, "député européen", "députés européens"),
+    },
+    {
+      value: party.politicians.length,
+      label: plural(party.politicians.length, "membre suivi", "membres suivis"),
+    },
+  ];
 
   const sameAsUrls = party.externalIds
     .map((e) => e.url)
@@ -195,6 +225,27 @@ export default async function PartyPage({ params }: PageProps) {
               </div>
             </div>
           </div>
+          <PartyShareSheet
+            slug={slug}
+            data={{
+              title: `${party.name} (${party.shortName})`,
+              text: `${party.name} : élus, votes et programme sur Poligraph`,
+              url: `${SITE_URL}/partis/${slug}`,
+            }}
+            name={party.name}
+            subline={cardSubline}
+            color={party.color}
+            leader={
+              cardLeader && {
+                fullName: cardLeader.politician.fullName,
+                role: `${cardLeader.title} depuis ${cardLeader.startDate.getFullYear()}`,
+                photoUrl: normalizeImageUrl(
+                  cardLeader.politician.blobPhotoUrl ?? cardLeader.politician.photoUrl
+                ),
+              }
+            }
+            stats={cardStats}
+          />
         </div>
 
         {/* Description */}
