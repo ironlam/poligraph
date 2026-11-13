@@ -274,7 +274,12 @@ export async function loadCandidateFicheDetail(
         ...getConvictionOnlyWhere(),
         category: { in: getCategoriesForSuper("PROBITE") },
         status: {
-          in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "POURVOI_EN_CASSATION"],
+          in: [
+            "CONDAMNATION_PREMIERE_INSTANCE",
+            "APPEL_EN_COURS",
+            "CONDAMNATION_EN_APPEL",
+            "POURVOI_EN_CASSATION",
+          ],
         },
       },
     }),

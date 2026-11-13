@@ -146,6 +146,7 @@ export const AFFAIR_STATUS_LABELS: Record<AffairStatus, string> = {
   PROCES_EN_COURS: "Procès en cours",
   CONDAMNATION_PREMIERE_INSTANCE: "Condamnation (1ère instance)",
   APPEL_EN_COURS: "Appel en cours",
+  CONDAMNATION_EN_APPEL: "Condamnation en appel",
   POURVOI_EN_CASSATION: "Condamnation non définitive, pourvoi en cassation en cours",
   CONDAMNATION_DEFINITIVE: "Condamnation définitive",
   RELAXE: "Relaxe",
@@ -167,6 +168,8 @@ export const AFFAIR_STATUS_COLORS: Record<AffairStatus, string> = {
   PROCES_EN_COURS: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
   CONDAMNATION_PREMIERE_INSTANCE: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   APPEL_EN_COURS: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
+  // Same shade as POURVOI_EN_CASSATION: convicted on appeal, not final.
+  CONDAMNATION_EN_APPEL: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   // Same shade as a first-instance conviction: two courts have convicted, but the
   // decision is not final, so it must not read as heavily as CONDAMNATION_DEFINITIVE.
   POURVOI_EN_CASSATION: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
@@ -195,6 +198,8 @@ export const AFFAIR_STATUS_DESCRIPTIONS: Record<AffairStatus, string> = {
   CONDAMNATION_PREMIERE_INSTANCE:
     "Le tribunal a prononcé une condamnation, mais un appel est encore possible.",
   APPEL_EN_COURS: "La décision du tribunal est contestée devant la cour d'appel.",
+  CONDAMNATION_EN_APPEL:
+    "La cour d'appel a condamné. Un pourvoi en cassation reste possible : aucun registre public ne permet de savoir s'il a été formé.",
   POURVOI_EN_CASSATION:
     "La cour d'appel a condamné, et un pourvoi en cassation a été formé. La condamnation n'est pas définitive : la Cour de cassation peut encore l'annuler.",
   CONDAMNATION_DEFINITIVE:
@@ -219,6 +224,7 @@ export const AFFAIR_STATUS_NEEDS_PRESUMPTION: Record<AffairStatus, boolean> = {
   PROCES_EN_COURS: true,
   CONDAMNATION_PREMIERE_INSTANCE: true, // Can still appeal
   APPEL_EN_COURS: true,
+  CONDAMNATION_EN_APPEL: true, // Cassation appeal still possible
   POURVOI_EN_CASSATION: true, // Cassation can still quash the conviction
   CONDAMNATION_DEFINITIVE: false,
   RELAXE: false,

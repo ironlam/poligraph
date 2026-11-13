@@ -68,6 +68,7 @@ export const STATUS_PHASE: Record<AffairStatus, Phase | null> = {
   RELAXE: null,
   ACQUITTEMENT: null,
   APPEL_EN_COURS: "APPEL",
+  CONDAMNATION_EN_APPEL: "APPEL",
   POURVOI_EN_CASSATION: "CASSATION",
   CONDAMNATION_DEFINITIVE: null,
   PRESCRIPTION: null,

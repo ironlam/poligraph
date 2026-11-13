@@ -85,7 +85,7 @@ describe("metadata /affaires/condamnations", () => {
       "directPenalConvicted",
     ]);
     expect(nonDefinitive!.status).toEqual({
-      in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"],
+      in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "CONDAMNATION_EN_APPEL"],
     });
   });
 });

@@ -487,6 +487,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
           "CONDAMNATION_DEFINITIVE",
           "CONDAMNATION_PREMIERE_INSTANCE",
           "APPEL_EN_COURS",
+          "CONDAMNATION_EN_APPEL",
           "POURVOI_EN_CASSATION",
         ],
       },

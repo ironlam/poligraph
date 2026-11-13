@@ -88,6 +88,7 @@ const ONGOING_STATUSES = [
 const CONVICTION_STATUSES = [
   "CONDAMNATION_PREMIERE_INSTANCE",
   "APPEL_EN_COURS",
+  "CONDAMNATION_EN_APPEL",
   "POURVOI_EN_CASSATION",
   "CONDAMNATION_DEFINITIVE",
 ] as const;
@@ -359,6 +360,7 @@ const STATUS_KEYWORDS: Record<AffairStatus, readonly string[]> = {
   PROCES_EN_COURS: ["proces", "juge", "audience", "comparait", "requis"],
   CONDAMNATION_PREMIERE_INSTANCE: ["condamn"],
   APPEL_EN_COURS: ["appel"],
+  CONDAMNATION_EN_APPEL: ["condamn"],
   POURVOI_EN_CASSATION: ["pourvoi", "cassation"],
   CONDAMNATION_DEFINITIVE: ["condamn", "definitif", "definitive"],
   RELAXE: ["relax"],
