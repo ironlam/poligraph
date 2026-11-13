@@ -1100,8 +1100,8 @@ enum AffairStatus {
   PROCES_EN_COURS
   CONDAMNATION_PREMIERE_INSTANCE
   APPEL_EN_COURS
-  // Convicted (or conviction confirmed) on appeal. Not final: a cassation appeal stays
-  // possible and no public register says whether one was filed (#1281).
+  // Convicted (or conviction confirmed) on appeal. No public register says whether a
+  // cassation appeal was filed, so the conviction is not shown as final (#1281).
   CONDAMNATION_EN_APPEL
   // Convicted on appeal with a cassation appeal filed: the conviction stands but is
   // not final. Sits between APPEL_EN_COURS and CONDAMNATION_DEFINITIVE (#511).

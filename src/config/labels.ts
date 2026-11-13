@@ -199,7 +199,7 @@ export const AFFAIR_STATUS_DESCRIPTIONS: Record<AffairStatus, string> = {
     "Le tribunal a prononcé une condamnation, mais un appel est encore possible.",
   APPEL_EN_COURS: "La décision du tribunal est contestée devant la cour d'appel.",
   CONDAMNATION_EN_APPEL:
-    "La cour d'appel a condamné. Un pourvoi en cassation reste possible : aucun registre public ne permet de savoir s'il a été formé.",
+    "La cour d'appel a condamné. Un pourvoi en cassation a pu être formé : aucun registre public ne permet de le savoir. En l'absence de pourvoi, la condamnation est définitive.",
   POURVOI_EN_CASSATION:
     "La cour d'appel a condamné, et un pourvoi en cassation a été formé. La condamnation n'est pas définitive : la Cour de cassation peut encore l'annuler.",
   CONDAMNATION_DEFINITIVE:

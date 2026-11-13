@@ -128,7 +128,7 @@ const NOTICES: Record<AffairNoticeVariant, { title: string; body: string; classN
   },
   en_appel: {
     title: "Décision non définitive",
-    body: "cette condamnation a été prononcée en appel. Un pourvoi en cassation reste possible : aucun registre public ne permet de savoir s'il a été formé.",
+    body: "cette condamnation a été prononcée en appel. Un pourvoi en cassation a pu être formé : aucun registre public ne permet de le savoir. En l'absence de pourvoi, la condamnation est définitive.",
     className:
       "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-200",
   },

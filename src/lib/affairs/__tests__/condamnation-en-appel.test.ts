@@ -73,9 +73,12 @@ describe("CONDAMNATION_EN_APPEL : le texte public n'affirme rien d'inconnu", () 
     expect(AFFAIR_STATUS_LABELS[STATUS].toLowerCase()).not.toContain("pourvoi");
   });
 
-  it("la description dit que le pourvoi est possible et non constaté", () => {
+  // Le délai de pourvoi est de 5 jours francs : « reste possible » serait faux dès la semaine
+  // suivante. On ne sait pas s'il a été formé, et sans pourvoi la condamnation est définitive.
+  it("la description dit que le pourvoi a pu être formé, sans l'affirmer ni le nier", () => {
     const text = AFFAIR_STATUS_DESCRIPTIONS[STATUS];
-    expect(text).toContain("reste possible");
+    expect(text).toContain("a pu être formé");
     expect(text).toContain("aucun registre public");
+    expect(text).not.toContain("reste possible");
   });
 });
