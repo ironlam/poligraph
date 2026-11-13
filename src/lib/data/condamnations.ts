@@ -43,7 +43,12 @@ export const CERTAINTY_STATUS: Record<"etabli" | "prononcee" | "tous", AffairSta
   // APPEL_EN_COURS is included because Poligraph convention is: appeal filed
   // AFTER first-instance conviction. Marginal "acquittal + prosecution appeal"
   // cases are rare and remain visible in the `sentence` field.
-  prononcee: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "POURVOI_EN_CASSATION"],
+  prononcee: [
+    "CONDAMNATION_PREMIERE_INSTANCE",
+    "APPEL_EN_COURS",
+    "CONDAMNATION_EN_APPEL",
+    "POURVOI_EN_CASSATION",
+  ],
   tous: "all",
 };
 
@@ -205,7 +210,7 @@ export async function getCondamnationsStatsByParty(
       pt.name AS "partyName",
       COUNT(DISTINCT p.id) AS "nSuivis",
       COUNT(DISTINCT CASE WHEN a.status = 'CONDAMNATION_DEFINITIVE' THEN a."politicianId" END) AS "nCondamnesDefinitifs",
-      COUNT(DISTINCT CASE WHEN a.status IN ('CONDAMNATION_PREMIERE_INSTANCE','APPEL_EN_COURS') THEN a."politicianId" END) AS "nCondamnesPrononces"
+      COUNT(DISTINCT CASE WHEN a.status IN ('CONDAMNATION_PREMIERE_INSTANCE','APPEL_EN_COURS','CONDAMNATION_EN_APPEL') THEN a."politicianId" END) AS "nCondamnesPrononces"
     FROM "Politician" p
     JOIN "Party" pt ON pt.id = p."currentPartyId"
     LEFT JOIN "Affair" a ON a."politicianId" = p.id

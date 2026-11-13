@@ -25,6 +25,7 @@ export type JudicialCounts = {
 const NON_DEFINITIVE: ReadonlySet<AffairStatus> = new Set<AffairStatus>([
   "CONDAMNATION_PREMIERE_INSTANCE",
   "APPEL_EN_COURS",
+  "CONDAMNATION_EN_APPEL",
   "POURVOI_EN_CASSATION",
 ]);
 

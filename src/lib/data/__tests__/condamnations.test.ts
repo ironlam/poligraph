@@ -113,6 +113,7 @@ describe("getCondamnations", () => {
     expect(args.where.status.in).toEqual([
       "CONDAMNATION_PREMIERE_INSTANCE",
       "APPEL_EN_COURS",
+      "CONDAMNATION_EN_APPEL",
       "POURVOI_EN_CASSATION",
     ]);
   });

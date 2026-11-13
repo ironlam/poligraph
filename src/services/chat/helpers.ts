@@ -104,6 +104,7 @@ export const AFFAIR_STATUS_LABELS: Record<string, string> = {
   RELAXE: "Relaxé(e)",
   ACQUITTEMENT: "Acquitté(e)",
   APPEL_EN_COURS: "Appel en cours",
+  CONDAMNATION_EN_APPEL: "Condamnation en appel, pourvoi possible",
   POURVOI_EN_CASSATION: "Condamnation non définitive, pourvoi en cassation en cours",
   PRESCRIPTION: "Prescrit",
   NON_LIEU: "Non-lieu",

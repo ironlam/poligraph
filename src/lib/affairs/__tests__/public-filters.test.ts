@@ -76,6 +76,7 @@ describe("public-filters — contrat des agrégats (RGPD art. 10)", () => {
     expect(statusesOf(getConvictionOnlyWhere()).sort()).toEqual([
       "APPEL_EN_COURS",
       "CONDAMNATION_DEFINITIVE",
+      "CONDAMNATION_EN_APPEL",
       "CONDAMNATION_PREMIERE_INSTANCE",
       "POURVOI_EN_CASSATION",
     ]);

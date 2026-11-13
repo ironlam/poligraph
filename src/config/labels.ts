@@ -100,6 +100,7 @@ export const JURISDICTION_ORDER_LABELS: Record<JurisdictionOrder, string> = {
  */
 const NON_PENAL_STATUS_LABELS: Partial<Record<AffairStatus, string>> = {
   CONDAMNATION_PREMIERE_INSTANCE: "Décision de première instance",
+  CONDAMNATION_EN_APPEL: "Décision rendue en appel",
   POURVOI_EN_CASSATION: "Décision non définitive, pourvoi en cassation en cours",
   CONDAMNATION_DEFINITIVE: "Décision définitive",
 };
@@ -107,6 +108,8 @@ const NON_PENAL_STATUS_LABELS: Partial<Record<AffairStatus, string>> = {
 const NON_PENAL_STATUS_DESCRIPTIONS: Partial<Record<AffairStatus, string>> = {
   CONDAMNATION_PREMIERE_INSTANCE:
     "Une juridiction non pénale a rendu sa décision, mais un recours est encore possible. Ce n'est pas une condamnation pénale.",
+  CONDAMNATION_EN_APPEL:
+    "Une juridiction non pénale a statué en appel. Un pourvoi a pu être formé : aucun registre public ne permet de le savoir. Ce n'est pas une condamnation pénale.",
   POURVOI_EN_CASSATION:
     "Une juridiction non pénale a statué en appel, et un pourvoi a été formé. Ce n'est pas une condamnation pénale.",
   CONDAMNATION_DEFINITIVE:
@@ -146,6 +149,7 @@ export const AFFAIR_STATUS_LABELS: Record<AffairStatus, string> = {
   PROCES_EN_COURS: "Procès en cours",
   CONDAMNATION_PREMIERE_INSTANCE: "Condamnation (1ère instance)",
   APPEL_EN_COURS: "Appel en cours",
+  CONDAMNATION_EN_APPEL: "Condamnation en appel",
   POURVOI_EN_CASSATION: "Condamnation non définitive, pourvoi en cassation en cours",
   CONDAMNATION_DEFINITIVE: "Condamnation définitive",
   RELAXE: "Relaxe",
@@ -167,6 +171,8 @@ export const AFFAIR_STATUS_COLORS: Record<AffairStatus, string> = {
   PROCES_EN_COURS: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
   CONDAMNATION_PREMIERE_INSTANCE: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   APPEL_EN_COURS: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
+  // Same shade as POURVOI_EN_CASSATION: convicted on appeal, not final.
+  CONDAMNATION_EN_APPEL: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   // Same shade as a first-instance conviction: two courts have convicted, but the
   // decision is not final, so it must not read as heavily as CONDAMNATION_DEFINITIVE.
   POURVOI_EN_CASSATION: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
@@ -195,6 +201,8 @@ export const AFFAIR_STATUS_DESCRIPTIONS: Record<AffairStatus, string> = {
   CONDAMNATION_PREMIERE_INSTANCE:
     "Le tribunal a prononcé une condamnation, mais un appel est encore possible.",
   APPEL_EN_COURS: "La décision du tribunal est contestée devant la cour d'appel.",
+  CONDAMNATION_EN_APPEL:
+    "La cour d'appel a condamné. Un pourvoi en cassation a pu être formé : aucun registre public ne permet de le savoir. En l'absence de pourvoi, la condamnation est définitive.",
   POURVOI_EN_CASSATION:
     "La cour d'appel a condamné, et un pourvoi en cassation a été formé. La condamnation n'est pas définitive : la Cour de cassation peut encore l'annuler.",
   CONDAMNATION_DEFINITIVE:
@@ -219,6 +227,7 @@ export const AFFAIR_STATUS_NEEDS_PRESUMPTION: Record<AffairStatus, boolean> = {
   PROCES_EN_COURS: true,
   CONDAMNATION_PREMIERE_INSTANCE: true, // Can still appeal
   APPEL_EN_COURS: true,
+  CONDAMNATION_EN_APPEL: true, // Cassation appeal still possible
   POURVOI_EN_CASSATION: true, // Cassation can still quash the conviction
   CONDAMNATION_DEFINITIVE: false,
   RELAXE: false,

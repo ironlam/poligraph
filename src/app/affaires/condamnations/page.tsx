@@ -59,7 +59,9 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
       where: {
         ...getConvictionOnlyWhere(),
         politician: PUBLIC_POLITICIAN_WHERE,
-        status: { in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"] },
+        status: {
+          in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "CONDAMNATION_EN_APPEL"],
+        },
       },
     }),
   ]);

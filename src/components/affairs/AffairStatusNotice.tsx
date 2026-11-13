@@ -18,6 +18,7 @@ export type AffairNoticeVariant =
   | "no_inquiry"
   | "non_definitive"
   | "pourvoi"
+  | "en_appel"
   | "definitive"
   | "favorable"
   | "prescription"
@@ -35,6 +36,7 @@ const FAVORABLE_STATUSES: readonly AffairStatus[] = [
 const NON_DEFINITIVE_STATUSES: readonly AffairStatus[] = [
   "CONDAMNATION_PREMIERE_INSTANCE",
   "APPEL_EN_COURS",
+  "CONDAMNATION_EN_APPEL",
 ];
 
 // Une plainte ou un signalement seuls : aucune procédure n'est « en cours » tant que rien n'est
@@ -72,6 +74,8 @@ export function getAffairNoticeVariant(
   // Checked before the generic non-definitive wording: "en cours d'appel" would be
   // wrong here, the appeal is over and it is cassation that is pending (#511).
   if (status === "POURVOI_EN_CASSATION") return "pourvoi";
+  // Avant le texte générique : « en cours d'appel » serait faux, l'appel est jugé.
+  if (status === "CONDAMNATION_EN_APPEL") return "en_appel";
   if (status === "INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN") return "instruction_close";
   if (NON_DEFINITIVE_STATUSES.includes(status)) return "non_definitive";
   if (NO_INQUIRY_STATUSES.includes(status)) return "no_inquiry";
@@ -119,6 +123,12 @@ const NOTICES: Record<AffairNoticeVariant, { title: string; body: string; classN
   pourvoi: {
     title: "Décision non définitive",
     body: "cette condamnation a été prononcée en appel et fait l'objet d'un pourvoi en cassation. La Cour de cassation peut encore l'annuler.",
+    className:
+      "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-200",
+  },
+  en_appel: {
+    title: "Décision non définitive",
+    body: "cette condamnation a été prononcée en appel. Un pourvoi en cassation a pu être formé : aucun registre public ne permet de le savoir. En l'absence de pourvoi, la condamnation est définitive.",
     className:
       "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-200",
   },
