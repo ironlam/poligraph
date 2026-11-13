@@ -362,7 +362,11 @@ async function getFilterCounts() {
   cacheTag("filter-counts");
   cacheLife("synced");
 
-  // Single SQL query replaces 9 parallel Prisma count queries (1 connection instead of 9)
+  // One round trip, and every count starts from the small side: the current mandates, the affairs,
+  // the party roles. The earlier form probed nine EXISTS per published politician; with 36 650
+  // profiles (mostly mayors) that was a million buffer reads and about a second, which kept coming
+  // back in Sentry as a slow query on /politiques. Same results, about 100 ms (EXPLAIN ANALYZE in
+  // production, 2026-11-13). A count is over published politicians only, hence the joins.
   const [counts] = await db.$queryRaw<
     [
       {
@@ -379,73 +383,43 @@ async function getFilterCounts() {
     ]
   >`
     SELECT
-      COUNT(*) AS total,
-      -- Politicians with a definitive probity conviction (same predicate as the badge)
-      COUNT(DISTINCT p.id) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM "Affair" a
-          WHERE a."politicianId" = p.id
-            AND ${getProbityConvictionBadgeSql("a")}
-        )
+      (SELECT COUNT(*) FROM "Politician" p WHERE p."publicationStatus" = 'PUBLISHED') AS total,
+      (
+        SELECT COUNT(DISTINCT a."politicianId") FROM "Affair" a
+        JOIN "Politician" p ON p.id = a."politicianId"
+        WHERE p."publicationStatus" = 'PUBLISHED' AND ${getProbityConvictionBadgeSql("a")}
       ) AS with_conviction,
-      -- Politicians with a definitive illegal political financing conviction (same predicate as the badge)
-      COUNT(DISTINCT p.id) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM "Affair" a
-          WHERE a."politicianId" = p.id
-            AND ${getPoliticalFinancingBadgeSql("a")}
-        )
+      (
+        SELECT COUNT(DISTINCT a."politicianId") FROM "Affair" a
+        JOIN "Politician" p ON p.id = a."politicianId"
+        WHERE p."publicationStatus" = 'PUBLISHED' AND ${getPoliticalFinancingBadgeSql("a")}
       ) AS with_financing,
-      -- Députés
-      COUNT(DISTINCT p.id) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM "Mandate" m
-          WHERE m."politicianId" = p.id AND m.type = 'DEPUTE' AND m."isCurrent" = true
-        )
-      ) AS deputes,
-      -- Sénateurs
-      COUNT(DISTINCT p.id) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM "Mandate" m
-          WHERE m."politicianId" = p.id AND m.type = 'SENATEUR' AND m."isCurrent" = true
-        )
-      ) AS senateurs,
-      -- Eurodéputés
-      COUNT(DISTINCT p.id) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM "Mandate" m
-          WHERE m."politicianId" = p.id AND m.type = 'DEPUTE_EUROPEEN' AND m."isCurrent" = true
-        )
-      ) AS eurodeputes,
-      -- Gouvernement
-      COUNT(DISTINCT p.id) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM "Mandate" m
-          WHERE m."politicianId" = p.id
-            AND m.type IN ('MINISTRE', 'PREMIER_MINISTRE', 'MINISTRE_DELEGUE', 'SECRETAIRE_ETAT')
-            AND m."isCurrent" = true
-        )
-      ) AS gouvernement,
-      -- Dirigeants (PRESIDENT_PARTI + significant party roles)
-      COUNT(DISTINCT p.id) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM "Mandate" m
-          WHERE m."politicianId" = p.id AND m.type = 'PRESIDENT_PARTI' AND m."isCurrent" = true
-        )
-        OR EXISTS (
-          SELECT 1 FROM "PartyMembership" pm
-          WHERE pm."politicianId" = p.id AND pm."endDate" IS NULL AND pm.role != 'MEMBRE'
-        )
+      cm.deputes, cm.senateurs, cm.eurodeputes, cm.gouvernement,
+      (
+        SELECT COUNT(*) FROM (
+          SELECT m."politicianId" FROM "Mandate" m
+          WHERE m.type = 'PRESIDENT_PARTI' AND m."isCurrent" = true
+          UNION
+          SELECT pm."politicianId" FROM "PartyMembership" pm
+          WHERE pm."endDate" IS NULL AND pm.role != 'MEMBRE'
+        ) leaders
+        JOIN "Politician" p ON p.id = leaders."politicianId"
+        WHERE p."publicationStatus" = 'PUBLISHED'
       ) AS dirigeants,
-      -- Maires
-      COUNT(DISTINCT p.id) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM "Mandate" m
-          WHERE m."politicianId" = p.id AND m.type = 'MAIRE' AND m."isCurrent" = true
-        )
-      ) AS maires
-    FROM "Politician" p
-    WHERE p."publicationStatus" = 'PUBLISHED'
+      cm.maires
+    FROM (
+      SELECT
+        COUNT(DISTINCT m."politicianId") FILTER (WHERE m.type = 'DEPUTE') AS deputes,
+        COUNT(DISTINCT m."politicianId") FILTER (WHERE m.type = 'SENATEUR') AS senateurs,
+        COUNT(DISTINCT m."politicianId") FILTER (WHERE m.type = 'DEPUTE_EUROPEEN') AS eurodeputes,
+        COUNT(DISTINCT m."politicianId") FILTER (
+          WHERE m.type IN ('MINISTRE', 'PREMIER_MINISTRE', 'MINISTRE_DELEGUE', 'SECRETAIRE_ETAT')
+        ) AS gouvernement,
+        COUNT(DISTINCT m."politicianId") FILTER (WHERE m.type = 'MAIRE') AS maires
+      FROM "Mandate" m
+      JOIN "Politician" p ON p.id = m."politicianId"
+      WHERE m."isCurrent" = true AND p."publicationStatus" = 'PUBLISHED'
+    ) cm
   `;
 
   return {
