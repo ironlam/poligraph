@@ -5,7 +5,7 @@ import {
   PRESIDENTIAL_ELECTION_ID_TAG,
   PRESIDENTIELLE_2027_SLUG,
 } from "@/lib/presidentielle/themes";
-import { ALL_TAGS } from "@/lib/cache-tags";
+import { ALL_TAGS, POLITICIAN_VOTES_TAG } from "@/lib/cache-tags";
 import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 
 // ─── Cache tiers for API responses ────────────────────────────────
@@ -197,6 +197,7 @@ export function invalidateEntity(
         revalidateTag(`politician:${slug}`, DEFAULT_PROFILE);
       }
       revalidateTag("politicians", DEFAULT_PROFILE);
+      revalidateTag(POLITICIAN_VOTES_TAG, DEFAULT_PROFILE);
       break;
 
     case "party":
@@ -226,6 +227,8 @@ export function invalidateEntity(
         revalidatePath("/api/deputies/by-department", "layout");
         revalidatePath("/api/deputies/by-commune", "layout");
         revalidateTag("politicians", DEFAULT_PROFILE);
+        // The vote readers of the profile read deputy mandates and do not carry "politicians".
+        revalidateTag(POLITICIAN_VOTES_TAG, DEFAULT_PROFILE);
       }
       // No-listings path: nothing to invalidate beyond the audit log row.
       // Mandate URL/title/dates are not surfaced on any cached listing.

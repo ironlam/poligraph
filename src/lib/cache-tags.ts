@@ -46,6 +46,12 @@ export const FROZEN_TAGS = ["elections-municipales-2026"] as const;
 // "scrutin-analysis" is the debate analysis of the scrutin page (`getScrutinAnalysis`), its only
 // reader. The daily sync regenerates a few analyses per run: purging "votes" for them restaled every
 // profile, listing and comparison of the site, which is where most ISR writes came from.
+// "politician-votes" is the vote record of one politician on the profile (counts per legislature,
+// participation, parliamentary path). Those readers depend on votes and on deputy mandates only,
+// so they carry "votes" and this tag INSTEAD of "politicians": the daily sync purges "politicians"
+// three times a day for prominence and publication changes, which re-ran the heaviest queries of
+// the profile for no change in what they read. Purged with a mandate or a politician edit
+// (`invalidateEntity`); a full purge reaches them through "votes".
 export const NARROW_TAGS = [
   "votes-key",
   "homepage",
@@ -54,7 +60,10 @@ export const NARROW_TAGS = [
   "historical-group-positions",
   "changelog",
   "scrutin-analysis",
+  "politician-votes",
 ] as const;
+
+export const POLITICIAN_VOTES_TAG = "politician-votes" satisfies (typeof NARROW_TAGS)[number];
 
 /** Per-scrutin tag of the debate analysis, so one regenerated analysis restales one page. */
 export function scrutinAnalysisTag(scrutinId: string): string {

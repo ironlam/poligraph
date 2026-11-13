@@ -1,4 +1,5 @@
 import { cacheLife, cacheTag } from "next/cache";
+import { POLITICIAN_VOTES_TAG } from "@/lib/cache-tags";
 import { db } from "@/lib/db";
 import {
   resolveLegislaturePerimeter,
@@ -62,7 +63,7 @@ export async function getPoliticianAnLegislatures(
   politicianId: string
 ): Promise<AnLegislatureOption[]> {
   "use cache";
-  cacheTag("votes", "politicians");
+  cacheTag("votes", POLITICIAN_VOTES_TAG);
   cacheLife("synced");
 
   const windows = await getAnLegislatureWindows();
@@ -94,7 +95,7 @@ export async function getPoliticianLegislatureVotes(
   legislature: number
 ): Promise<LegislatureVotes> {
   "use cache";
-  cacheTag("votes", "politicians");
+  cacheTag("votes", POLITICIAN_VOTES_TAG);
   cacheLife("synced");
 
   const scrutinScope = { legislature, chamber: "AN" as const };

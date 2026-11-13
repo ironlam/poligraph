@@ -1,5 +1,6 @@
 import { isGroupStatsPublishable } from "@/lib/votes/group-attribution";
 import { cacheTag, cacheLife } from "next/cache";
+import { POLITICIAN_VOTES_TAG } from "@/lib/cache-tags";
 import { db } from "@/lib/db";
 import { Chamber, MandateType } from "@/generated/prisma";
 import type { ThemeCategory } from "@/generated/prisma";
@@ -343,7 +344,7 @@ export async function getPoliticianVotingStats(
   // it is computed once per politician per window instead of on every page view
   // (this groupBy was ~15% of total DB time). Invalidated by the votes/politicians
   // cache tags after a sync.
-  cacheTag("votes", "politicians");
+  cacheTag("votes", POLITICIAN_VOTES_TAG);
   cacheLife("synced");
 
   return computePoliticianVotingStats(politicianId, mandateType);
@@ -490,7 +491,7 @@ export async function getPoliticianVoteTabCounts(
   politicianId: string
 ): Promise<{ totalAll: number; amendmentCount: number; nonAmendmentCount: number }> {
   "use cache";
-  cacheTag("votes", "politicians");
+  cacheTag("votes", POLITICIAN_VOTES_TAG);
   cacheLife("synced");
 
   // Filters the denormalized Vote.scrutinType directly (Issue #377) to drop the
@@ -515,7 +516,7 @@ export async function getPoliticianVoteTabCounts(
  */
 export async function getPoliticianVoteChamberCoverage(politicianId: string): Promise<Chamber[]> {
   "use cache";
-  cacheTag("votes", "politicians");
+  cacheTag("votes", POLITICIAN_VOTES_TAG);
   cacheLife("synced");
 
   const rows = await db.vote.groupBy({
