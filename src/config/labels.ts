@@ -100,6 +100,7 @@ export const JURISDICTION_ORDER_LABELS: Record<JurisdictionOrder, string> = {
  */
 const NON_PENAL_STATUS_LABELS: Partial<Record<AffairStatus, string>> = {
   CONDAMNATION_PREMIERE_INSTANCE: "Décision de première instance",
+  CONDAMNATION_EN_APPEL: "Décision rendue en appel",
   POURVOI_EN_CASSATION: "Décision non définitive, pourvoi en cassation en cours",
   CONDAMNATION_DEFINITIVE: "Décision définitive",
 };
@@ -107,6 +108,8 @@ const NON_PENAL_STATUS_LABELS: Partial<Record<AffairStatus, string>> = {
 const NON_PENAL_STATUS_DESCRIPTIONS: Partial<Record<AffairStatus, string>> = {
   CONDAMNATION_PREMIERE_INSTANCE:
     "Une juridiction non pénale a rendu sa décision, mais un recours est encore possible. Ce n'est pas une condamnation pénale.",
+  CONDAMNATION_EN_APPEL:
+    "Une juridiction non pénale a statué en appel. Un pourvoi a pu être formé : aucun registre public ne permet de le savoir. Ce n'est pas une condamnation pénale.",
   POURVOI_EN_CASSATION:
     "Une juridiction non pénale a statué en appel, et un pourvoi a été formé. Ce n'est pas une condamnation pénale.",
   CONDAMNATION_DEFINITIVE:

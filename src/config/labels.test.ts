@@ -17,6 +17,7 @@ import {
   FACTCHECK_ALLOWED_SOURCES,
   canonicalizeFactCheckSource,
   getAffairStatusLabel,
+  getAffairStatusDescription,
 } from "./labels";
 
 describe("AFFAIR_STATUS_LABELS", () => {
@@ -301,6 +302,16 @@ describe("getAffairStatusLabel", () => {
       expect(getAffairStatusLabel("CONDAMNATION_DEFINITIVE", order)).toBe("Décision définitive");
       expect(getAffairStatusLabel("CONDAMNATION_PREMIERE_INSTANCE", order)).not.toMatch(
         /condamnation/i
+      );
+    }
+  });
+
+  it("parle de décision pour un arrêt d'appel hors du pénal", () => {
+    expect(getAffairStatusLabel("CONDAMNATION_EN_APPEL")).toBe("Condamnation en appel");
+    for (const order of ["CIVIL", "ADMINISTRATIF", "FINANCIER"] as const) {
+      expect(getAffairStatusLabel("CONDAMNATION_EN_APPEL", order)).toBe("Décision rendue en appel");
+      expect(getAffairStatusDescription("CONDAMNATION_EN_APPEL", order)).toMatch(
+        /Ce n'est pas une condamnation pénale/
       );
     }
   });
