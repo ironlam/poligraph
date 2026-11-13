@@ -28,6 +28,28 @@ interface RunPreflightOptions {
    * safe default is identical on both transports.
    */
   moderationResults?: Map<string, ModerationResult>;
+  /**
+   * Build the report without any AI opinion: every draft is NEEDS_REVIEW, and the
+   * duplicate and attribution checks still run. For a provider known to be down
+   * (no credit), where calling it would only log one failure per draft.
+   */
+  skipModeration?: boolean;
+}
+
+/** What a draft gets when no AI opinion is available: the safe default, never PUBLISH. */
+function unmoderated(reasoning: string): ModerationResult {
+  return {
+    recommendation: "NEEDS_REVIEW",
+    issues: [],
+    confidence: 0,
+    reasoning,
+    correctedTitle: null,
+    correctedDescription: null,
+    correctedStatus: null,
+    correctedCategory: null,
+    correctedInvolvement: null,
+    model: "fallback",
+  };
 }
 
 /**
@@ -147,7 +169,9 @@ export async function runPreflight(
     let moderation: ModerationResult;
     const precomputed = options.moderationResults?.get(draft.id);
     try {
-      if (options.moderationResults) {
+      if (options.skipModeration) {
+        moderation = unmoderated("Modération IA désactivée ; relecture manuelle requise.");
+      } else if (options.moderationResults) {
         if (!precomputed) throw new Error("absent des résultats de modération fournis");
         moderation = precomputed;
       } else {
@@ -176,18 +200,7 @@ export async function runPreflight(
       }
     } catch (err) {
       console.error(`[preflight] moderateAffair failed for draft ${draft.id}:`, err);
-      moderation = {
-        recommendation: "NEEDS_REVIEW",
-        issues: [],
-        confidence: 0,
-        reasoning: "Moderation failed; manual review required.",
-        correctedTitle: null,
-        correctedDescription: null,
-        correctedStatus: null,
-        correctedCategory: null,
-        correctedInvolvement: null,
-        model: "fallback",
-      };
+      moderation = unmoderated("Moderation failed; manual review required.");
     }
 
     const attribution = auditAttribution({
@@ -224,7 +237,7 @@ export async function runPreflight(
 
     // Pas de temporisation quand les résultats sont déjà là : le débit de
     // l'API n'est plus en jeu.
-    if (!options.moderationResults && i < drafts.length - 1) {
+    if (!options.moderationResults && !options.skipModeration && i < drafts.length - 1) {
       await sleep(getAIRateLimitMs());
     }
   }

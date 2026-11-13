@@ -203,4 +203,45 @@ describe("runPreflight", () => {
     expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
   });
+
+  it("skipModeration : aucun appel au modèle, aucun bruit, chaque brouillon en NEEDS_REVIEW", async () => {
+    // With the provider out of credit, the nightly run logged one failure per draft for a
+    // report whose AI column could only ever be the safe default anyway.
+    (db.affair.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "a1",
+        title: "X",
+        description: "",
+        publicationStatus: "DRAFT",
+        createdAt: new Date(),
+        category: "AUTRE",
+        status: "INSTRUCTION",
+        involvement: "DIRECT",
+        factsDate: null,
+        startDate: null,
+        verdictDate: null,
+        court: null,
+        sentence: null,
+        politician: { id: "p1", slug: "x", fullName: "X Y", normalizedLastName: "y" },
+        sources: [],
+        events: [],
+      },
+    ]);
+    (db.politician.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "p1", fullName: "X Y", normalizedLastName: "y" },
+    ]);
+    (findPotentialDuplicates as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const report = await runPreflight({ source: "cron", skipModeration: true });
+
+    expect(moderateAffair).not.toHaveBeenCalled();
+    expect(errSpy).not.toHaveBeenCalled();
+    expect(report.drafts).toHaveLength(1);
+    expect(report.drafts[0]!.preflight.moderationRecommendation).toBe("NEEDS_REVIEW");
+    expect(report.stats.autoPublishCandidates).toBe(0);
+    // The checks that need no model still run.
+    expect(findPotentialDuplicates).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
 });

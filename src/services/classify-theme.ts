@@ -2,14 +2,16 @@
  * Theme classification for legislative dossiers and scrutins.
  *
  * Taxonomic classification over existing text (not content generation) into one
- * of 13 controlled theme values. Anthropic (Claude Haiku, tool-use) is the
- * primary provider; when it fails (quota/rate-limit/server/network), the call
- * falls back to Mistral so a single-provider outage doesn't break the daily sync.
+ * of 13 controlled theme values. Mistral is the primary provider; when it fails
+ * (quota/rate-limit/server/network), the call falls back to Anthropic (Claude
+ * Haiku, tool-use) so a single-provider outage doesn't break the daily sync.
  * The returned theme is always validated against THEME_VALUES, so a bad answer
  * from either provider degrades to null rather than corrupting data.
  *
- * NOTE: this is the only call site using a Mistral fallback for now. A shadow
- * eval on a sample is planned before deciding whether Mistral becomes primary.
+ * Mistral went first on 2026-11-13: the Anthropic account had been out of credit
+ * for months, so every classification paid a failed Anthropic call and a warning
+ * before Mistral answered anyway. The shadow eval comparing both providers on a
+ * sample was never run.
  */
 
 import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
@@ -93,8 +95,8 @@ function normalizeTheme(
   return null;
 }
 
-/** Primary path: Claude Haiku with a forced tool call. Throws on API failure or
- *  an empty (no tool_use) response, so the caller can fall back. */
+/** Fallback path: Claude Haiku with a forced tool call. Throws on API failure or
+ *  an empty (no tool_use) response. */
 async function classifyViaAnthropic(input: string): Promise<string> {
   const prompt = `Tu es un classificateur thématique pour des textes législatifs français. Classe le texte suivant dans une catégorie en utilisant l'outil classify_theme.
 
@@ -135,7 +137,7 @@ ${CATEGORY_GUIDE}`;
   return toolInput.theme;
 }
 
-/** Fallback path: Mistral JSON mode. Returns the raw theme string (validated by
+/** Primary path: Mistral JSON mode. Returns the raw theme string (validated by
  *  the caller). Throws on API/parse failure.
  *  TODO: upgrade to response_format json_schema with a strict enum on
  *  THEME_VALUES once verified against mistral-small-latest. json_object is used
@@ -161,7 +163,7 @@ Réponds UNIQUEMENT avec un objet JSON de la forme {"theme": "<CATEGORIE>"} où 
 
 /**
  * Classify a legislative text or scrutin into a theme category.
- * Anthropic primary, Mistral fallback. Returns null when neither produces a
+ * Mistral primary, Anthropic fallback. Returns null when neither produces a
  * valid theme value; throws only when BOTH providers fail outright.
  */
 export async function classifyTheme(
@@ -171,30 +173,29 @@ export async function classifyTheme(
 ): Promise<ThemeCategoryValue | null> {
   const input = buildInput(title, summary, context);
 
-  let anthropicError: string;
-  try {
-    const raw = await classifyViaAnthropic(input);
-    return normalizeTheme(raw, "anthropic");
-  } catch (err) {
-    anthropicError = err instanceof Error ? err.message : String(err);
-    // Fall back on ANY Anthropic error. Detecting provider/quota/rate-limit vs.
-    // a genuine bad request precisely is brittle and the output is validated
-    // (degrades to null), so for this single, low-stakes classifier we accept a
-    // broad fallback rather than masking an outage. The error is logged loudly.
-    console.warn(
-      `[classify-theme] primary=anthropic failed (${anthropicError}); falling back to provider=mistral`
-    );
-  }
-
+  let mistralError: string;
   try {
     const raw = await classifyViaMistral(input);
     return normalizeTheme(raw, "mistral");
   } catch (err) {
-    const mistralError = err instanceof Error ? err.message : String(err);
-    // Both providers failed: surface an explicit error (never swallow silently),
-    // including the missing-MISTRAL_API_KEY case which throws here.
+    mistralError = err instanceof Error ? err.message : String(err);
+    // Fall back on ANY Mistral error, the missing-MISTRAL_API_KEY case included.
+    // Telling a quota or rate limit from a genuine bad request precisely is
+    // brittle and the output is validated (degrades to null), so for this single,
+    // low-stakes classifier a broad fallback beats masking an outage. Logged loudly.
+    console.warn(
+      `[classify-theme] primary=mistral failed (${mistralError}); falling back to provider=anthropic`
+    );
+  }
+
+  try {
+    const raw = await classifyViaAnthropic(input);
+    return normalizeTheme(raw, "anthropic");
+  } catch (err) {
+    const anthropicError = err instanceof Error ? err.message : String(err);
+    // Both providers failed: surface an explicit error (never swallow silently).
     throw new Error(
-      `Theme classification failed — anthropic: ${anthropicError}; mistral fallback: ${mistralError}`
+      `Theme classification failed — mistral: ${mistralError}; anthropic fallback: ${anthropicError}`
     );
   }
 }
