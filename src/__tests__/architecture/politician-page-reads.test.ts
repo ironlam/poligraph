@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { createFileSystemSourceHost } from "./mcp-public-surface-graph";
@@ -121,9 +121,8 @@ describe("fiche politicien : lecture du document précalculé", () => {
   });
 
   it("n'expose plus les lectures de fiche remplacées par le document", () => {
-    const source = withoutComments(read("src/lib/data/politicians.ts"));
-    expect(source).not.toMatch(/\bgetPoliticianIdentity\b/);
-    expect(source).not.toMatch(/\bgetPoliticianDossier\b/);
+    // The module that held them is gone altogether: its last export had no caller left.
+    expect(existsSync("src/lib/data/politicians.ts")).toBe(false);
   });
 
   it("les pages candidat lisent le document de fiche", () => {
