@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { permanentRedirect, redirect } from "next/navigation";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 
 interface PageProps {
@@ -14,7 +14,9 @@ export default async function RecapIndexPage({ searchParams }: PageProps) {
     const parsed = new Date(params.week + "T00:00:00Z");
     if (!Number.isNaN(parsed.getTime())) {
       const monday = getWeekStart(parsed);
-      redirect(`/recap/${getISOWeekString(monday)}`);
+      // 308: the old `?week=` URL moved for good. A temporary redirect tells Google to keep it
+      // in the index instead of consolidating on the archive route.
+      permanentRedirect(`/recap/${getISOWeekString(monday)}`);
     }
   }
 
