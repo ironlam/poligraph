@@ -197,23 +197,33 @@ export const getGroupExposure = cache(
  */
 export const getSenatorialesResults = cache(
   async function getSenatorialesResults(): Promise<SenatorialesResultsSummary> {
+    // Filtered on the election id, never on `election: { slug }`: with the join, the implicit
+    // `ORDER BY id LIMIT 200` made Postgres walk the primary key of the whole table (1.3 M rows)
+    // looking for 200 rows of an election that only has 178, 20 to 40 s per page. On the id it
+    // reads the `electionId` index, under a millisecond. The page already loads the election, and
+    // `cache()` shares that read.
+    const election = await getSenatorialesElection();
+    const electionId = election?.id ?? null;
+
     const [rows, snapshot] = await Promise.all([
-      db.candidacy.findMany({
-        where: { election: { slug: SENATORIALES_2026_SLUG }, isElected: true },
-        // 178 seats at stake; a literal, so the Candidacy read-bounds guard can prove it.
-        take: 200,
-        select: {
-          candidateName: true,
-          constituencyCode: true,
-          constituencyName: true,
-          partyLabel: true,
-          round2Votes: true,
-          politicianId: true,
-          updatedAt: true,
-          politician: { select: { slug: true, publicationStatus: true } },
-          candidate: { select: { gender: true } },
-        },
-      }),
+      electionId === null
+        ? []
+        : db.candidacy.findMany({
+            where: { electionId, isElected: true },
+            // 178 seats at stake; a literal, so the Candidacy read-bounds guard can prove it.
+            take: 200,
+            select: {
+              candidateName: true,
+              constituencyCode: true,
+              constituencyName: true,
+              partyLabel: true,
+              round2Votes: true,
+              politicianId: true,
+              updatedAt: true,
+              politician: { select: { slug: true, publicationStatus: true } },
+              candidate: { select: { gender: true } },
+            },
+          }),
       db.statsSnapshot.findUnique({
         where: { key: SENATE_OUTGOING_COMPOSITION_KEY },
         select: { data: true },
