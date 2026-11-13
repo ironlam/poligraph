@@ -29,7 +29,6 @@ const EDITORIAL_FIELDS = ["court", "verdictDate", "caseNumber"] as const;
  * writes the same field names onto a different table, which is the point.
  */
 const WRITE_SURFACES = [
-  "src/services/affairs/index.ts",
   "src/services/affairs/create-draft.ts",
   "src/app/api/admin/affaires/route.ts",
   "src/app/api/admin/affaires/[id]/route.ts",

@@ -124,7 +124,6 @@ src/
 │
 ├── lib/                    # Utilitaires et couche données
 │   ├── data/               #   Data layer (12 modules cachés)
-│   │   ├── politicians.ts  #     getPolitician, getPoliticianForComparison
 │   │   ├── affairs.ts      #     getAffairs, getAffairsFiltered
 │   │   ├── parties.ts      #     getParty, getPartyLeadership
 │   │   ├── declarations.ts #     getDeclarations, getDeclarationStats
