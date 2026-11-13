@@ -26,60 +26,60 @@ const mistralJson = (obj: unknown): MistralResponse => ({
   ],
 });
 
-describe("classifyTheme — Mistral fallback", () => {
+describe("classifyTheme, Mistral en premier", () => {
   beforeEach(() => {
     vi.mocked(callAnthropic).mockReset();
     vi.mocked(callMistral).mockReset();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
-  it("Anthropic OK -> returns theme, Mistral NOT called", async () => {
-    vi.mocked(callAnthropic).mockResolvedValue(anthropicTool("SANTE"));
+  it("Mistral OK -> returns theme, Anthropic NOT called", async () => {
+    // The Anthropic account runs dry for months at a time: calling it first cost a failed
+    // request and a warning on every single classification.
+    vi.mocked(callMistral).mockResolvedValue(mistralJson({ theme: "SANTE" }));
     const res = await classifyTheme("Loi hôpital", "réforme des urgences");
     expect(res).toBe("SANTE");
-    expect(callMistral).not.toHaveBeenCalled();
+    expect(callAnthropic).not.toHaveBeenCalled();
   });
 
-  it("Anthropic throws (quota / rate-limit) -> Mistral called", async () => {
-    vi.mocked(callAnthropic).mockRejectedValue(
-      new Error("Anthropic API error 429: rate_limit_error")
-    );
-    vi.mocked(callMistral).mockResolvedValue(mistralJson({ theme: "TRANSPORTS" }));
-    const res = await classifyTheme("Loi mobilités");
-    expect(res).toBe("TRANSPORTS");
-    expect(callMistral).toHaveBeenCalledTimes(1);
-  });
-
-  it("Mistral fallback returns an alias -> normalized", async () => {
-    vi.mocked(callAnthropic).mockRejectedValue(
-      new Error("Anthropic API error 400: credit balance too low")
-    );
+  it("Mistral returns an alias -> normalized", async () => {
     vi.mocked(callMistral).mockResolvedValue(mistralJson({ theme: "CULTURE_EDUCATION" }));
     const res = await classifyTheme("Loi école");
     expect(res).toBe("EDUCATION_CULTURE");
   });
 
-  it("Mistral fallback returns an invalid theme -> null (not thrown)", async () => {
-    vi.mocked(callAnthropic).mockRejectedValue(new Error("Anthropic API error 500"));
+  it("Mistral returns an invalid theme -> null (not thrown), no second provider", async () => {
     vi.mocked(callMistral).mockResolvedValue(mistralJson({ theme: "PAS_UN_THEME" }));
     const res = await classifyTheme("Texte ambigu");
     expect(res).toBeNull();
+    expect(callAnthropic).not.toHaveBeenCalled();
   });
 
-  it("both providers throw -> error propagated (not swallowed)", async () => {
-    vi.mocked(callAnthropic).mockRejectedValue(new Error("Anthropic API error 429"));
-    vi.mocked(callMistral).mockRejectedValue(
-      new Error("Mistral API error 503: service unavailable")
-    );
-    await expect(classifyTheme("X")).rejects.toThrow(/Theme classification failed/);
+  it("Mistral throws (quota / rate-limit) -> Anthropic called", async () => {
+    vi.mocked(callMistral).mockRejectedValue(new Error("Mistral API error 429: rate limit"));
+    vi.mocked(callAnthropic).mockResolvedValue(anthropicTool("TRANSPORTS"));
+    const res = await classifyTheme("Loi mobilités");
+    expect(res).toBe("TRANSPORTS");
+    expect(callAnthropic).toHaveBeenCalledTimes(1);
   });
 
-  it("MISTRAL_API_KEY missing + Anthropic throws -> explicit error, not silent null", async () => {
-    vi.mocked(callAnthropic).mockRejectedValue(new Error("Anthropic API error 429"));
+  it("MISTRAL_API_KEY missing -> Anthropic still answers", async () => {
     vi.mocked(callMistral).mockRejectedValue(
       new Error("MISTRAL_API_KEY environment variable is not set")
     );
+    vi.mocked(callAnthropic).mockResolvedValue(anthropicTool("SANTE"));
+    expect(await classifyTheme("Loi hôpital")).toBe("SANTE");
+  });
+
+  it("both providers throw -> error propagated with both causes (not swallowed)", async () => {
+    vi.mocked(callMistral).mockRejectedValue(
+      new Error("Mistral API error 503: service unavailable")
+    );
+    vi.mocked(callAnthropic).mockRejectedValue(
+      new Error("Anthropic API error 400: credit balance too low")
+    );
     await expect(classifyTheme("X")).rejects.toThrow(
-      /MISTRAL_API_KEY environment variable is not set/
+      /Theme classification failed.*service unavailable.*credit balance too low/
     );
   });
 });
