@@ -43,7 +43,7 @@ export async function getLatestDossiers(limit = 6) {
   cacheTag("legislation");
   cacheLife("synced");
 
-  return db.legislativeDossier.findMany({
+  const dossiers = await db.legislativeDossier.findMany({
     orderBy: { updatedAt: "desc" },
     take: limit,
     select: {
@@ -59,9 +59,23 @@ export async function getLatestDossiers(limit = 6) {
       summary: true,
       filingDate: true,
       adoptionDate: true,
-      _count: { select: { amendments: true } },
     },
   });
+
+  // Counted apart, on these dossiers only. A `_count` in the select above makes Prisma join an
+  // aggregate of the WHOLE Amendment table before keeping a handful of rows: several seconds on
+  // /parlement (Sentry POLIGRAPH-3Y). Here the count reads the `dossierId` index for six ids.
+  const counts = await db.amendment.groupBy({
+    by: ["dossierId"],
+    where: { dossierId: { in: dossiers.map((d) => d.id) } },
+    _count: { _all: true },
+  });
+  const amendmentsByDossier = new Map(counts.map((c) => [c.dossierId, c._count._all]));
+
+  return dossiers.map((d) => ({
+    ...d,
+    _count: { amendments: amendmentsByDossier.get(d.id) ?? 0 },
+  }));
 }
 
 // ─── Queries ─────────────────────────────────────────
