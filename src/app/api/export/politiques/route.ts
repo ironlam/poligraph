@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { parsePagination } from "@/lib/api/pagination";
+import { readInPages } from "@/lib/api/paged-read";
 import { getExportProminenceScores } from "@/services/sync/prominence";
 
 export const dynamic = "force-dynamic";
@@ -110,46 +111,54 @@ export const GET = withPublicRoute(async (request) => {
     maxLimit: EXPORT_CAP,
   });
 
-  const politicians = await db.politician.findMany({
-    take: limit,
-    where,
-    include: {
-      currentParty: {
-        select: {
-          publicId: true,
-          slug: true,
-          shortName: true,
-          name: true,
-          politicalPosition: true,
+  // Paged: the nested `mandates` and `externalIds` reads bind one parameter per politician of the
+  // page, and a full export in one read exceeded what a statement can bind (P2029).
+  const politicians = await readInPages(
+    ({ skip, take }) =>
+      db.politician.findMany({
+        skip,
+        take,
+        where,
+        include: {
+          currentParty: {
+            select: {
+              publicId: true,
+              slug: true,
+              shortName: true,
+              name: true,
+              politicalPosition: true,
+            },
+          },
+          mandates: {
+            where: activeOnly ? { isCurrent: true } : undefined,
+            orderBy: { startDate: "desc" },
+            take: 1,
+            select: {
+              type: true,
+              title: true,
+              constituency: true,
+              departmentCode: true,
+              startDate: true,
+              endDate: true,
+            },
+          },
+          externalIds: {
+            where: { source: "WIKIDATA" },
+            select: { externalId: true },
+            take: 1,
+          },
+          _count: {
+            select: {
+              affairs: { where: getPublishedAffairWhere() },
+              factCheckMentions: { where: { factCheck: getPublicFactCheckWhere() } },
+            },
+          },
         },
-      },
-      mandates: {
-        where: activeOnly ? { isCurrent: true } : undefined,
-        orderBy: { startDate: "desc" },
-        take: 1,
-        select: {
-          type: true,
-          title: true,
-          constituency: true,
-          departmentCode: true,
-          startDate: true,
-          endDate: true,
-        },
-      },
-      externalIds: {
-        where: { source: "WIKIDATA" },
-        select: { externalId: true },
-        take: 1,
-      },
-      _count: {
-        select: {
-          affairs: { where: getPublishedAffairWhere() },
-          factCheckMentions: { where: { factCheck: getPublicFactCheckWhere() } },
-        },
-      },
-    },
-    orderBy: { lastName: "asc" },
-  });
+        // `id` last: pages need a total order.
+        orderBy: [{ lastName: "asc" }, { id: "asc" }],
+      }),
+    limit
+  );
 
   // Only the cap matters here: a caller-supplied smaller limit returning a full page is
   // ordinary paging, not truncation, and warning on it would make this signal noise.
