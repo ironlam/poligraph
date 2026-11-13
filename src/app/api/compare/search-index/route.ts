@@ -3,6 +3,7 @@ import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { readInPages } from "@/lib/api/paged-read";
 
 /**
  * Lightweight search index for client-side autocomplete in the compare page.
@@ -15,32 +16,39 @@ async function getSearchIndex() {
   cacheLife("synced");
 
   const [politicians, parties, groups] = await Promise.all([
-    db.politician.findMany({
-      where: PUBLIC_POLITICIAN_WHERE,
-      select: {
-        slug: true,
-        fullName: true,
-        photoUrl: true,
-        currentParty: {
-          select: {
-            shortName: true,
-            color: true,
-          },
-        },
-        mandates: {
-          where: { isCurrent: true },
-          select: {
-            type: true,
-            parliamentaryData: {
-              select: { parliamentaryGroupId: true },
+    // Paged: the nested `mandates` read binds one parameter per politician of the page, and all
+    // published profiles in one read exceeded what a statement can bind (P2029).
+    readInPages(({ skip, take }) =>
+      db.politician.findMany({
+        skip,
+        take,
+        where: PUBLIC_POLITICIAN_WHERE,
+        select: {
+          slug: true,
+          fullName: true,
+          photoUrl: true,
+          currentParty: {
+            select: {
+              shortName: true,
+              color: true,
             },
           },
-          orderBy: { startDate: "desc" },
-          take: 1,
+          mandates: {
+            where: { isCurrent: true },
+            select: {
+              type: true,
+              parliamentaryData: {
+                select: { parliamentaryGroupId: true },
+              },
+            },
+            orderBy: { startDate: "desc" },
+            take: 1,
+          },
         },
-      },
-      orderBy: [{ prominenceScore: "desc" }, { lastName: "asc" }],
-    }),
+        // `id` last: pages need a total order.
+        orderBy: [{ prominenceScore: "desc" }, { lastName: "asc" }, { id: "asc" }],
+      })
+    ),
     db.party.findMany({
       where: {
         ...PUBLIC_PARTY_WHERE,
