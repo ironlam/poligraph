@@ -1,4 +1,5 @@
 import { cacheLife, cacheTag } from "next/cache";
+import { POLITICIAN_VOTES_TAG } from "@/lib/cache-tags";
 import { db } from "@/lib/db";
 import {
   LEGISLATURE_NUMBERS,
@@ -28,7 +29,7 @@ export async function getPoliticianParliamentaryPath(
   politicianId: string
 ): Promise<ParliamentaryPathRow[]> {
   "use cache";
-  cacheTag("votes", "politicians");
+  cacheTag("votes", POLITICIAN_VOTES_TAG);
   cacheLife("synced");
 
   const [mandates, options] = await Promise.all([
@@ -93,7 +94,7 @@ export async function getPoliticianParliamentaryPath(
  */
 export async function getPoliticianIdsWithAnVotes(): Promise<string[]> {
   "use cache";
-  cacheTag("votes", "politicians");
+  cacheTag("votes", POLITICIAN_VOTES_TAG);
   cacheLife("synced");
 
   const rows = await db.politician.findMany({

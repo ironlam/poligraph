@@ -25,7 +25,7 @@ describe("getPoliticianVoteChamberCoverage", () => {
       by: ["chamber"],
       where: { politicianId: "politician-1" },
     });
-    expect(cacheTag).toHaveBeenCalledWith("votes", "politicians");
+    expect(cacheTag).toHaveBeenCalledWith("votes", "politician-votes");
     expect(cacheLife).toHaveBeenCalledWith("synced");
   });
 
