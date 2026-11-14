@@ -143,6 +143,7 @@ const PARTY_SURFACES = [
   "src/app/parlement/dossiers/page.tsx",
   // The group's preview images read the same group reader for its name, code, colour, chamber and
   // seat count. Its members' currentParty is selected but never drawn: the cards print no party.
+  "src/app/parlement/groupes/[slug]/opengraph-image.tsx",
   "src/app/parlement/groupes/[slug]/page.tsx",
   "src/app/parlement/groupes/[slug]/projets-gouvernementaux/opengraph-image.tsx",
   // The evidence page reads the group's name, code and chamber through the shared group reader.
