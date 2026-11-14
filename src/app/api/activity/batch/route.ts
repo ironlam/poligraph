@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
-import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import {
+  PUBLIC_PARTY_WHERE,
+  PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+  PUBLIC_POLITICIAN_WHERE,
+} from "@/lib/api/public-contract";
+import { Prisma } from "@/generated/prisma";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import type {
@@ -154,17 +159,27 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
   }
 
   // Generate party-update activity items (only for parties with slugs)
+  const partyIds = [...partyInfoMap.keys()];
+  const voteCountRows =
+    partyIds.length > 0
+      ? await db.$queryRaw<Array<{ partyId: string; count: number }>>(Prisma.sql`
+          SELECT p."currentPartyId" AS "partyId", COUNT(*)::int AS count
+          FROM "Vote" v
+          JOIN "Politician" p ON p.id = v."politicianId"
+          WHERE p."currentPartyId" IN (${Prisma.join(partyIds)})
+            AND p."publicationStatus"::text = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+            AND v."votingDate" >= ${since}
+          GROUP BY p."currentPartyId"
+        `)
+      : [];
+  const voteCountByParty = new Map(voteCountRows.map((r) => [r.partyId, r.count]));
+
   const partyActivityItems: ActivityItem[] = [];
   for (const party of resolvedParties) {
     const partyInfo = partyInfoMap.get(party.id);
     if (!partyInfo) continue; // skip parties without slug
 
-    const recentVoteCount = await db.vote.count({
-      where: {
-        politician: { currentPartyId: party.id, ...PUBLIC_POLITICIAN_WHERE },
-        votingDate: { gte: since },
-      },
-    });
+    const recentVoteCount = voteCountByParty.get(party.id) ?? 0;
     if (recentVoteCount > 0) {
       partyActivityItems.push({
         type: "party-update",
