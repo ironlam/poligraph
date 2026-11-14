@@ -32,6 +32,7 @@ export default async function FactCheckStatisticsPage() {
         topFauxSharePoliticians={data.topFauxSharePoliticians}
         topVraiShareParties={data.topVraiShareParties}
         topFauxShareParties={data.topFauxShareParties}
+        partiesByVolume={data.partiesByVolume}
       />
     </StatisticsPageLayout>
   );

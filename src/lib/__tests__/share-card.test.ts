@@ -9,6 +9,7 @@ import {
   pickCardStats,
   shareCardFileName,
   storyFileName,
+  tableRowHeight,
   voteShares,
   wrapLines,
 } from "../share-card";
@@ -190,5 +191,20 @@ describe("seatSharePct", () => {
 describe("storyFileName", () => {
   it("marks the tall export without changing the rest of the name", () => {
     expect(storyFileName("poligraph-vote-2025-plf.png")).toBe("poligraph-vote-2025-plf-story.png");
+  });
+});
+
+describe("tableRowHeight", () => {
+  it("gives a short table comfortable rows", () => {
+    expect(tableRowHeight(5, 700)).toBe(54);
+  });
+
+  it("tightens the rows so that a long table still fits whole", () => {
+    expect(tableRowHeight(20, 700)).toBe(35);
+  });
+
+  it("refuses a table that could only be drawn truncated or illegible", () => {
+    expect(tableRowHeight(30, 700)).toBeNull();
+    expect(tableRowHeight(0, 700)).toBeNull();
   });
 });

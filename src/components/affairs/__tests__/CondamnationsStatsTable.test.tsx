@@ -61,7 +61,8 @@ describe("CondamnationsStatsTable", () => {
 
   it("n'affiche plus de jauge SVG (régression jauge trompeuse)", () => {
     const { container } = render(<CondamnationsStatsTable rows={rows} />);
-    expect(container.querySelector("svg")).toBeNull();
+    // Scoped to the table: the share button above it carries an icon, which is not a gauge.
+    expect(container.querySelector("table svg")).toBeNull();
   });
 
   it("expose un lien Détails descriptif et unique par parti (a11y)", () => {

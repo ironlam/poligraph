@@ -100,6 +100,12 @@ export interface FactCheckStatisticsData {
   topFauxSharePoliticians: RankedPolitician[];
   topVraiShareParties: RankedParty[];
   topFauxShareParties: RankedParty[];
+  /**
+   * Every party above the threshold, most verified first. This is the list a shared image prints:
+   * the whole table in an order that is not a verdict, where the two rankings above each keep
+   * five names sorted by score.
+   */
+  partiesByVolume: RankedParty[];
 }
 
 // ============================================
@@ -432,6 +438,9 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     topFauxSharePoliticians,
     topVraiShareParties,
     topFauxShareParties,
+    partiesByVolume: [...rankedParties].sort(
+      (a, b) => b.totalMentions - a.totalMentions || a.name.localeCompare(b.name, "fr")
+    ),
   };
 }
 
