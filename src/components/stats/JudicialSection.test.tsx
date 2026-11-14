@@ -33,7 +33,7 @@ describe("JudicialSection, probité", () => {
     const { container } = render(<JudicialSection {...PROPS} />);
     const text = flat(container.textContent);
     expect(text).toContain(
-      "Condamnations et procédures validées par un juge, en implication directe, par catégorie et par parti."
+      "Condamnations et procédures validées par un juge, en implication directe, par catégorie et par parti actuel de l'élu (pas celui de l'époque des faits)."
     );
     expect(text).toContain(
       "Les « atteintes à la probité » regroupent la corruption, le trafic d'influence, la prise illégale d'intérêts, le favoritisme, le détournement de fonds publics, les emplois fictifs et les conflits d'intérêts. Le financement illégal de campagne ou de parti et l'incitation à la haine n'en font pas partie."
