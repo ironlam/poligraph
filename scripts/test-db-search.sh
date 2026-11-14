@@ -97,6 +97,7 @@ else
     src/lib/data/__tests__/subject-page.integration.test.ts \
     src/lib/data/__tests__/themes-index.integration.test.ts \
     "src/app/api/elections/[slug]/route.integration.test.ts" \
+    "src/app/api/politiques/[slug]/relations/route.integration.test.ts" \
     src/lib/search \
     src/lib/measures \
     src/app/admin/mesures \
