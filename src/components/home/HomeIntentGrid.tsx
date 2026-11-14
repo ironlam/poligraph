@@ -50,18 +50,19 @@ export function HomeIntentGrid({ enabledFlags }: HomeIntentGridProps) {
 
   return (
     <section>
-      <h2 className="mb-4 text-lg font-display font-bold">Que cherchez-vous ?</h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <h2 className="mb-3 text-lg font-display font-bold sm:mb-4">Que cherchez-vous ?</h2>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
             <Link key={card.href + card.title} href={card.href} prefetch={false}>
               <Card
-                className={`group h-full cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                // Below sm the card drops its outer padding: four entries then fit on one screen.
+                className={`group h-full cursor-pointer transition-all hover:shadow-md max-sm:py-0 sm:hover:-translate-y-0.5 ${
                   card.accent ? "ring-1 ring-brand/25" : ""
                 }`}
               >
-                <CardContent className="flex items-start gap-3 p-4">
+                <CardContent className="flex items-center gap-3 p-3 sm:items-start sm:p-4">
                   <span
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
                       card.accent ? "bg-brand/12 text-brand" : "bg-primary/10 text-primary"

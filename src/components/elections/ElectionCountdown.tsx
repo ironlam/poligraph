@@ -90,7 +90,7 @@ export function ElectionCountdown({
     <div
       role="timer"
       aria-label={`Compte à rebours pour ${electionTitle}`}
-      className="bg-gradient-to-br from-primary/10 via-background to-accent/10 border rounded-2xl p-6 md:p-8 mb-8"
+      className="bg-gradient-to-br from-primary/10 via-background to-accent/10 border rounded-2xl p-4 mb-4 sm:p-6 sm:mb-8 md:p-8"
     >
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
         {label ?? "Prochaine élection"}
