@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ROUTES } from "@/config/routes";
+import { NEUTRAL_GROUP_COLOR } from "@/config/parliamentaryGroups";
 import { getAccessibleTextColor } from "@/lib/contrast";
 import type { GroupListingItem } from "@/lib/data/groupes";
 import { GovernmentProjectPositionBreakdown } from "./GovernmentProjectPositionBreakdown";
@@ -9,8 +10,6 @@ interface GroupCardProps {
   /** Seats held by every listed group of the same chamber, for the share shown under the name. */
   chamberSeats?: number;
 }
-
-const NEUTRAL_GROUP_COLOR = "#a6a6a6";
 
 export function formatSeatShare(seats: number, total: number): string {
   const share = Math.round((seats / total) * 1000) / 10;
