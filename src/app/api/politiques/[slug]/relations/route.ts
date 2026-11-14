@@ -156,22 +156,46 @@ export const GET = withPublicRoute(async (request, context) => {
       govGroups.get(name)!.push(m);
     }
 
+    // One query for every government, `limit` colleagues each, instead of one query per government.
+    const govNames = Array.from(govGroups.keys());
+    const colleagueRows =
+      govNames.length > 0
+        ? await db.$queryRaw<Array<{ gov: string; politicianId: string }>>(Prisma.sql`
+            SELECT gov, "politicianId" FROM (
+              SELECT x.gov, x."politicianId",
+                     ROW_NUMBER() OVER (PARTITION BY x.gov ORDER BY x."fullName", x."politicianId") AS rn
+              FROM (
+                SELECT DISTINCT mg."governmentName" AS gov, p.id AS "politicianId", p."fullName"
+                FROM "MandateGovernment" mg
+                JOIN "Mandate" m ON m.id = mg."mandateId"
+                JOIN "Politician" p ON p.id = m."politicianId"
+                WHERE mg."governmentName" IN (${Prisma.join(govNames)})
+                  AND m.type::text IN (${Prisma.join(GOVERNMENT_TYPES)})
+                  AND p."publicationStatus" = 'PUBLISHED'
+                  AND p.id <> ${politician.id}
+              ) x
+            ) ranked
+            WHERE rn <= ${limit}
+            ORDER BY gov, rn
+          `)
+        : [];
+    const colleagueIds = [...new Set(colleagueRows.map((r) => r.politicianId))];
+    const colleagueById = new Map(
+      (colleagueIds.length > 0
+        ? await db.politician.findMany({
+            where: { id: { in: colleagueIds } },
+            select: POLITICIAN_SELECT,
+          })
+        : []
+      ).map((p) => [p.id, p])
+    );
+
     for (const [govName, mandates] of govGroups) {
       const mandate = mandates[0];
-      const colleagues = await db.politician.findMany({
-        where: {
-          publicationStatus: "PUBLISHED",
-          id: { not: politician.id },
-          mandates: {
-            some: {
-              governmentData: { governmentName: govName },
-              type: { in: GOVERNMENT_TYPES },
-            },
-          },
-        },
-        select: POLITICIAN_SELECT,
-        take: limit,
-      });
+      const colleagues = colleagueRows
+        .filter((r) => r.gov === govName)
+        .map((r) => colleagueById.get(r.politicianId))
+        .filter((p) => p !== undefined);
 
       if (colleagues.length > 0) {
         const nodes = colleagues.map(toGraphNode);
@@ -217,48 +241,56 @@ export const GET = withPublicRoute(async (request, context) => {
       if (companies.size > 0) {
         const companyArray = Array.from(companies);
 
-        const matchingDeclarations = await db.declaration.findMany({
-          where: {
-            politicianId: { not: politician.id },
-            politician: { publicationStatus: "PUBLISHED" },
-            details: { not: Prisma.DbNull },
-          },
-          select: {
-            politicianId: true,
-            details: true,
-            politician: { select: POLITICIAN_SELECT },
-          },
-          take: 200,
+        // Compare against every other published politician's latest declaration, like the
+        // center's own (latest year with details). Matching runs in SQL over the whole table.
+        const matches = await db.$queryRaw<Array<{ politicianId: string; companies: string[] }>>(
+          Prisma.sql`
+            WITH latest AS (
+              SELECT DISTINCT ON (d."politicianId") d."politicianId", d.details
+              FROM "Declaration" d
+              JOIN "Politician" p ON p.id = d."politicianId"
+              WHERE d.details IS NOT NULL
+                AND p."publicationStatus" = 'PUBLISHED'
+                AND d."politicianId" <> ${politician.id}
+              ORDER BY d."politicianId", d.year DESC
+            ),
+            entries AS (
+              SELECT l."politicianId", e->>'company' AS company
+              FROM latest l
+              CROSS JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(l.details->'financialParticipations') = 'array'
+                     THEN l.details->'financialParticipations' ELSE '[]'::jsonb END
+              ) e
+              UNION ALL
+              SELECT l."politicianId", e->>'company' AS company
+              FROM latest l
+              CROSS JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(l.details->'directorships') = 'array'
+                     THEN l.details->'directorships' ELSE '[]'::jsonb END
+              ) e
+            )
+            SELECT "politicianId", array_agg(DISTINCT trim(company)) AS companies
+            FROM entries
+            WHERE upper(trim(company)) IN (${Prisma.join(companyArray)})
+            GROUP BY "politicianId"
+            ORDER BY count(DISTINCT trim(company)) DESC, "politicianId"
+            LIMIT ${limit}
+          `
+        );
+
+        const matchedById = new Map(
+          (matches.length > 0
+            ? await db.politician.findMany({
+                where: { id: { in: matches.map((m) => m.politicianId) } },
+                select: POLITICIAN_SELECT,
+              })
+            : []
+          ).map((p) => [p.id, p])
+        );
+        const sorted = matches.flatMap((m) => {
+          const p = matchedById.get(m.politicianId);
+          return p ? [{ node: toGraphNode(p), companies: m.companies }] : [];
         });
-
-        const companyMatches = new Map<string, { node: GraphNode; companies: string[] }>();
-
-        for (const decl of matchingDeclarations) {
-          const d = decl.details as unknown as DeclarationDetails;
-          const sharedCompanies: string[] = [];
-
-          for (const fp of d.financialParticipations || []) {
-            if (fp.company && companyArray.includes(fp.company.toUpperCase().trim())) {
-              sharedCompanies.push(fp.company.trim());
-            }
-          }
-          for (const dir of d.directorships || []) {
-            if (dir.company && companyArray.includes(dir.company.toUpperCase().trim())) {
-              sharedCompanies.push(dir.company.trim());
-            }
-          }
-
-          if (sharedCompanies.length > 0 && !companyMatches.has(decl.politicianId)) {
-            companyMatches.set(decl.politicianId, {
-              node: toGraphNode(decl.politician),
-              companies: [...new Set(sharedCompanies)],
-            });
-          }
-        }
-
-        const sorted = Array.from(companyMatches.values())
-          .sort((a, b) => b.companies.length - a.companies.length)
-          .slice(0, limit);
 
         if (sorted.length > 0) {
           const nodes = sorted.map((s) => s.node);
