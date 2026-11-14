@@ -91,7 +91,7 @@ function ScrutinRow({ row }: { row: GovernmentProjectPositionRow }) {
           <Link
             href={ROUTES.voteDetail(row.scrutin.slug)}
             prefetch={false}
-            className="font-semibold leading-snug hover:underline"
+            className="inline-flex min-h-11 items-center font-semibold leading-snug hover:underline"
           >
             {bill}
           </Link>
@@ -107,7 +107,7 @@ function ScrutinRow({ row }: { row: GovernmentProjectPositionRow }) {
             <Link
               href={ROUTES.dossierDetail(row.dossier.slug)}
               prefetch={false}
-              className="inline-flex min-h-8 items-center text-primary hover:underline"
+              className="inline-flex min-h-11 items-center text-primary hover:underline"
             >
               Dossier législatif
             </Link>
@@ -118,7 +118,7 @@ function ScrutinRow({ row }: { row: GovernmentProjectPositionRow }) {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Voir le scrutin sur le site de l’Assemblée nationale, nouvelle fenêtre"
-              className="inline-flex min-h-8 items-center gap-1 text-primary hover:underline"
+              className="inline-flex min-h-11 items-center gap-1 text-primary hover:underline"
             >
               Source Assemblée nationale
               <ExternalLink className="size-3" aria-hidden="true" />
@@ -196,7 +196,10 @@ export default async function GovernmentProjectsPage({ params }: PageProps) {
             />
             <div className="min-w-0">
               <p className="text-sm text-muted-foreground">
-                <Link href={ROUTES.groupeDetail(slug)} className="hover:underline">
+                <Link
+                  href={ROUTES.groupeDetail(slug)}
+                  className="inline-flex min-h-11 items-center hover:underline"
+                >
                   {group.name}
                 </Link>{" "}
                 · {plural(group.seatCount, "député")}
@@ -249,7 +252,7 @@ export default async function GovernmentProjectsPage({ params }: PageProps) {
                 la liste.{" "}
                 <Link
                   href={ROUTES.governmentProjectsMethodology}
-                  className="text-primary underline underline-offset-2"
+                  className="inline-flex min-h-11 items-center text-primary underline underline-offset-2"
                 >
                   Lire la méthodologie complète
                 </Link>

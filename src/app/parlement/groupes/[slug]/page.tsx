@@ -253,7 +253,7 @@ export default async function GroupeDetailPage({ params }: PageProps) {
                       href={presidents[0]!.sourceUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline underline-offset-2 hover:text-foreground"
+                      className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground"
                       aria-label={`Données ouvertes, ${chamberLabel} (fichier officiel, nouvel onglet)`}
                     >
                       données ouvertes, {chamberLabel}
@@ -541,7 +541,10 @@ export default async function GroupeDetailPage({ params }: PageProps) {
 
       {/* Back link */}
       <div className="mt-8 text-center">
-        <Link href="/parlement/groupes" className="text-primary hover:underline">
+        <Link
+          href="/parlement/groupes"
+          className="inline-flex min-h-11 items-center text-primary hover:underline"
+        >
           Tous les groupes
         </Link>
       </div>
