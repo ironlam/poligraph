@@ -7,18 +7,6 @@ import { z } from "zod/v4";
 // #337, once the identity rules are settled.
 
 const cuid = z.string().min(1).max(64);
-
-/**
- * Free-text search over existing decisions.
- *
- * One field on purpose: the route decides how to interpret the term. An exact ECLI or
- * Judilibre id resolves to at most one row; a pourvoi number always resolves to a
- * list, because a pourvoi can produce several decisions.
- */
-export const courtDecisionSearchSchema = z.object({
-  q: z.string().min(2).max(120),
-});
-
 export const linkCourtDecisionSchema = z.object({
   courtDecisionId: cuid,
   notes: z.string().max(2000).optional(),
@@ -54,8 +42,6 @@ export const enrichCourtDecisionSchema = z
   .refine((v) => Boolean(v.judilibreId || v.ecli || v.pourvoiNumber), {
     message: "Fournir au moins une référence : identifiant Judilibre, ECLI ou numéro de pourvoi.",
   });
-
-export type CourtDecisionSearchQuery = z.infer<typeof courtDecisionSearchSchema>;
 export type EnrichCourtDecisionBody = z.infer<typeof enrichCourtDecisionSchema>;
 export type LinkCourtDecisionBody = z.infer<typeof linkCourtDecisionSchema>;
 export type UpdateCourtDecisionLinkBody = z.infer<typeof updateCourtDecisionLinkSchema>;

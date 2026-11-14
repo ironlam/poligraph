@@ -670,36 +670,6 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
   return matches;
 }
 
-/**
- * Check if a candidate affair is a duplicate of an existing one.
- * Returns true if any match has HIGH or CERTAIN confidence.
- */
-export async function isDuplicate(candidate: MatchCandidate): Promise<boolean> {
-  const matches = await findMatchingAffairs(candidate);
-  return matches.some((m) => m.confidence === "CERTAIN" || m.confidence === "HIGH");
-}
-
-/**
- * Existing affairs the candidate looks like a later development of.
- *
- * Separate from `findMatchingAffairs` on purpose. That function answers "is this
- * the same affair?", and its CERTAIN/HIGH tiers authorise an importer to write to
- * an existing row. This one answers a different question — "is this the same story,
- * further along?" — whose answer must never authorise a silent write: the caller is
- * expected to file an `AffairUpdateProposal` for a human, not to enrich in place.
- *
- * Ordered by score, best first. Ambiguity is not collapsed here the way
- * `pickConfidentMatch` collapses it: several candidates on one story is normal
- * once a story has already fragmented, and the reviewer needs to see the whole
- * cluster to pick the survivor.
- */
-export async function findEvolutionCandidates(candidate: MatchCandidate): Promise<MatchResult[]> {
-  if (!isPreDecisionStatus(candidate.status)) return [];
-
-  const matches = await findMatchingAffairs(candidate);
-  return matches.filter((m) => m.matchedBy === "evolution-title-overlap");
-}
-
 export type AffairMatchRouting =
   | { kind: "CONFIDENT_MATCH"; match: MatchResult }
   | { kind: "CONFIDENT_AMBIGUOUS"; candidates: MatchResult[] }

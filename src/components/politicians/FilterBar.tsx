@@ -17,8 +17,6 @@ export type MandateFilter =
   | "gouvernement"
   | "dirigeants"
   | "maire";
-export type StatusFilter = "" | "active" | "former"; // kept for backward compat — unused in UI
-
 const SORT_OPTIONS: Record<SortOption, string> = {
   prominence: "Notoriété",
   alpha: "A - Z",

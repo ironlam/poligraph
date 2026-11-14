@@ -128,38 +128,9 @@ export const createAffairSchema = createAffairFields
       path: ["ineligibilityFirmMonths"],
     }
   );
-
-export type CreateAffairInput = z.infer<typeof createAffairSchema>;
-
 // ─── Affair update (same shape as create) ──────────────────────────────
 
 export const updateAffairSchema = createAffairSchema;
-
-export type UpdateAffairInput = z.infer<typeof updateAffairSchema>;
-
-// ─── Bulk action ───────────────────────────────────────────────────────
-
-export const bulkAffairActionSchema = z
-  .object({
-    ids: z.array(z.string().min(1)).min(1),
-    action: z.enum(["publish", "reject", "delete"]),
-    rejectionReason: z.string().optional(),
-  })
-  .refine(
-    (data) => data.action !== "reject" || (data.rejectionReason && data.rejectionReason.length > 0),
-    { message: "Motif de rejet requis", path: ["rejectionReason"] }
-  );
-
-export type BulkAffairActionInput = z.infer<typeof bulkAffairActionSchema>;
-
-// ─── Apply AI moderation ──────────────────────────────────────────
-
-export const applyModerationSchema = z.object({
-  reviewIds: z.array(z.string().min(1)).min(1),
-  action: z.enum(["apply", "dismiss"]),
-});
-
-export type ApplyModerationInput = z.infer<typeof applyModerationSchema>;
 
 // ─── Enrich affair via web search ────────────────────────────────
 

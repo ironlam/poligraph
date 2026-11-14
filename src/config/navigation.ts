@@ -265,12 +265,6 @@ export function getActiveTabHref(pathname: string): string | null {
   return tab?.href ?? null;
 }
 
-/** @deprecated Use NAV_PRIMARY instead */
-export const NAV_TOP_LEVEL = NAV_PRIMARY;
-
-/** @deprecated Dropdown groups removed in redesign */
-export const NAV_GROUPS: NavGroup[] = [];
-
 // Icon-only tool buttons in the header utility rail
 export const NAV_TOOLS: NavItem[] = [
   {
@@ -287,28 +281,6 @@ export const NAV_TOOLS: NavItem[] = [
     description: "Suivez l'activité de vos représentants",
   },
 ];
-
-export const CTA_ASSISTANT: NavItem = {
-  href: "/chat",
-  label: "Assistant IA",
-  description: "Chatbot alimenté par nos données",
-};
-
-// Legacy exports for backwards compatibility
-export const CTA_COMPARER: NavItem = {
-  href: "/comparer",
-  label: "Comparer",
-  description: "Comparez des représentants, partis ou groupes parlementaires",
-  featureFlag: "COMPARISON_TOOL",
-};
-export const CTA_MON_DEPUTE: NavItem = {
-  href: "/mon-depute",
-  label: "Mon député",
-  description: "Trouvez votre député par code postal",
-  featureFlag: "MON_DEPUTE_SECTION",
-};
-export const CHAT_LINK = CTA_ASSISTANT;
-export const CTA_LINK = CTA_MON_DEPUTE;
 
 // Footer navigation (5 columns)
 export interface FooterSection {
@@ -441,25 +413,3 @@ export const SOCIAL_LINKS: SocialLink[] = [
     icon: "github",
   },
 ];
-
-// Legacy exports for backwards compatibility
-export const NAV_LINKS = [
-  { href: "/politiques", label: "Représentants" },
-  { href: "/parlement", label: "Parlement" },
-  { href: "/affaires", label: "Affaires" },
-  { href: "/partis", label: "Partis" },
-  { href: "/statistiques", label: "Stats" },
-] as const;
-
-export const FOOTER_LINKS = [
-  { href: "/recherche", label: "Recherche avancée" },
-  { href: TERRITOIRES_DEPARTEMENTS_PATH, label: "Départements" },
-  { href: "/institutions", label: "Institutions" },
-  { href: "/sources", label: "Sources" },
-  { href: "/methodologie", label: "Méthodologie" },
-  { href: "/docs/api", label: "API" },
-  { href: "/mentions-legales", label: "Mentions légales" },
-] as const;
-
-export type NavLink = (typeof NAV_LINKS)[number];
-export type FooterLink = (typeof FOOTER_LINKS)[number];

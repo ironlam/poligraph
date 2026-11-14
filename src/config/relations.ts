@@ -27,5 +27,3 @@ export const ALL_RELATION_TYPES: RelationType[] = [
   "SAME_DEPARTMENT",
   "PARTY_HISTORY",
 ];
-
-export const DEFAULT_RELATION_TYPES: RelationType[] = ALL_RELATION_TYPES;

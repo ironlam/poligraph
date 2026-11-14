@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { assertHubMeasureCandidacy } from "@/app/admin/mesures/_data/candidacy-eligibility";
@@ -324,8 +323,4 @@ export async function runV6DraftImport(
   const reportDir = options.reportDir ?? ".tmp/program-import/reports";
   await writeDraftReport(report, reportDir);
   return report;
-}
-
-export function stableDraftReportHash(report: V6DraftImportReport): string {
-  return createHash("sha256").update(JSON.stringify(report.items)).digest("hex");
 }

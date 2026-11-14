@@ -559,48 +559,6 @@ export const getCumulCandidates = cache(async function getCumulCandidates() {
   );
 });
 
-// Currently unused: the "Qui manque à l'appel ?" section on /cumul was hidden
-// because candidacy-politician linking is still sparse (nearly every maire shows
-// as "missing"). Kept for when linking is fuller; re-add the section to restore.
-export const getMissingMaires = cache(async function getMissingMaires() {
-  "use cache";
-  cacheTag("elections-municipales-2026");
-  cacheLife("synced");
-
-  const election = await db.election.findUnique({
-    where: { slug: "municipales-2026" },
-    select: { id: true },
-  });
-  if (!election) return [];
-
-  // Politicians with MAIRE mandate who are NOT in the candidacy list
-  const rows = await db.$queryRaw<
-    Array<{
-      id: string;
-      slug: string;
-      fullName: string;
-      photoUrl: string | null;
-      partyShortName: string | null;
-      partyColor: string | null;
-      mandateStartDate: string | null;
-    }>
-  >(Prisma.sql`
-    SELECT p.id, p.slug, p."fullName", p."photoUrl",
-           pa."shortName" as "partyShortName", pa.color as "partyColor",
-           m."startDate"::text as "mandateStartDate"
-    FROM "Politician" p
-    JOIN "Mandate" m ON m."politicianId" = p.id AND m."isCurrent" = true AND m.type = 'MAIRE'
-    LEFT JOIN "Party" pa ON pa.id = p."currentPartyId"
-    WHERE NOT EXISTS (
-      SELECT 1 FROM "Candidacy" c WHERE c."politicianId" = p.id AND c."electionId" = ${election.id}
-    )
-      AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
-    ORDER BY p."fullName" ASC
-  `);
-
-  return rows;
-});
-
 export const getParityOutliers = cache(async function getParityOutliers() {
   "use cache";
   cacheTag("elections-municipales-2026");

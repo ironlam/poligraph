@@ -21,5 +21,3 @@ export const EXPORT_CACHE_TAGS = {
  * so no admin/cron endpoint can purge it on request.
  */
 export const EXPORT_ROLLUP_TAG = "exports";
-
-export type ExportCacheKey = keyof typeof EXPORT_CACHE_TAGS;

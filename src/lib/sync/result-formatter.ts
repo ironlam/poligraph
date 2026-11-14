@@ -110,38 +110,3 @@ function formatStatLabel(key: string): string {
     .replace(/^./, (str) => str.toUpperCase())
     .trim();
 }
-
-/**
- * Format a number with thousand separators
- */
-export function formatNumber(n: number): string {
-  return n.toLocaleString("fr-FR");
-}
-
-/**
- * Format bytes to human readable size
- */
-export function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
-/**
- * Format duration in human readable format
- */
-export function formatDuration(seconds: number): string {
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  const secs = Math.round(seconds % 60);
-  if (minutes < 60) {
-    return `${minutes}m ${secs}s`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours}h ${mins}m`;
-}

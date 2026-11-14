@@ -74,6 +74,4 @@ export function scrutinAnalysisTag(scrutinId: string): string {
 export const SELECTABLE_TAGS = [...ALL_TAGS, ...FROZEN_TAGS, ...NARROW_TAGS] as const;
 
 export type CacheTag = (typeof ALL_TAGS)[number];
-export type NarrowCacheTag = (typeof NARROW_TAGS)[number];
-export type FrozenCacheTag = (typeof FROZEN_TAGS)[number];
 export type SelectableCacheTag = (typeof SELECTABLE_TAGS)[number];

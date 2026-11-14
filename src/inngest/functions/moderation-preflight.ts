@@ -6,8 +6,7 @@ import { inngest } from "../client";
  * The AI opinion used to come from Anthropic's Batch API. The account has been out of credit for
  * months and the submission failed every night, so this cron no longer asks a model anything:
  * every draft comes out NEEDS_REVIEW, the safe default. Nothing is lost, since this report cannot
- * be written to a serverless filesystem and the moderation session rebuilds it locally. The batch
- * transport still lives in `@/services/affair-moderation-batch`, with no caller left here.
+ * be written to a serverless filesystem and the moderation session rebuilds it locally.
  */
 export const moderationPreflight = inngest.createFunction(
   {

@@ -90,11 +90,6 @@ export function isBraveQuotaError(err: unknown): boolean {
 // otherwise emit thousands of identical lines.
 let quotaAlertEmitted = false;
 
-/** Test seam only. */
-export function __resetBraveQuotaAlertForTests(): void {
-  quotaAlertEmitted = false;
-}
-
 export async function searchBrave(query: string): Promise<BraveSearchResult[]> {
   const apiKey = process.env.BRAVE_API_KEY;
   if (!apiKey) {

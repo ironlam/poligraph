@@ -296,32 +296,11 @@ export const INVOLVEMENT_COLORS: Record<Involvement, string> = {
 
 // Involvement filter groups for /affaires page
 export type InvolvementGroup = "mise-en-cause" | "victime" | "mentionne";
-
-export const INVOLVEMENT_GROUP_LABELS: Record<InvolvementGroup, string> = {
-  "mise-en-cause": "Mis en cause",
-  victime: "Victime / Plaignant",
-  mentionne: "Mentionné",
-};
-
 export const INVOLVEMENT_GROUP_VALUES: Record<InvolvementGroup, Involvement[]> = {
   "mise-en-cause": ["DIRECT", "INDIRECT"],
   victime: ["VICTIM", "PLAINTIFF"],
   mentionne: ["MENTIONED_ONLY"],
 };
-
-export const INVOLVEMENT_GROUP_COLORS: Record<InvolvementGroup, string> = {
-  "mise-en-cause":
-    "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700",
-  victime:
-    "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
-  mentionne:
-    "bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-800/40 dark:text-gray-300 dark:border-gray-700",
-};
-
-export function involvementsFromGroups(groups: InvolvementGroup[]): Involvement[] {
-  return groups.flatMap((g) => INVOLVEMENT_GROUP_VALUES[g]);
-}
-
 // Super-categories for grouping
 export type AffairSuperCategory = "PROBITE" | "FINANCES" | "PERSONNES" | "EXPRESSION" | "AUTRE";
 
@@ -485,20 +464,6 @@ export const LOCAL_MANDATE_TYPES: MandateType[] = [
   "VICE_PRESIDENT_REGION",
   "CONSEILLER_REGIONAL",
 ];
-
-export const ROLE_TO_MANDATE_TYPE: Record<string, MandateType> = {
-  MAIRE: "MAIRE",
-  MAIRE_ARRONDISSEMENT: "MAIRE_ARRONDISSEMENT",
-  ADJOINT_MAIRE: "ADJOINT_MAIRE",
-  CONSEILLER_MUNICIPAL: "CONSEILLER_MUNICIPAL",
-  PRESIDENT_DEPARTEMENT: "PRESIDENT_DEPARTEMENT",
-  VICE_PRESIDENT_DEPARTEMENT: "VICE_PRESIDENT_DEPARTEMENT",
-  CONSEILLER_DEPARTEMENTAL: "CONSEILLER_DEPARTEMENTAL",
-  PRESIDENT_REGION: "PRESIDENT_REGION",
-  VICE_PRESIDENT_REGION: "VICE_PRESIDENT_REGION",
-  CONSEILLER_REGIONAL: "CONSEILLER_REGIONAL",
-};
-
 export const MANDATE_TYPE_LABELS: Record<MandateType, string> = {
   DEPUTE: "Député",
   SENATEUR: "Sénateur",
@@ -521,47 +486,11 @@ export const MANDATE_TYPE_LABELS: Record<MandateType, string> = {
   PRESIDENT_PARTI: "Dirigeant(e) de parti",
   OTHER: "Autre mandat",
 };
-
-export const MANDATE_TYPE_LABELS_PLURAL: Record<MandateType, string> = {
-  DEPUTE: "Députés",
-  SENATEUR: "Sénateurs",
-  DEPUTE_EUROPEEN: "Députés européens",
-  PRESIDENT_REPUBLIQUE: "Présidents de la République",
-  PREMIER_MINISTRE: "Premiers ministres",
-  MINISTRE: "Ministres",
-  SECRETAIRE_ETAT: "Secrétaires d'État",
-  MINISTRE_DELEGUE: "Ministres délégués",
-  PRESIDENT_REGION: "Présidents de région",
-  VICE_PRESIDENT_REGION: "Vice-présidents du conseil régional",
-  PRESIDENT_DEPARTEMENT: "Présidents de département",
-  VICE_PRESIDENT_DEPARTEMENT: "Vice-présidents du conseil départemental",
-  MAIRE: "Maires",
-  MAIRE_ARRONDISSEMENT: "Maires d'arrondissement",
-  ADJOINT_MAIRE: "Adjoints au maire",
-  CONSEILLER_REGIONAL: "Conseillers régionaux",
-  CONSEILLER_DEPARTEMENTAL: "Conseillers départementaux",
-  CONSEILLER_MUNICIPAL: "Conseillers municipaux",
-  PRESIDENT_PARTI: "Dirigeant(e)s de parti",
-  OTHER: "Autres mandats",
-};
-
 // Feminize institutional roles based on civility
 export function feminizeRole(role: string, civility?: string | null): string {
   if (civility !== "Mme") return role;
   return role.replace(/^Président /, "Présidente ").replace(/^Vice-président /, "Vice-présidente ");
 }
-
-// Salary information (public data, monthly gross in EUR)
-export const MANDATE_SALARIES: Partial<Record<MandateType, number>> = {
-  DEPUTE: 7493, // Indemnité parlementaire brute
-  SENATEUR: 7493,
-  DEPUTE_EUROPEEN: 9808,
-  PRESIDENT_REPUBLIQUE: 15900,
-  PREMIER_MINISTRE: 15900,
-  MINISTRE: 10647,
-  SECRETAIRE_ETAT: 10135,
-  MINISTRE_DELEGUE: 10135,
-};
 
 // Source type labels (for affair sources)
 export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
@@ -632,17 +561,6 @@ export const POLITICAL_POSITION_COLORS: Record<PoliticalPosition, string> = {
   FAR_RIGHT: "bg-blue-200 text-blue-900 dark:bg-blue-900/50 dark:text-blue-200",
 };
 
-// Hex colors for graphical representations (spectrum charts, etc.)
-export const POLITICAL_POSITION_HEX_COLORS: Record<PoliticalPosition, string> = {
-  FAR_LEFT: "#991b1b",
-  LEFT: "#dc2626",
-  CENTER_LEFT: "#f472b6",
-  CENTER: "#eab308",
-  CENTER_RIGHT: "#38bdf8",
-  RIGHT: "#2563eb",
-  FAR_RIGHT: "#1e3a8a",
-};
-
 // Order for display (left to right)
 export const POLITICAL_POSITION_ORDER: PoliticalPosition[] = [
   "FAR_LEFT",
@@ -688,42 +606,6 @@ export const AFFAIR_EVENT_TYPE_LABELS: Record<AffairEventType, string> = {
   CRPC: "Comparution sur reconnaissance préalable de culpabilité",
   RENVOI_AUDIENCE: "Report d'audience",
   DECISION_DEFINITIVE: "Décision devenue définitive",
-};
-
-// Event type colors for timeline display
-export const AFFAIR_EVENT_TYPE_COLORS: Record<AffairEventType, string> = {
-  FAITS: "bg-gray-500",
-  REVELATION: "bg-yellow-500",
-  PLAINTE: "bg-orange-400",
-  ENQUETE_PRELIMINAIRE: "bg-orange-500",
-  INFORMATION_JUDICIAIRE: "bg-orange-600",
-  PERQUISITION: "bg-amber-500",
-  GARDE_A_VUE: "bg-amber-600",
-  MISE_EN_EXAMEN: "bg-red-400",
-  CONTROLE_JUDICIAIRE: "bg-red-500",
-  DETENTION_PROVISOIRE: "bg-red-600",
-  RENVOI_TRIBUNAL: "bg-purple-500",
-  PROCES: "bg-purple-600",
-  REQUISITOIRE: "bg-purple-700",
-  JUGEMENT: "bg-indigo-500",
-  APPEL: "bg-blue-400",
-  PROCES_APPEL: "bg-blue-500",
-  ARRET_APPEL: "bg-blue-600",
-  POURVOI_CASSATION: "bg-sky-500",
-  ARRET_CASSATION: "bg-sky-600",
-  RELAXE: "bg-green-500",
-  ACQUITTEMENT: "bg-green-600",
-  CONDAMNATION: "bg-red-700",
-  PRESCRIPTION: "bg-gray-400",
-  NON_LIEU: "bg-gray-500",
-  AUTRE: "bg-gray-600",
-  TEMOIN_ASSISTE: "bg-red-300",
-  CLASSEMENT_SANS_SUITE: "bg-gray-400",
-  CONVOCATION_TRIBUNAL: "bg-purple-400",
-  COMPARUTION_IMMEDIATE: "bg-purple-500",
-  CRPC: "bg-purple-500",
-  RENVOI_AUDIENCE: "bg-purple-300",
-  DECISION_DEFINITIVE: "bg-slate-600",
 };
 
 export const EVENT_OUTCOME_LABELS: Record<EventOutcome, string> = {
@@ -894,13 +776,6 @@ export const CHAMBER_SHORT_LABELS: Record<Chamber, string> = {
   AN: "AN",
   SENAT: "Sénat",
 };
-
-export const CHAMBER_COLORS: Record<Chamber, string> = {
-  AN: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
-  SENAT:
-    "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-700",
-};
-
 // ============================================
 // SCRUTIN TYPE (amendment/final/motion/article)
 // ============================================
@@ -1055,16 +930,6 @@ export const DOSSIER_CATEGORY_ICONS: Record<string, string> = {
 // ============================================
 // TIMELINE CHAMBERS (dossier legislative timeline)
 // ============================================
-
-export const TIMELINE_CHAMBER_COLORS: Record<string, string> = {
-  AN: "bg-blue-500",
-  SENAT: "bg-rose-500",
-  CMP: "bg-purple-500",
-  CC: "bg-amber-500",
-  GOV: "bg-emerald-500",
-  UNKNOWN: "bg-gray-400",
-};
-
 export const TIMELINE_CHAMBER_LABELS: Record<string, string> = {
   AN: "Assemblée nationale",
   SENAT: "Sénat",
@@ -1186,14 +1051,6 @@ export const THEME_CATEGORY_ICONS: Record<ThemeCategory, string> = {
   LOGEMENT_URBANISME: "🏠",
   TRANSPORTS: "🚆",
 };
-
-export function dissidenceLabel(rate: number): string {
-  if (rate < 5) return "Très discipliné";
-  if (rate < 15) return "Discipliné";
-  if (rate < 30) return "Modérément indépendant";
-  return "Indépendant";
-}
-
 // ============================================
 // ELECTIONS
 // ============================================
@@ -1352,14 +1209,6 @@ export const PARTY_ROLE_LABELS: Record<PartyRole, string> = {
   PRESIDENT_HONNEUR: "Président d'honneur",
   SECRETAIRE_GENERAL: "Secrétaire général",
 };
-
-export const SIGNIFICANT_PARTY_ROLES: PartyRole[] = [
-  "FONDATEUR",
-  "PORTE_PAROLE",
-  "COORDINATEUR",
-  "PRESIDENT_HONNEUR",
-  "SECRETAIRE_GENERAL",
-];
 
 export function feminizePartyRole(label: string, civility?: string | null): string {
   if (civility !== "Mme") return label;
@@ -1596,13 +1445,6 @@ export const GROUP_POSITION_LABELS: Record<GroupPosition, string> = {
   CONTRE: "Contre",
   ABSTENTION: "Abstention",
 };
-
-export const GROUP_POSITION_COLORS: Record<GroupPosition, string> = {
-  POUR: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  CONTRE: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-  ABSTENTION: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300",
-};
-
 export const ANALYSIS_SOURCE_TYPE_LABELS: Record<AnalysisSourceType, string> = {
   DEBATE_TRANSCRIPT: "Débats parlementaires",
   STRUCTURED_DATA: "Données structurées",

@@ -14,8 +14,6 @@ const THEMATIC_AXES = [
   "MOBILITY",
 ] as const;
 
-const QUIZ_SCOPES = ["COMMON", "NATIONAL", "MUNICIPAL"] as const;
-
 const PUBLICATION_STATUSES = ["PUBLISHED", "DRAFT", "ARCHIVED", "EXCLUDED", "REJECTED"] as const;
 
 // Platform
@@ -48,15 +46,3 @@ export const createProposalSchema = z.object({
 export const updateProposalSchema = createProposalSchema
   .omit({ platformId: true, axis: true })
   .partial();
-
-// QuizQuestion
-
-export const createQuizQuestionSchema = z.object({
-  axis: z.enum(THEMATIC_AXES),
-  scope: z.enum(QUIZ_SCOPES),
-  statement: z.string().min(10).max(500),
-  order: z.int().min(0),
-  publicationStatus: z.enum(PUBLICATION_STATUSES).optional(),
-});
-
-export const updateQuizQuestionSchema = createQuizQuestionSchema.partial();

@@ -15,18 +15,3 @@ export function PoligraphBadge({ className }: { className?: string }) {
     </Badge>
   );
 }
-
-/**
- * Small legend explaining the PoliGraph badge.
- * Place near candidate/mayor sections.
- */
-export function PoligraphBadgeLegend() {
-  return (
-    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-      <Badge variant="outline" className="text-xs pointer-events-none">
-        Fiche PoliGraph
-      </Badge>
-      = profil avec informations croisées (mandats, votes, patrimoine, affaires…)
-    </p>
-  );
-}

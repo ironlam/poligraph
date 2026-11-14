@@ -46,36 +46,6 @@ export const getPartyPlatform = cache(async function getPartyPlatform(
   return platform;
 });
 
-// --- All platforms for a given election ---
-
-export async function getPlatformsByElection(electionId: string) {
-  "use cache";
-  cacheTag("platforms");
-  cacheLife("synced");
-
-  return db.platform.findMany({
-    where: {
-      electionId,
-      publicationStatus: "PUBLISHED",
-      party: PUBLIC_PARTY_WHERE,
-    },
-    include: {
-      proposals: true,
-      party: {
-        select: {
-          id: true,
-          slug: true,
-          name: true,
-          shortName: true,
-          color: true,
-          logoUrl: true,
-        },
-      },
-    },
-    orderBy: { party: { name: "asc" } },
-  });
-}
-
 // --- All published platforms (for hub page) ---
 
 async function queryPlatforms(status?: PublicationStatus) {
@@ -190,20 +160,4 @@ export async function getPartyPositionsForMatching(electionId: string) {
       Record<ThematicAxis, number>
     >,
   }));
-}
-
-// --- Quiz questions ---
-
-export async function getQuizQuestions(scope?: "COMMON" | "NATIONAL" | "MUNICIPAL") {
-  "use cache";
-  cacheTag("quiz-questions");
-  cacheLife("synced");
-
-  return db.quizQuestion.findMany({
-    where: {
-      publicationStatus: "PUBLISHED",
-      ...(scope ? { scope } : {}),
-    },
-    orderBy: [{ scope: "asc" }, { order: "asc" }],
-  });
 }

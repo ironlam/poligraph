@@ -1,18 +1,12 @@
-export { updatePoliticianSchema, detectDuplicatesSchema } from "./politician";
+export { updatePoliticianSchema } from "./politician";
 export {
   quickUpdateAffairSchema,
   mergeAffairsSchema,
   moderateAffairSchema,
   bulkAffairSchema,
-  createAffairSchema,
 } from "./affair";
 export { createMandateSchema, updateMandateSchema, patchMandateSchema } from "./mandate";
-export {
-  updatePartySchema,
-  addPartyMembershipSchema,
-  endPartyMembershipSchema,
-  updatePartyMembershipSchema,
-} from "./party";
+export { updatePartySchema, addPartyMembershipSchema, updatePartyMembershipSchema } from "./party";
 export { updateDossierSchema } from "./dossier";
 export { createFeatureFlagSchema, updateFeatureFlagSchema } from "./feature-flag";
 export { createChangelogSchema, updateChangelogSchema } from "./changelog";
@@ -28,7 +22,6 @@ export {
 export { updateFactcheckSchema, addFactcheckMentionSchema, updateMentionSchema } from "./factcheck";
 export { createPromiseSchema, updatePromiseSchema } from "./promise";
 export {
-  createCandidatePresidentialSchema,
   updateCandidatePresidentialSchema,
   createCandidacyPresidentialFromPickerSchema,
   reviewCandidateSynthesisSchema,

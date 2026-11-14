@@ -74,10 +74,6 @@ export async function createCourtDecision(
   return client.courtDecision.create({ data: toCreateData(input), select: { id: true } });
 }
 
-export async function findCourtDecisionById(id: string, client: Client = db) {
-  return client.courtDecision.findUnique({ where: { id } });
-}
-
 /** An ECLI identifies exactly one decision, so this lookup is safe to act on. */
 export async function findCourtDecisionByEcli(ecli: string, client: Client = db) {
   return client.courtDecision.findUnique({ where: { ecli } });
@@ -154,12 +150,4 @@ export async function listCourtDecisionsForAffair(affairId: string, client: Clie
     orderBy: { createdAt: "asc" },
   });
   return links.map((link) => ({ ...link.courtDecision, linkNotes: link.notes }));
-}
-
-export async function listAffairIdsForCourtDecision(courtDecisionId: string, client: Client = db) {
-  const links = await client.affairCourtDecision.findMany({
-    where: { courtDecisionId },
-    select: { affairId: true },
-  });
-  return links.map((link) => link.affairId);
 }

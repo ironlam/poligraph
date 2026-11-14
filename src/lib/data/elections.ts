@@ -519,26 +519,6 @@ export const getCommuneResults2014 = cache(async function getCommuneResults2014(
 });
 
 // ============================================
-// 5. getUpcomingElections
-// ============================================
-
-export async function getUpcomingElections() {
-  "use cache";
-  cacheTag("elections", "homepage");
-  cacheLife("synced");
-
-  const now = new Date();
-  return db.election.findMany({
-    where: {
-      status: { not: "COMPLETED" },
-      round1Date: { gte: now },
-    },
-    orderBy: { round1Date: "asc" },
-    take: 4,
-  });
-}
-
-// ============================================
 // 5a. getPastElectionSlugs — for the navigation
 // ============================================
 

@@ -3676,25 +3676,3 @@ export const frenchCorpus: BenchmarkPair[] = [
   ...marriageBallotNames,
   ...trueNegatives,
 ];
-
-// Corpus metadata for reporting
-export const corpusStats = {
-  total: frenchCorpus.length,
-  truePositives: frenchCorpus.filter((p) => p.expectedMatch).length,
-  trueNegatives: frenchCorpus.filter((p) => !p.expectedMatch).length,
-  byCategory: frenchCorpus.reduce<Record<string, { total: number; tp: number; tn: number }>>(
-    (acc, pair) => {
-      if (!acc[pair.category]) {
-        acc[pair.category] = { total: 0, tp: 0, tn: 0 };
-      }
-      acc[pair.category]!.total++;
-      if (pair.expectedMatch) {
-        acc[pair.category]!.tp++;
-      } else {
-        acc[pair.category]!.tn++;
-      }
-      return acc;
-    },
-    {}
-  ),
-};

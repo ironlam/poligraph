@@ -830,23 +830,6 @@ export async function mergeAffairsInTransaction(
 }
 
 // ============================================
-// DISMISS
-// ============================================
-
-/**
- * Mark a pair of affairs as "not a duplicate" so they won't be re-proposed.
- */
-export async function dismissDuplicate(affairIdA: string, affairIdB: string): Promise<void> {
-  // Always store with sorted IDs to avoid duplicates
-  const [idA, idB] = [affairIdA, affairIdB].sort();
-  await db.dismissedDuplicate.upsert({
-    where: { affairIdA_affairIdB: { affairIdA: idA!, affairIdB: idB! } },
-    create: { affairIdA: idA!, affairIdB: idB! },
-    update: {},
-  });
-}
-
-// ============================================
 // STATS
 // ============================================
 

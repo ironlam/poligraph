@@ -151,12 +151,6 @@ export type PoliticianWithPartyAndCounts = Politician & {
     partyShortName: string;
   } | null;
 };
-
-export type PoliticianWithMandates = Politician & {
-  currentParty: Party | null;
-  mandates: Mandate[];
-};
-
 export type PoliticianFull = Politician & {
   currentParty: Party | null;
   mandates: Mandate[];
@@ -168,12 +162,6 @@ export type AffairWithSources = Affair & {
   sources: Source[];
   events?: AffairEvent[];
 };
-
-export type AffairWithPolitician = Affair & {
-  politician: PoliticianWithParty;
-  sources: Source[];
-};
-
 // Search and filter types
 export type PoliticianFilters = {
   search?: string;
@@ -185,16 +173,6 @@ export type PoliticianFilters = {
   limit?: number;
   sortBy?: "name" | "prominence";
 };
-
-export type AffairFilters = {
-  search?: string;
-  politicianId?: string;
-  status?: AffairStatus;
-  category?: AffairCategory;
-  page?: number;
-  limit?: number;
-};
-
 // API response types
 export type PaginatedResponse<T> = {
   data: T[];
@@ -202,69 +180,4 @@ export type PaginatedResponse<T> = {
   page: number;
   limit: number;
   totalPages: number;
-};
-
-// Form input types (for validation)
-export type CreateAffairInput = {
-  politicianId: string;
-  title: string;
-  description: string;
-  status: AffairStatus;
-  category: AffairCategory;
-  isRelatedToMandate?: boolean;
-  factsDate?: Date;
-  startDate?: Date;
-  verdictDate?: Date;
-  sentence?: string;
-  // Judicial identifiers (multi-source matching)
-  sources: {
-    url: string;
-    title: string;
-    publisher: string;
-    publishedAt: Date;
-    sourceType?: SourceType;
-  }[];
-};
-
-// Vote/Scrutin types
-export type ScrutinWithVotes = Scrutin & {
-  votes: (Vote & {
-    politician: PoliticianWithParty;
-  })[];
-};
-
-export type VoteWithScrutin = Vote & {
-  scrutin: Scrutin;
-};
-
-export type PoliticianVoteStats = {
-  total: number;
-  pour: number;
-  contre: number;
-  abstention: number;
-  nonVotant: number;
-  eligibleScrutins: number | null;
-  scrutinsSansVoteEnregistre: number | null;
-  participationRate: number | null;
-  participationStatus: "AVAILABLE" | "SOURCE_INSUFFICIENT" | "COMPUTATION_INCOMPLETE";
-};
-
-export type ScrutinFilters = {
-  search?: string;
-  result?: VotingResult;
-  legislature?: number;
-  chamber?: Chamber;
-  theme?: ThemeCategory;
-  dateFrom?: Date;
-  dateTo?: Date;
-  page?: number;
-  limit?: number;
-};
-
-export type ElectionFilters = {
-  search?: string;
-  type?: ElectionType;
-  status?: ElectionStatus;
-  page?: number;
-  limit?: number;
 };

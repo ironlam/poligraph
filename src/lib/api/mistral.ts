@@ -127,9 +127,6 @@ let _mistralTokensUsed = 0;
 export function getMistralTokensUsed(): number {
   return _mistralTokensUsed;
 }
-export function resetMistralTokensUsed(): void {
-  _mistralTokensUsed = 0;
-}
 
 export function extractMistralText(response: MistralResponse): string {
   return response.choices[0]?.message.content ?? "";

@@ -9,18 +9,6 @@ const NOTES_MAX = 2000;
 const RANK_MAX = 999;
 const SOURCE_LABEL_MAX = 300;
 const SYNTHESIS_MAX = 5_000;
-
-export const createCandidatePresidentialSchema = z.object({
-  candidacyId: z.string().min(1),
-  slogan: z.string().max(SLOGAN_MAX).optional(),
-  accentColor: z.string().regex(HEX_COLOR_RE).optional(),
-  declaredAt: z.string().datetime().optional(),
-  withdrewAt: z.string().datetime().optional(),
-  withdrewReason: z.string().max(WITHDREW_REASON_MAX).optional(),
-  rank: z.number().int().min(0).max(RANK_MAX).optional(),
-  notes: z.string().max(NOTES_MAX).optional(),
-});
-
 export const updateCandidatePresidentialSchema = z.object({
   slogan: z.string().max(SLOGAN_MAX).nullable().optional(),
   accentColor: z.string().regex(HEX_COLOR_RE).nullable().optional(),

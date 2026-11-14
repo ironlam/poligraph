@@ -7,7 +7,6 @@ export type { HTTPClientOptions, HTTPResponse, RequestOptions } from "./http-cli
 
 export {
   WikidataService,
-  wikidataService,
   WIKIDATA_PROPS,
   WIKIDATA_ENTITIES,
   POLITICAL_POSITIONS,
@@ -22,7 +21,7 @@ export type {
   WikidataPartyAffiliation,
 } from "./wikidata";
 
-export { RSSClient, rssClient, RSS_FEEDS } from "./rss";
+export { RSSClient, RSS_FEEDS } from "./rss";
 export type { RSSFeedConfig, RSSItem, RSSFeed, RSSClientOptions } from "./rss";
 
 export { searchClaims, mapTextualRating, fetchPageTitle } from "./factcheck";

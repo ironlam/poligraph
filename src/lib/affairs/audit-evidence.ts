@@ -22,7 +22,6 @@ export const ADVERSE_INVOLVEMENTS: readonly Involvement[] = RULES.coherence.adve
 export const OFFICIAL_HOSTS: readonly string[] = RULES.evidence.officialHosts;
 export const OFFICIAL_PUBLISHER = RULES.evidence.officialPublisher;
 export const NOT_INDEPENDENT_TYPES = new Set<string>(RULES.evidence.notIndependentTypes);
-export const PENDING_RECOURSE: readonly RegExp[] = RULES.coherence.pendingRecourse;
 export const RECOURSE_EXHAUSTED = RULES.coherence.recourseExhausted;
 
 /**
