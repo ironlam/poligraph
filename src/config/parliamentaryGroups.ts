@@ -16,6 +16,9 @@
 import type { PoliticalPosition } from "@/generated/prisma";
 import { WD_PARTIES } from "./wikidata";
 
+/** Drawn for a group whose colour is unknown: a grey that reads as no colour, not as a side. */
+export const NEUTRAL_GROUP_COLOR = "#a6a6a6";
+
 export interface ParliamentaryGroupConfig {
   /** Group code as used in source data (CSV groupeAbrev / API groupe.code) */
   code: string;
