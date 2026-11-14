@@ -201,7 +201,7 @@ export function JudicialSection({
           </h2>
           <p className="text-sm text-muted-foreground mb-6">
             Condamnations et procédures validées par un juge, en implication directe, par catégorie
-            et par parti.
+            et par parti actuel de l{"'"}élu (pas celui de l{"'"}époque des faits).
           </p>
 
           <div className="space-y-6 mb-8">
