@@ -76,13 +76,13 @@ async function seedPolitician(
   });
 }
 
-async function read(types: string, limit = 10) {
+async function read(types: string, limit = 10, slug = CENTER) {
   return measurePostgresDriverOperation(async () => {
     const response = await getRelations(
       new NextRequest(
-        `https://poligraph.fr/api/politiques/${CENTER}/relations?types=${types}&limit=${limit}`
+        `https://poligraph.fr/api/politiques/${slug}/relations?types=${types}&limit=${limit}`
       ),
-      { params: Promise.resolve({ slug: CENTER }) }
+      { params: Promise.resolve({ slug }) }
     );
     return { status: response.status, body: await response.json() };
   });
@@ -158,6 +158,8 @@ describeIfDisposableDb("GET /api/politiques/[slug]/relations, PostgreSQL", () =>
     }
     await seedPolitician("gov-b-1", { government: [{ name: GOV_B, type: "MINISTRE_DELEGUE" }] });
     await seedPolitician("gov-c-1", { government: [{ name: GOV_C, type: "PREMIER_MINISTRE" }] });
+    // Same shape as the center with a single government: the query count must not grow with it.
+    await seedPolitician("centre-un-gouv", { government: [{ name: GOV_B, type: "MINISTRE" }] });
     // A non-government mandate type carrying the same government name must not count.
     await seedPolitician("gov-a-depute", { government: [{ name: GOV_A, type: "DEPUTE" }] });
   }, 120_000);
@@ -184,9 +186,12 @@ describeIfDisposableDb("GET /api/politiques/[slug]/relations, PostgreSQL", () =>
   });
 
   it("SAME_GOVERNMENT : une requête pour tous les gouvernements, limit par gouvernement", async () => {
-    // The center has no department mandate: this read costs only the center lookup.
+    // Neither center has a department mandate: this read costs only the center lookup.
     const baseline = await read("SAME_DEPARTMENT", 2);
     const { result, metrics } = await read("SAME_GOVERNMENT", 2);
+    const ONE_GOV = `${PREFIX}-centre-un-gouv`;
+    const oneGovBaseline = await read("SAME_DEPARTMENT", 2, ONE_GOV);
+    const oneGov = await read("SAME_GOVERNMENT", 2, ONE_GOV);
 
     expect(result.status).toBe(200);
     const bySlugs = Object.fromEntries(
@@ -197,10 +202,13 @@ describeIfDisposableDb("GET /api/politiques/[slug]/relations, PostgreSQL", () =>
     );
     expect(bySlugs).toEqual({
       [GOV_A]: [`${PREFIX}-gov-a-1`, `${PREFIX}-gov-a-2`],
-      [GOV_B]: [`${PREFIX}-gov-b-1`],
+      [GOV_B]: [`${PREFIX}-centre-un-gouv`, `${PREFIX}-gov-b-1`],
       [GOV_C]: [`${PREFIX}-gov-c-1`],
     });
-    // Colleagues, then their nodes: two queries for three governments, not one per government.
-    expect(metrics.queryCount - baseline.metrics.queryCount).toBe(2);
+    // Three governments cost the same queries as one: no longer one lookup per government.
+    const threeGovCost = metrics.queryCount - baseline.metrics.queryCount;
+    const oneGovCost = oneGov.metrics.queryCount - oneGovBaseline.metrics.queryCount;
+    expect(oneGovCost).toBeGreaterThan(0);
+    expect(threeGovCost).toBe(oneGovCost);
   });
 });
