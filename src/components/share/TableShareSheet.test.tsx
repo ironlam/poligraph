@@ -74,8 +74,27 @@ describe("tableau des fact-checks par parti", () => {
   it("donne à chaque parti ses trois décomptes et son total, sans trier ni couper", () => {
     const table = buildPartyFactCheckTable([party("PB", 2, 3, 9), party("PA", 8, 1, 1)], 6);
     expect(table.rows.map((row) => row.label)).toEqual(["PB", "PA"]);
-    expect(table.rows[0]?.detail).toBe("2 · 3 · 9 sur 15");
-    expect(table.rows[0]?.segments?.map((segment) => segment.value)).toEqual([2, 3, 9]);
+    expect(table.rows[0]?.detail).toBe("2 · 3 · 9 · 1 sur 15");
+    expect(table.rows[0]?.segments?.map((segment) => segment.value)).toEqual([2, 3, 9, 1]);
+    expect(table.legend?.map((entry) => entry.label)).toEqual([
+      "vrai",
+      "trompeur",
+      "faux",
+      "invérifiable",
+    ]);
+  });
+
+  it("dessine la barre sur le même total que le chiffre affiché", () => {
+    // One "faux" out of ten must not read as a full red bar: the nine unverifiable stay in it.
+    const lopsided = {
+      ...party("PC", 0, 0, 1),
+      totalMentions: 10,
+      breakdown: { vrai: 0, trompeur: 0, faux: 1, inverifiable: 9 },
+    };
+    const row = buildPartyFactCheckTable([lopsided], 6).rows[0]!;
+    const drawn = row.segments!.reduce((sum, segment) => sum + segment.value, 0);
+    expect(drawn).toBe(lopsided.totalMentions);
+    expect(row.detail).toBe("0 · 0 · 1 · 9 sur 10");
   });
 
   it("explique le travail des médias, sans conclure à la place du lecteur", () => {
