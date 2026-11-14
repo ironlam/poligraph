@@ -1,5 +1,8 @@
 import Link from "next/link";
 import type { CondamnationsPartyStats } from "@/lib/data/condamnations";
+import { TableShareSheet } from "@/components/share/TableShareSheet";
+import { SITE_URL } from "@/config/site";
+import type { TableCardInput } from "@/lib/share-card";
 
 /**
  * Nombre minimal de responsables suivis pour afficher un taux de condamnation. En dessous,
@@ -16,6 +19,30 @@ const PERCENT = new Intl.NumberFormat("fr-FR", {
 
 function formatPct(v: number): string {
   return PERCENT.format(v);
+}
+
+/**
+ * The table a shared image prints: every row of the page, in its order (by people followed, not by
+ * rate), each with its numerator and denominator. The rate is withheld under the same threshold
+ * as on the page.
+ */
+export function buildConvictionRateTable(
+  rows: CondamnationsPartyStats[],
+  mandat?: string
+): TableCardInput {
+  return {
+    context: "Justice",
+    title: "Condamnations définitives par parti",
+    // A filtered table says so on the image: the same parties give other figures per mandate.
+    subtitle: `Responsables politiques condamnés définitivement, rapportés à ceux que Poligraph suit dans chaque parti${mandat ? `, mandat ${mandat}` : ""}.`,
+    rows: rows.map((row) => ({
+      label: row.partyShortName,
+      detail: `${row.nCondamnesDefinitifs} sur ${row.nSuivis}`,
+      value: row.nSuivis >= SEUIL_SUIVIS_TAUX ? formatPct(row.tauxDefinitif) : "n.s.",
+    })),
+    callToAction: "La méthode et chaque affaire sur poligraph.fr",
+    note: `Partis rangés par nombre de responsables suivis, pas par taux. Parti actuel de la personne. Taux non calculé (n.s.) sous ${SEUIL_SUIVIS_TAUX} responsables suivis. Il dépend aussi de la couverture médiatique des affaires.`,
+  };
 }
 
 export function CondamnationsStatsTable({
@@ -58,6 +85,19 @@ export function CondamnationsStatsTable({
           parti auquel elle appartenait au moment des faits, indiqué sur la fiche de chaque affaire.
         </p>
       </div>
+      {rows.length > 0 && (
+        <TableShareSheet
+          slug={`condamnations-par-parti${currentMandat ? `-${currentMandat}` : ""}`}
+          label="Partager ce tableau"
+          className="mb-4"
+          data={{
+            title: "Condamnations définitives par parti",
+            text: "Condamnations définitives par parti, rapportées aux responsables suivis : le tableau et sa méthode sur Poligraph",
+            url: `${SITE_URL}/affaires/condamnations?view=stats${currentMandat ? `&mandat=${currentMandat}` : ""}`,
+          }}
+          table={buildConvictionRateTable(rows, currentMandat)}
+        />
+      )}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm" aria-describedby="stats-caption">
           <caption id="stats-caption" className="sr-only">

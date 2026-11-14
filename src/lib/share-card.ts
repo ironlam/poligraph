@@ -190,7 +190,8 @@ export type ShareCardKind =
   | "groupe"
   | "elu"
   | "affaire"
-  | "factcheck";
+  | "factcheck"
+  | "stat";
 
 /** File name of the downloaded card: stable, ASCII, tied to what it shows. */
 export function shareCardFileName(kind: ShareCardKind, slug: string): string {
@@ -206,4 +207,40 @@ export type ShareCardFormat = "post" | "story";
 /** File name of the story export of a card: the same name, marked as the tall version. */
 export function storyFileName(fileName: string): string {
   return fileName.replace(/\.png$/, "-story.png");
+}
+
+/** One row of a table card: a party, an optional breakdown bar, and its figures in words. */
+export interface TableCardRow {
+  label: string;
+  /** Segments of the bar, as counts. Omitted when the table has no breakdown to draw. */
+  segments?: readonly { value: number; color: string }[];
+  detail: string;
+  /** Right-hand figure, e.g. a rate or "n.s.". */
+  value?: string;
+}
+
+export interface TableCardInput {
+  context: string;
+  title: string;
+  subtitle: string;
+  /** What each colour of the bars stands for, in the order of the segments. */
+  legend?: readonly { label: string; color: string }[];
+  rows: readonly TableCardRow[];
+  callToAction: string;
+  note: string;
+}
+
+const TABLE_ROW_MAX = 54;
+const TABLE_ROW_MIN = 30;
+
+/**
+ * Height of one row for a table of `count` rows drawn in `available` pixels, or null when the
+ * rows would not stay legible. A comparison between parties is shared whole or not at all: a
+ * table cut to its first lines is a podium, true line by line and misleading as a whole.
+ */
+export function tableRowHeight(count: number, available: number): number | null {
+  if (count <= 0) return null;
+  const height = Math.min(TABLE_ROW_MAX, Math.floor(available / count));
+  if (height < TABLE_ROW_MIN) return null;
+  return height;
 }

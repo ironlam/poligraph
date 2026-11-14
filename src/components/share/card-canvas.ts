@@ -177,6 +177,7 @@ export function drawCardFooter(
     steps: [
       { size: 28, maxLines: 1 },
       { size: 24, maxLines: 2 },
+      { size: 21, maxLines: 3 },
     ],
     lineHeight: 1.3,
   });

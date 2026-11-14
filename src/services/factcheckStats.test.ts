@@ -97,4 +97,46 @@ describe("statistiques publiques des fact-checks", () => {
       warnSpy.mockRestore();
     });
   });
+
+  describe("partiesByVolume, le tableau qu'une carte de partage imprime", () => {
+    const row = (
+      pol: string,
+      party: string,
+      verdictRating: string,
+      mentionCount: number
+    ): Record<string, unknown> => ({
+      politicianId: pol,
+      fullName: `Personne ${pol}`,
+      slug: pol,
+      photoUrl: null,
+      partyName: `Parti ${party}`,
+      partyShortName: party,
+      partyColor: null,
+      partySlug: `parti-${party.toLowerCase()}`,
+      verdictRating,
+      mentionCount: BigInt(mentionCount),
+    });
+
+    it("donne tous les partis au-dessus du seuil, du plus vérifié au moins vérifié", async () => {
+      mocks.queryRaw.mockResolvedValue([
+        row("a", "AAA", "FALSE", 6),
+        row("b", "BBB", "TRUE", 20),
+        row("c", "CCC", "FALSE", 9),
+        row("d", "DDD", "TRUE", 2),
+      ]);
+
+      const result = await factcheckStatsService.getStatisticsData();
+
+      // DDD reste sous le seuil de 5 propos ; l'ordre suit le volume, pas la part de faux.
+      expect(result.partiesByVolume.map((party) => party.shortName)).toEqual(["BBB", "CCC", "AAA"]);
+    });
+
+    it("départage deux partis de même volume par leur nom, pour un ordre stable", async () => {
+      mocks.queryRaw.mockResolvedValue([row("z", "ZZZ", "TRUE", 7), row("a", "AAA", "FALSE", 7)]);
+
+      const result = await factcheckStatsService.getStatisticsData();
+
+      expect(result.partiesByVolume.map((party) => party.shortName)).toEqual(["AAA", "ZZZ"]);
+    });
+  });
 });

@@ -5,6 +5,10 @@ import { HorizontalBars } from "./HorizontalBars";
 import { ProportionBar } from "./ProportionBar";
 import { MethodologyDisclaimer } from "./MethodologyDisclaimer";
 import { VERDICT_GROUP_COLORS, VERDICT_GROUP_LABELS } from "@/config/labels";
+import { statsHref } from "@/config/routes";
+import { SITE_URL } from "@/config/site";
+import { TableShareSheet } from "@/components/share/TableShareSheet";
+import type { TableCardInput } from "@/lib/share-card";
 
 interface VerdictBreakdown {
   vrai: number;
@@ -37,6 +41,39 @@ interface RankedParty {
   scoreFaux: number;
 }
 
+const SHARED_VERDICTS = ["vrai", "trompeur", "faux"] as const;
+
+/**
+ * The table a shared image prints for the parties: all of them, in the order it receives (most
+ * verified first), each with its three counts and its total. The unverifiable statements stay in
+ * the total, so the three counts may not add up to it. The note explains how the outlets work
+ * and stops there: it does not tell the reader what to conclude.
+ */
+export function buildPartyFactCheckTable(
+  parties: RankedParty[],
+  sourceCount: number
+): TableCardInput {
+  return {
+    context: "Fact-checks",
+    title: "Fact-checks par parti",
+    subtitle: `Propos attribués à des membres de chaque parti et vérifiés par ${sourceCount} ${sourceCount > 1 ? "médias" : "média"}. Parti actuel de la personne.`,
+    legend: SHARED_VERDICTS.map((key) => ({
+      label: key,
+      color: VERDICT_GROUP_COLORS[key]!,
+    })),
+    rows: parties.map((party) => ({
+      label: party.shortName ?? party.name,
+      segments: SHARED_VERDICTS.map((key) => ({
+        value: party.breakdown[key],
+        color: VERDICT_GROUP_COLORS[key]!,
+      })),
+      detail: `${party.breakdown.vrai} · ${party.breakdown.trompeur} · ${party.breakdown.faux} sur ${party.totalMentions}`,
+    })),
+    callToAction: "Chaque fact-check sur poligraph.fr",
+    note: "Tous les partis comptant au moins 5 propos vérifiés, rangés par nombre de vérifications. Les médias et les fact-checkeurs choisissent les propos qu'ils vérifient.",
+  };
+}
+
 interface FactCheckSectionProps {
   total: number;
   groups: VerdictBreakdown;
@@ -45,6 +82,8 @@ interface FactCheckSectionProps {
   topFauxSharePoliticians: RankedPolitician[];
   topVraiShareParties: RankedParty[];
   topFauxShareParties: RankedParty[];
+  /** Every party above the threshold, most verified first: the table the share card prints. */
+  partiesByVolume: RankedParty[];
 }
 
 function PoliticianRankingItem({
@@ -162,6 +201,7 @@ export function FactCheckSection({
   topFauxSharePoliticians,
   topVraiShareParties,
   topFauxShareParties,
+  partiesByVolume,
 }: FactCheckSectionProps) {
   const vraiPct = total > 0 ? ((groups.vrai / total) * 100).toFixed(0) : "0";
   const trompeurPct = total > 0 ? ((groups.trompeur / total) * 100).toFixed(0) : "0";
@@ -297,6 +337,22 @@ export function FactCheckSection({
           </Card>
         )}
       </div>
+
+      {partiesByVolume.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-display text-lg font-bold">Par parti</h3>
+          <TableShareSheet
+            slug="factchecks-par-parti"
+            label="Partager le tableau par parti"
+            data={{
+              title: "Fact-checks par parti",
+              text: "Fact-checks par parti : la répartition des verdicts, parti par parti, sur Poligraph",
+              url: `${SITE_URL}${statsHref("factchecks")}`,
+            }}
+            table={buildPartyFactCheckTable(partiesByVolume, bySource.length)}
+          />
+        </div>
+      )}
 
       {/* Party rankings — 2 columns */}
       <div className="grid md:grid-cols-2 gap-8 mb-8">
