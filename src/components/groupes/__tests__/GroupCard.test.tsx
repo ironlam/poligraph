@@ -38,11 +38,12 @@ describe("carte d'un groupe parlementaire", () => {
   it("remplace la concordance AN par trois parts séparées", () => {
     render(<GroupCard group={baseGroup} />);
 
-    expect(screen.getByText("Positions sur les projets gouvernementaux")).toBeInTheDocument();
-    expect(screen.getByText("POUR")).toBeInTheDocument();
-    expect(screen.getByText("ABSTENTION")).toBeInTheDocument();
-    expect(screen.getByText("CONTRE")).toBeInTheDocument();
+    expect(screen.getByText("pour")).toBeInTheDocument();
+    expect(screen.getByText("abst.")).toBeInTheDocument();
+    expect(screen.getByText("contre")).toBeInTheDocument();
     expect(screen.getAllByText("33 %")).toHaveLength(3);
+    expect(screen.getByText("Sur 3 scrutins")).toBeInTheDocument();
+    expect(screen.getByTestId("position-share-bar")).toBeInTheDocument();
     expect(screen.queryByText("Concordance")).not.toBeInTheDocument();
     expect(screen.queryByText("Cohésion")).not.toBeInTheDocument();
   });
@@ -60,7 +61,9 @@ describe("carte d'un groupe parlementaire", () => {
     );
 
     expect(screen.getByText("Concordance")).toBeInTheDocument();
-    expect(screen.queryByText("Positions sur les projets gouvernementaux")).not.toBeInTheDocument();
+    expect(screen.getByText("42 %")).toBeInTheDocument();
+    expect(screen.queryByText("Participation")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("position-share-bar")).not.toBeInTheDocument();
   });
 
   it("distingue une part nulle d'une valeur indisponible", () => {
@@ -80,8 +83,15 @@ describe("carte d'un groupe parlementaire", () => {
 
     expect(screen.getByText("0 %")).toBeInTheDocument();
     expect(screen.getByText("-")).toBeInTheDocument();
-    expect(screen.getByText("ABSTENTION")).toBeInTheDocument();
-    expect(screen.getByText("CONTRE")).toBeInTheDocument();
+    expect(screen.getByText("Abstention")).toBeInTheDocument();
+    expect(screen.getByText("Contre")).toBeInTheDocument();
+    expect(screen.getAllByText("aucun scrutin")).toHaveLength(2);
+  });
+
+  it("affiche la part des sièges quand le total de la chambre est connu", () => {
+    render(<GroupCard group={{ ...baseGroup, seatCount: 90 }} chamberSeats={574} />);
+
+    expect(screen.getByText("90 députés · 15,7 % des sièges")).toBeInTheDocument();
   });
 
   it("explique que les non-inscrits n'ont pas de position de groupe calculée", () => {
@@ -95,7 +105,9 @@ describe("carte d'un groupe parlementaire", () => {
       />
     );
 
-    expect(screen.getByText("Non calculé pour les non-inscrits")).toBeInTheDocument();
+    expect(
+      screen.getByText("Non calculé pour les non-inscrits, qui ne forment pas un groupe.")
+    ).toBeInTheDocument();
     expect(screen.queryByText("Données indisponibles")).not.toBeInTheDocument();
     expect(screen.queryByText("33 %")).not.toBeInTheDocument();
   });

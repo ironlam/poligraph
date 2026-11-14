@@ -162,4 +162,53 @@ describe("/parlement/groupes/[slug] cartes de votes", () => {
     expect(screen.queryByRole("link", { name: "Voir les scrutins et les exclusions" })).toBeNull();
     expect(mocks.getGovernmentProjectPositionsForGroup).not.toHaveBeenCalled();
   });
+  it("range les membres par lettre et n'écrit le parti qu'une fois s'il est commun", async () => {
+    const member = (id: string, firstName: string, lastName: string, party: string | null) => ({
+      id,
+      slug: id,
+      firstName,
+      lastName,
+      fullName: `${firstName} ${lastName}`,
+      photoUrl: null,
+      blobPhotoUrl: null,
+      currentParty: party ? { shortName: party } : null,
+    });
+    const group = {
+      id: "group-senat",
+      name: "Groupe du Sénat",
+      shortName: "GS",
+      code: "GS",
+      chamber: "SENAT",
+      legislature: null,
+      color: null,
+      seatCount: 3,
+      stats: [],
+      members: [
+        member("eric-bothorel", "Éric", "Bothorel", "RE"),
+        member("pieyre-anglade", "Pieyre", "Anglade", "RE"),
+        member("elisabeth-borne", "Élisabeth", "Borne", "RE"),
+      ],
+    };
+    mocks.getGroupeDetail.mockResolvedValue(group);
+    mocks.getGroupKeyVotes.mockResolvedValue([]);
+
+    const { unmount } = render(
+      await GroupeDetailPage({ params: Promise.resolve({ slug: "gs-senat" }) })
+    );
+
+    expect(screen.getByText("Tous rattachés à RE")).toBeInTheDocument();
+    expect(screen.queryByText("RE", { exact: true })).toBeNull();
+    const letters = screen.getByRole("navigation", { name: "Aller à une lettre" });
+    expect(letters).toHaveTextContent("AB");
+    unmount();
+
+    mocks.getGroupeDetail.mockResolvedValue({
+      ...group,
+      members: [...group.members, member("alix-exemple", "Alix", "Exemple", "LR")],
+    });
+    render(await GroupeDetailPage({ params: Promise.resolve({ slug: "gs-senat" }) }));
+
+    expect(screen.queryByText(/Tous rattachés/)).toBeNull();
+    expect(screen.getByText("LR")).toBeInTheDocument();
+  });
 });
