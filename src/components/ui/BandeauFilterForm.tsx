@@ -40,6 +40,7 @@ export function BandeauFilterForm({
             id={`${idPrefix}-search`}
             name="search"
             type="search"
+            aria-label="Recherche"
             maxLength={100}
             autoComplete="off"
             placeholder={searchPlaceholder}

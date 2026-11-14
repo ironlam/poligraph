@@ -151,7 +151,6 @@ export function KPIStrip({ kpis }: { kpis: HomepageKPIs }) {
   return (
     <section>
       <h2 className="mb-3 text-lg font-display font-bold sm:mb-4">Poligraph en chiffres</h2>
-      {/* Three figures side by side at every width: stacked, they took a whole phone screen. */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <CounterCard
           count={kpis.politiciansCount}
