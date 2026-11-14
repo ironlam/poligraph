@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import {
   getGroupeDetail,
@@ -12,17 +11,18 @@ import {
   getGroupPresidents,
 } from "@/lib/data/groupes";
 import { VoteCard } from "@/components/votes";
-import { CHAMBER_LABELS, CHAMBER_SHORT_LABELS, groupPresidencyLabel } from "@/config/labels";
+import { CHAMBER_LABELS, groupPresidencyLabel } from "@/config/labels";
 import { formatDate, normalizeImageUrl } from "@/lib/utils";
 import { GLOSSARY } from "@/config/glossary";
 import { GOVERNMENT_GROUP_CODE, SENATE_GOVERNMENT_GROUP_CODE } from "@/config/scrutin-importance";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import { Users, TrendingUp, Target, Activity, FileCheck2 } from "lucide-react";
+import { TrendingUp, Target, Activity, FileCheck2 } from "lucide-react";
 import { ParliamentaryGroupJsonLd } from "@/components/seo/JsonLd";
 import { buildGroupeSeo } from "@/lib/seo/groupe-metadata";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { getGovernmentProjectPositionsForGroup } from "@/lib/data/government-project-positions";
 import { GovernmentProjectPositionBreakdown } from "@/components/groupes/GovernmentProjectPositionBreakdown";
+import { GroupMonogram, formatSeatShare } from "@/components/groupes/GroupCard";
 import { ROUTES } from "@/config/routes";
 import { GroupShareSheet } from "@/components/share/GroupShareSheet";
 import { legislatureLabel } from "@/lib/share-card";
@@ -143,6 +143,28 @@ export default async function GroupeDetailPage({ params }: PageProps) {
     ? `Scrutins ${group.chamber === "AN" ? `de la ${legislatureLabel(stats.legislature)}` : "du Sénat"}. Le groupe ${referenceGroupCode} sert d'indicateur de la position gouvernementale. Source : ${chamberLabel}.`
     : `Source : ${chamberLabel}. Les données présentées peuvent être incomplètes.`;
 
+  // Members by the first letter of their last name, accents folded ("Élisabeth Borne" files
+  // under B, "Éric Bothorel" too). The party is printed once when every member shares it.
+  const sortedMembers = [...group.members].sort((a, b) =>
+    a.lastName.localeCompare(b.lastName, "fr")
+  );
+  const memberLetters: { letter: string; members: typeof sortedMembers }[] = [];
+  for (const member of sortedMembers) {
+    const letter = member.lastName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .charAt(0)
+      .toUpperCase();
+    const last = memberLetters[memberLetters.length - 1];
+    if (last && last.letter === letter) last.members.push(member);
+    else memberLetters.push({ letter, members: [member] });
+  }
+  const firstParty = sortedMembers[0]?.currentParty?.shortName ?? null;
+  const sharedParty =
+    firstParty && sortedMembers.every((m) => m.currentParty?.shortName === firstParty)
+      ? firstParty
+      : null;
+
   return (
     <div className="container mx-auto px-4 py-8">
       <ParliamentaryGroupJsonLd
@@ -161,101 +183,150 @@ export default async function GroupeDetailPage({ params }: PageProps) {
       />
 
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          {group.color && (
-            <span
-              className="w-5 h-5 rounded-full"
-              style={{ backgroundColor: group.color }}
-              aria-hidden="true"
-            />
-          )}
-          <h1 className="text-2xl font-display font-extrabold tracking-tight">{group.name}</h1>
-          <Badge
-            variant="outline"
-            className={
-              group.chamber === "AN" ? "bg-blue-100 text-blue-700" : "bg-rose-100 text-rose-700"
-            }
-          >
-            {CHAMBER_SHORT_LABELS[group.chamber]}
-          </Badge>
-        </div>
-        <p className="text-sm text-muted-foreground flex items-center gap-1">
-          <Users className="h-4 w-4" />
-          {group.seatCount} membre{group.seatCount > 1 ? "s" : ""}
-        </p>
-        {presidents.length > 0 && (
-          <div className="mt-4">
-            <ul className="flex flex-wrap gap-3">
-              {presidents.map((president) => (
-                <li key={president.politician.slug}>
-                  <Link
-                    href={`/politiques/${president.politician.slug}`}
-                    prefetch={false}
-                    className="flex min-h-11 items-center gap-3 rounded-lg border p-2 pr-4 hover:bg-muted transition-colors"
-                  >
-                    <PoliticianAvatar
-                      photoUrl={president.politician.photoUrl}
-                      blobPhotoUrl={president.politician.blobPhotoUrl}
-                      firstName={president.politician.firstName}
-                      lastName={president.politician.lastName}
-                      size="sm"
-                    />
-                    <span className="flex flex-col">
-                      <span className="text-xs text-muted-foreground">
-                        {groupPresidencyLabel(president.politician.civility)} depuis le{" "}
-                        {formatDate(president.since)}
-                      </span>
-                      <span className="text-sm font-medium">{president.politician.fullName}</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Source :{" "}
-              <a
-                href={presidents[0]!.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-foreground"
-                aria-label={`Données ouvertes, ${chamberLabel} (fichier officiel, nouvel onglet)`}
-              >
-                données ouvertes, {chamberLabel}
-              </a>
-            </p>
-          </div>
-        )}
-        <GroupShareSheet
-          slug={slug}
-          className="mt-4"
-          data={{
-            title: group.name,
-            text: `${group.name} (${cardSubline}) : membres et votes sur Poligraph`,
-            url: `${SITE_URL}/parlement/groupes/${slug}`,
-          }}
-          name={group.name}
-          subline={cardSubline}
-          color={group.color}
-          president={
-            cardPresident && {
-              fullName: cardPresident.politician.fullName,
-              role: `${groupPresidencyLabel(cardPresident.politician.civility)} depuis ${cardPresident.since.getUTCFullYear()}`,
-              photoUrl: normalizeImageUrl(
-                cardPresident.politician.blobPhotoUrl ?? cardPresident.politician.photoUrl
-              ),
-            }
-          }
-          seatCount={group.seatCount}
-          hemicycle={
-            hemicyclePlacement && {
-              placement: hemicyclePlacement,
-              seatNoun: seatNoun(group.chamber, hemicyclePlacement.seats),
-            }
-          }
-          indicators={cardIndicators}
-          scope={cardScope}
+      <div className="mb-8 overflow-hidden rounded-2xl border bg-card">
+        <div
+          aria-hidden="true"
+          className="h-2"
+          style={{ backgroundColor: group.color ?? "#a6a6a6" }}
         />
+        <div className="p-5 sm:p-7">
+          <div className="flex flex-wrap items-start gap-6">
+            <div className="flex min-w-0 grow basis-[30rem] items-start gap-4">
+              <GroupMonogram
+                code={group.code}
+                color={group.color}
+                className="h-14 min-w-14 rounded-xl px-2 text-base sm:h-16 sm:min-w-16 sm:text-lg"
+              />
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground">
+                  Groupe parlementaire · {chamberLabel}
+                  {group.legislature !== null ? ` · ${legislatureLabel(group.legislature)}` : ""}
+                </p>
+                <h1 className="mt-1 text-2xl font-display font-extrabold leading-tight tracking-tight sm:text-4xl">
+                  {group.name}
+                </h1>
+                <p className="mt-2 text-base">
+                  <strong>
+                    {group.seatCount} {seatNoun(group.chamber, group.seatCount)}
+                  </strong>
+                  {hemicyclePlacement && hemicyclePlacement.total > 0
+                    ? `, soit ${formatSeatShare(hemicyclePlacement.seats, hemicyclePlacement.total)} des ${hemicyclePlacement.total} sièges occupés.`
+                    : "."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex grow basis-72 flex-col gap-3">
+              {presidents.length > 0 && (
+                <div>
+                  <ul className="flex flex-col gap-2">
+                    {presidents.map((president) => (
+                      <li key={president.politician.slug}>
+                        <Link
+                          href={`/politiques/${president.politician.slug}`}
+                          prefetch={false}
+                          className="flex min-h-11 items-center gap-3 rounded-lg border p-2 pr-4 hover:bg-muted transition-colors"
+                        >
+                          <PoliticianAvatar
+                            photoUrl={president.politician.photoUrl}
+                            blobPhotoUrl={president.politician.blobPhotoUrl}
+                            firstName={president.politician.firstName}
+                            lastName={president.politician.lastName}
+                            size="sm"
+                          />
+                          <span className="flex flex-col">
+                            <span className="text-xs text-muted-foreground">
+                              {groupPresidencyLabel(president.politician.civility)} depuis le{" "}
+                              {formatDate(president.since)}
+                            </span>
+                            <span className="text-sm font-semibold">
+                              {president.politician.fullName}
+                            </span>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Source :{" "}
+                    <a
+                      href={presidents[0]!.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground"
+                      aria-label={`Données ouvertes, ${chamberLabel} (fichier officiel, nouvel onglet)`}
+                    >
+                      données ouvertes, {chamberLabel}
+                    </a>
+                  </p>
+                </div>
+              )}
+              <GroupShareSheet
+                slug={slug}
+                data={{
+                  title: group.name,
+                  text: `${group.name} (${cardSubline}) : membres et votes sur Poligraph`,
+                  url: `${SITE_URL}/parlement/groupes/${slug}`,
+                }}
+                name={group.name}
+                subline={cardSubline}
+                color={group.color}
+                president={
+                  cardPresident && {
+                    fullName: cardPresident.politician.fullName,
+                    role: `${groupPresidencyLabel(cardPresident.politician.civility)} depuis ${cardPresident.since.getUTCFullYear()}`,
+                    photoUrl: normalizeImageUrl(
+                      cardPresident.politician.blobPhotoUrl ?? cardPresident.politician.photoUrl
+                    ),
+                  }
+                }
+                seatCount={group.seatCount}
+                hemicycle={
+                  hemicyclePlacement && {
+                    placement: hemicyclePlacement,
+                    seatNoun: seatNoun(group.chamber, hemicyclePlacement.seats),
+                  }
+                }
+                indicators={cardIndicators}
+                scope={cardScope}
+              />
+            </div>
+          </div>
+
+          {hemicyclePlacement && hemicyclePlacement.total > 0 && (
+            <div className="mt-6">
+              <div
+                role="img"
+                aria-label={`Place du groupe dans l'hémicycle : ${hemicyclePlacement.seats} sièges sur ${hemicyclePlacement.total}, de la gauche vers la droite`}
+                className="flex h-3.5 gap-0.5 overflow-hidden rounded-md"
+              >
+                {hemicyclePlacement.before > 0 && (
+                  <span className="bg-muted" style={{ flex: `${hemicyclePlacement.before} 1 0` }} />
+                )}
+                <span
+                  style={{
+                    flex: `${hemicyclePlacement.seats} 1 0`,
+                    backgroundColor: group.color ?? "#a6a6a6",
+                  }}
+                />
+                {hemicyclePlacement.total - hemicyclePlacement.before - hemicyclePlacement.seats >
+                  0 && (
+                  <span
+                    className="bg-muted"
+                    style={{
+                      flex: `${hemicyclePlacement.total - hemicyclePlacement.before - hemicyclePlacement.seats} 1 0`,
+                    }}
+                  />
+                )}
+              </div>
+              <p className="mt-2 flex justify-between text-xs text-muted-foreground">
+                <span>Gauche</span>
+                <span>Place dans l&apos;hémicycle</span>
+                <span>Droite</span>
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats row */}
@@ -305,68 +376,73 @@ export default async function GroupeDetailPage({ params }: PageProps) {
       )}
 
       {group.chamber === "AN" && (governmentProjects || isNonInscritAN) && (
-        <section className="mb-8" aria-labelledby="government-projects-title">
-          <Card>
-            <CardContent className="p-5">
-              <h2 id="government-projects-title" className="text-lg font-semibold">
+        <section
+          className="mb-10 rounded-2xl border bg-card p-5 sm:p-7"
+          aria-labelledby="government-projects-title"
+        >
+          {isNonInscritAN ? (
+            <>
+              <h2 id="government-projects-title" className="font-display text-xl font-bold">
                 Positions sur les projets gouvernementaux
               </h2>
-              {isNonInscritAN ? (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Non calculé pour les non-inscrits, qui ne constituent pas un groupe parlementaire.
+              <p className="mt-3 text-sm text-muted-foreground">
+                Non calculé pour les non-inscrits, qui ne constituent pas un groupe parlementaire.
+              </p>
+            </>
+          ) : (
+            <div className="flex flex-wrap gap-x-10 gap-y-6">
+              <div className="min-w-0 grow basis-80">
+                <h2
+                  id="government-projects-title"
+                  className="font-display text-xl font-bold sm:text-2xl"
+                >
+                  Positions sur les projets gouvernementaux
+                </h2>
+                <p className="mt-2 text-base text-muted-foreground">
+                  Position majoritaire du groupe lors des votes sur l{"'"}ensemble des projets de
+                  loi déposés par le gouvernement. L{"'"}abstention reste distincte et n{"'"}est pas
+                  comptée comme un soutien.
                 </p>
-              ) : (
-                <>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Répartition de la position dominante du groupe lors des votes sur l{"'"}ensemble
-                    des projets de loi d{"'"}origine gouvernementale. L{"'"}abstention reste
-                    distincte et n{"'"}est pas comptée comme un soutien.
-                  </p>
-                  <div className="mt-5">
-                    <GovernmentProjectPositionBreakdown summary={governmentProjects!.summary} />
-                  </div>
-                  <p className="mt-3 text-center text-xs text-muted-foreground">
-                    {governmentProjects!.summary.eligibleScrutinCount} scrutins dans le périmètre,
-                    dont {governmentProjects!.summary.groupExcludedCount} sans position retenue pour
-                    ce groupe.
-                  </p>
-                  {governmentProjects!.summary.updatedAt && (
-                    <p className="mt-1 text-center text-xs text-muted-foreground">
-                      Sources récupérées le{" "}
-                      {governmentProjects!.summary.updatedAt.toLocaleDateString("fr-FR", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                        timeZone: "Europe/Paris",
-                      })}
-                      .
-                    </p>
-                  )}
-                  <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm">
-                    <Link
-                      href={ROUTES.groupeGovernmentProjects(slug)}
-                      className="inline-flex min-h-11 items-center text-primary hover:underline"
-                    >
-                      Voir les scrutins et les exclusions
-                    </Link>
-                    <Link
-                      href={ROUTES.governmentProjectsMethodology}
-                      className="inline-flex min-h-11 items-center text-primary hover:underline"
-                    >
-                      Comprendre la méthode
-                    </Link>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <Link
+                    href={ROUTES.groupeGovernmentProjects(slug)}
+                    className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                  >
+                    Voir les {governmentProjects!.summary.eligibleScrutinCount} scrutins
+                  </Link>
+                  <Link
+                    href={ROUTES.governmentProjectsMethodology}
+                    className="inline-flex min-h-11 items-center text-sm text-primary hover:underline"
+                  >
+                    Comprendre la méthode
+                  </Link>
+                </div>
+              </div>
+              <div className="min-w-0 grow basis-96">
+                <GovernmentProjectPositionBreakdown summary={governmentProjects!.summary} />
+                <p className="mt-4 text-xs text-muted-foreground">
+                  {governmentProjects!.summary.consideredCount} scrutins pris en compte sur{" "}
+                  {governmentProjects!.summary.eligibleScrutinCount} dans le périmètre
+                  {governmentProjects!.summary.groupExcludedCount > 0
+                    ? `, ${governmentProjects!.summary.groupExcludedCount} sans position retenue pour ce groupe`
+                    : ""}
+                  .
+                  {governmentProjects!.summary.updatedAt &&
+                    ` Sources récupérées le ${governmentProjects!.summary.updatedAt.toLocaleDateString(
+                      "fr-FR",
+                      { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" }
+                    )}.`}
+                </p>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
       {/* Key Votes */}
       {groupKeyVotes.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Votes marquants</h2>
+          <h2 className="mb-4 font-display text-xl font-bold sm:text-2xl">Votes marquants</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {groupKeyVotes.map((gp) => (
               <VoteCard
@@ -392,39 +468,83 @@ export default async function GroupeDetailPage({ params }: PageProps) {
       )}
 
       {/* Members */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Membres</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {group.members
-            .sort((a, b) => a.lastName.localeCompare(b.lastName, "fr"))
-            .map((m) => (
-              <Link
-                key={m.id}
-                href={`/politiques/${m.slug}`}
-                prefetch={false}
-                className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted transition-colors"
+      <section aria-labelledby="members-title">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 id="members-title" className="font-display text-xl font-bold sm:text-2xl">
+            {group.members.length > 1
+              ? `Les ${group.members.length} ${seatNoun(group.chamber, group.members.length)} du groupe`
+              : "Membres"}
+          </h2>
+          {sharedParty && (
+            <p className="text-sm text-muted-foreground">Tous rattachés à {sharedParty}</p>
+          )}
+        </div>
+        {memberLetters.length > 1 && (
+          <nav aria-label="Aller à une lettre" className="mt-4 flex flex-wrap gap-1">
+            {memberLetters.map(({ letter }) => (
+              <a
+                key={letter}
+                href={`#membres-${letter}`}
+                className="inline-flex size-11 items-center justify-center rounded-lg border bg-card font-semibold hover:bg-muted"
               >
-                <PoliticianAvatar
-                  photoUrl={m.photoUrl}
-                  blobPhotoUrl={m.blobPhotoUrl}
-                  firstName={m.firstName}
-                  lastName={m.lastName}
-                  size="sm"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{m.fullName}</p>
-                  {m.currentParty && (
-                    <p className="text-xs text-muted-foreground">{m.currentParty.shortName}</p>
-                  )}
-                </div>
-              </Link>
+                {letter}
+              </a>
             ))}
+          </nav>
+        )}
+        <div className="mt-4 rounded-2xl border bg-card px-3 pb-3 sm:px-5">
+          {memberLetters.map(({ letter, members }) => (
+            <div
+              key={letter}
+              id={`membres-${letter}`}
+              className="flex scroll-mt-20 gap-3 border-t pt-3 mt-3 first:mt-0 first:border-t-0 sm:gap-4"
+            >
+              <span
+                aria-hidden="true"
+                className="w-6 shrink-0 pt-2.5 font-display text-xl font-extrabold text-primary sm:w-8"
+              >
+                {letter}
+              </span>
+              <ul className="grid min-w-0 grow grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 lg:grid-cols-4">
+                {members.map((m) => (
+                  <li key={m.id}>
+                    <Link
+                      href={`/politiques/${m.slug}`}
+                      prefetch={false}
+                      className="flex min-h-12 items-center gap-2.5 rounded-lg px-2 py-1 hover:bg-muted transition-colors"
+                    >
+                      <PoliticianAvatar
+                        photoUrl={m.photoUrl}
+                        blobPhotoUrl={m.blobPhotoUrl}
+                        firstName={m.firstName}
+                        lastName={m.lastName}
+                        size="sm"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm">
+                          {m.firstName} <strong className="font-semibold">{m.lastName}</strong>
+                        </span>
+                        {!sharedParty && m.currentParty && (
+                          <span className="block text-xs text-muted-foreground">
+                            {m.currentParty.shortName}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* Back link */}
       <div className="mt-8 text-center">
-        <Link href="/parlement/groupes" className="text-primary hover:underline">
+        <Link
+          href="/parlement/groupes"
+          className="inline-flex min-h-11 items-center text-primary hover:underline"
+        >
           Tous les groupes
         </Link>
       </div>
