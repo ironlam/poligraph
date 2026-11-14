@@ -380,6 +380,7 @@ export const FOOTER_SECTIONS: FooterSection[] = [
       { href: "/methodologie", label: "Méthodologie" },
       { href: "/changelog", label: "Journal des évolutions" },
       { href: "/docs/api", label: "API" },
+      { href: "https://mcp.poligraph.fr", label: "Serveur MCP", external: true },
       { href: "/espace-presse", label: "Presse et partenaires" },
       {
         href: "https://boussole.poligraph.fr",
