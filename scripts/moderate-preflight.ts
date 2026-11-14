@@ -43,13 +43,13 @@ async function main() {
   );
 
   const startedAt = Date.now();
-  const report = await runPreflight({ source: "manual", limit: args.limit });
+  // Pas de crédit Anthropic : la session /moderate juge elle-même chaque brouillon.
+  const report = await runPreflight({ source: "manual", limit: args.limit, skipModeration: true });
   const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
 
   console.log(`\n📊 Stats (${elapsedSec}s):`);
   console.log(`   Total drafts:            ${report.stats.totalDrafts}`);
-  console.log(`   Auto-publish candidates: ${report.stats.autoPublishCandidates}`);
-  console.log(`   Needs review:            ${report.stats.needsReview}`);
+  console.log(`   Avis IA :                désactivé (la session /moderate juge chaque brouillon)`);
   console.log(`   Attribution issues:      ${report.stats.attributionIssues}`);
   console.log(`   Duplicate groups:        ${report.stats.duplicateGroups}`);
 
