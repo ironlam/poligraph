@@ -19,7 +19,9 @@ export const SITEMAP_SHARD_TAGS = {
   0: ["politicians", "affairs", "factchecks", "gouvernements", "changelog"],
   // Affair pages, party pages, elections, departments.
   1: ["affairs", "parties", "elections"],
-  2: ["dossiers"],
+  // Dossiers + parliamentary groups. "votes" is the tag the groups listing carries
+  // (getGroupesListing), so a group that loses its last member leaves with it.
+  2: ["dossiers", "votes"],
   3: ["votes"],
   // Communes carrying a 2026 candidacy. Frozen data, hence the frozen tag.
   4: ["elections-municipales-2026"],

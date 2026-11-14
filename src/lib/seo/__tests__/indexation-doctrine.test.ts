@@ -708,3 +708,51 @@ describe("doctrine, /territoires/departements/[slug] : les vues de la liste des 
     }
   });
 });
+
+describe("doctrine — indexable routes the 2026-11-12 audit found missing from the sitemap", () => {
+  const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
+  const code = src
+    .split("\n")
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join("\n");
+
+  it.each([
+    "url: `${SITE_URL}/parlement/votes`,",
+    "url: `${SITE_URL}/parlement/groupes`,",
+    "url: `${SITE_URL}${ROUTES.governmentProjectsMethodology}`,",
+    "url: `${SITE_URL}/procedures-baillons`,",
+    "url: `${SITE_URL}/elections/municipales-2026/resultats`,",
+    "url: `${SITE_URL}/elections/senatoriales-2026/college-electoral`,",
+  ])("lists %s", (entry) => {
+    expect(code).toContain(entry);
+  });
+
+  // Mirrors the /parlement/groupes listing: current legislature (from the shared constant, never
+  // a literal) or Senate, and at least one current member.
+  const dossiersShard = (() => {
+    const start = code.indexOf("async function buildDossiersSitemap");
+    expect(start).toBeGreaterThan(-1);
+    return code.slice(start, code.indexOf("\n}", start));
+  })();
+
+  it("announces the group pages on the listing perimeter", () => {
+    expect(dossiersShard).toContain("url: `${SITE_URL}/parlement/groupes/${g.slug}`");
+    expect(dossiersShard).toContain("{ legislature: CURRENT_LEGISLATURE }, { legislature: null }");
+    expect(dossiersShard).toContain("mandates: { some: { mandate: { isCurrent: true } } }");
+    expect(dossiersShard).not.toMatch(/legislature: \d+/);
+  });
+
+  // Deliberately left out: third-party fact-check summaries (near-duplicates of their source),
+  // the daily view (same content as a noindex date archive), the flagged chatbot, the
+  // group evidence pages, and the 2026 municipal department pages (overlap with Territoires).
+  it.each([
+    "/factchecks/${",
+    "/parlement/votes/aujourd-hui",
+    "/chat",
+    "/projets-gouvernementaux",
+    "/elections/municipales-2026/departements",
+    "/parlement/votes?filter",
+  ])("does not list %s", (fragment) => {
+    expect(code).not.toContain(fragment);
+  });
+});
