@@ -12,6 +12,7 @@ import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
 import { PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
 import { ROUTES, STATS_SECTIONS, STATS_TABS } from "@/config/routes";
+import { CURRENT_LEGISLATURE } from "@/config/scrutin-importance";
 import { getPublishedChangelog } from "@/lib/data/changelog";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
@@ -198,6 +199,20 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       changeFrequency: "daily",
       priority: 0.8,
     },
+    // Bare listing only: AGENTS.md §5 names it indexable, while its facets are noindex,follow
+    // and crawl-blocked in robots.ts. The group detail pages are in shard 2.
+    {
+      url: `${SITE_URL}/parlement/votes`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/parlement/groupes`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
     {
       url: `${SITE_URL}/parlement/assemblee/legislatures`,
       lastModified: new Date(),
@@ -321,6 +336,18 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       priority: 0.6,
     },
     {
+      url: `${SITE_URL}${ROUTES.governmentProjectsMethodology}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
+      url: `${SITE_URL}/procedures-baillons`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
       url: `${SITE_URL}/espace-presse`,
       // Static content: its date only moves when the mentions or credits change.
       lastModified: new Date(PRESS_SPACE_UPDATED_AT),
@@ -386,6 +413,19 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.7,
+    },
+    // Bare page only: the ?dept= variant overlaps the department pages.
+    {
+      url: `${SITE_URL}/elections/municipales-2026/resultats`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${SITE_URL}/elections/senatoriales-2026/college-electoral`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.6,
     },
   ];
 
@@ -822,7 +862,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
   ];
 }
 
-// Sitemap 2: Legislative dossiers — top 300 most recent (priority 0.6)
+// Sitemap 2: Legislative dossiers (top 300 most recent, priority 0.6) + parliamentary groups (0.7)
 async function buildDossiersSitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache";
   cacheTag(...SITEMAP_SHARD_TAGS[2]);
@@ -835,7 +875,21 @@ async function buildDossiersSitemap(): Promise<MetadataRoute.Sitemap> {
     take: 300,
   });
 
-  return dossiers
+  // Same perimeter as the /parlement/groupes listing (getGroupesListing + seatCount > 0):
+  // current-legislature AN groups and Senate groups (legislature null), each with at least one
+  // current member. A group with no current member is hidden from the listing, so it is not
+  // announced either.
+  const groups = await db.parliamentaryGroup.findMany({
+    where: {
+      slug: { not: null },
+      OR: [{ legislature: CURRENT_LEGISLATURE }, { legislature: null }],
+      mandates: { some: { mandate: { isCurrent: true } } },
+    },
+    select: { slug: true, updatedAt: true },
+    orderBy: { code: "asc" },
+  });
+
+  const dossierPages: MetadataRoute.Sitemap = dossiers
     .filter((d) => d.slug)
     .map((d) => ({
       url: `${SITE_URL}/parlement/dossiers/${d.slug}`,
@@ -843,6 +897,15 @@ async function buildDossiersSitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly" as const,
       priority: 0.6,
     }));
+
+  const groupPages: MetadataRoute.Sitemap = groups.map((g) => ({
+    url: `${SITE_URL}/parlement/groupes/${g.slug}`,
+    lastModified: g.updatedAt,
+    changeFrequency: "weekly" as const,
+    priority: 0.7,
+  }));
+
+  return [...dossierPages, ...groupPages];
 }
 
 // Sitemap 3: Top 500 indexable scrutins by recency (priority 0.4).
