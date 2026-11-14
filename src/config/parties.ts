@@ -229,13 +229,3 @@ export const EUROPEAN_GROUPS: EuropeanGroupConfig[] = [
     color: "#999999",
   },
 ];
-
-// Helper to get European group config by code
-export function getEuropeanGroupConfig(code: string): EuropeanGroupConfig | undefined {
-  return EUROPEAN_GROUPS.find((g) => g.code === code);
-}
-
-// Helper to get group-to-party mapping by parliamentary group abbreviation
-export function getGroupPartyMapping(abbrev: string): GroupPartyMapping | undefined {
-  return ASSEMBLY_GROUP_PARTY_MAPPING[abbrev] || SENATE_GROUP_PARTY_MAPPING[abbrev];
-}

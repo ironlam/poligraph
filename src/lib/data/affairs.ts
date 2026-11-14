@@ -18,7 +18,6 @@ import {
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import {
-  ADVERSE_INVOLVEMENTS,
   VICTIM_LISTING_INVOLVEMENTS,
   getAdverseAffairWhere,
   getDocumentaryAffairWhere,
@@ -388,43 +387,6 @@ export async function getSuperCategoryCounts(involvements: readonly Involvement[
   }
 
   return superCounts;
-}
-
-export async function getStatusCounts() {
-  "use cache";
-  cacheTag("affairs");
-  cacheLife("synced");
-
-  const statusCounts = await db.affair.groupBy({
-    by: ["status"],
-    where: {
-      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
-      politician: PUBLIC_POLITICIAN_WHERE,
-    },
-    _count: { status: true },
-  });
-
-  return Object.fromEntries(statusCounts.map((s) => [s.status, s._count.status]));
-}
-
-export async function getSeverityCounts() {
-  "use cache";
-  cacheTag("affairs");
-  cacheLife("synced");
-
-  const severityCounts = await db.affair.groupBy({
-    by: ["severity"],
-    where: {
-      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
-      politician: PUBLIC_POLITICIAN_WHERE,
-    },
-    _count: { severity: true },
-  });
-
-  return Object.fromEntries(severityCounts.map((s) => [s.severity, s._count.severity])) as Record<
-    string,
-    number
-  >;
 }
 
 const EMPTY_CERTAINTY_COUNTS: Record<CertaintyLevel, number> = {

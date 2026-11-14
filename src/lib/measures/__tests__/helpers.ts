@@ -185,8 +185,6 @@ export async function publishSeededMeasure(): Promise<{ measureId: string; revis
   return seeded;
 }
 
-const REJECT_CONSTRAINT = "reject_measure_search_document_test";
-
 /**
  * Runs `fn` while the database rejects every write to a MEASURE SearchDocument.
  *
@@ -213,7 +211,3 @@ export async function withIndexingRejected<T>(fn: () => Promise<T>): Promise<T> 
     `;
   }
 }
-
-// Named export of the constraint name so a failing test can be diagnosed without
-// searching for the string.
-export const INDEXING_REJECT_CONSTRAINT = REJECT_CONSTRAINT;

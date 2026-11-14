@@ -20,13 +20,6 @@ const STATUS_STYLES: Record<PublicationStatus, string> = {
   ARCHIVED: "border-slate-300 bg-slate-50 text-slate-500",
   EXCLUDED: "border-gray-300 bg-gray-50 text-gray-500",
 };
-
-export interface PublishRefusal {
-  ok: false;
-  error: string;
-  blocking?: BlockingDecision[];
-}
-
 type ChangeResult = void | { ok: boolean; error?: string; blocking?: BlockingDecision[] };
 
 interface Props {

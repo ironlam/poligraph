@@ -14,18 +14,6 @@ export function formatCurrency(amount: number): string {
 }
 
 /**
- * Normalize a query for matching: lowercase, strip accents and punctuation.
- */
-export function normalizeQuery(query: string): string {
-  return query
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[?!.,;:'"()]/g, "")
-    .trim();
-}
-
-/**
  * Extract temporal modifiers from a query.
  * Returns a date filter object if temporal keywords are found.
  */

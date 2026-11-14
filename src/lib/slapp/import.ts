@@ -24,9 +24,6 @@ export const CaseImportSchema = z.object({
   outcomeUnfavorable: CriterionStateSchema,
   externalQualification: ExternalQualificationSchema,
 });
-
-export type CaseImportInput = z.infer<typeof CaseImportSchema>;
-
 export type CaseImportResult =
   | {
       success: true;

@@ -5,15 +5,9 @@
  */
 
 export { createCLI } from "./cli-runner";
-export {
-  formatResults,
-  formatHeader,
-  formatNumber,
-  formatBytes,
-  formatDuration,
-} from "./result-formatter";
-export { ProgressTracker, createProgress } from "./progress-tracker";
-export { CheckpointManager, createCheckpoint } from "./checkpoint";
+export { formatResults, formatHeader } from "./result-formatter";
+export { ProgressTracker } from "./progress-tracker";
+export { CheckpointManager } from "./checkpoint";
 export { syncMetadata } from "./sync-metadata";
 export { hashFile, hashContent, hashVotes } from "./hash";
 

@@ -28,7 +28,3 @@ export async function getMeasureVoteLinksForModeration(measureId: string) {
     },
   });
 }
-
-export type ModerationVoteLink = Awaited<
-  ReturnType<typeof getMeasureVoteLinksForModeration>
->[number];

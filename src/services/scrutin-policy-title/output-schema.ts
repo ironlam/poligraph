@@ -15,5 +15,3 @@ export const PolicyTitleOutputSchema = z.object({
   selfConfidence: z.enum(["HIGH", "MEDIUM", "LOW"]),
   rationale: z.string(),
 });
-
-export type PolicyTitleOutputParsed = z.infer<typeof PolicyTitleOutputSchema>;

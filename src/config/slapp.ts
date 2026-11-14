@@ -40,9 +40,6 @@ export const SLAPP_CRITERIA = [
   description: string;
   isExternalQualifier: boolean;
 }[];
-
-export type SlappCriterionId = (typeof SLAPP_CRITERIA)[number]["id"];
-
 export type CriterionState = {
   met: boolean;
   note?: string;

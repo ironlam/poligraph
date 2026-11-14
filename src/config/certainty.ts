@@ -141,8 +141,3 @@ export function getStatusesForCertainty(level: CertaintyLevel): AffairStatus[] {
 export const ACTIVE_AFFAIR_STATUSES: AffairStatus[] = Object.entries(STATUS_TO_CERTAINTY)
   .filter(([, level]) => isActiveCertainty(level))
   .map(([status]) => status as AffairStatus);
-
-/** All AffairStatus values that are clos favorable */
-export const CLOS_FAVORABLE_STATUSES: AffairStatus[] = Object.entries(STATUS_TO_CERTAINTY)
-  .filter(([, level]) => level === "CLOS_FAVORABLE")
-  .map(([status]) => status as AffairStatus);

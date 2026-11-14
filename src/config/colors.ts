@@ -110,36 +110,8 @@ export const STAT_ACCENTS = {
   warning: { border: "#d97706", bg: "#d9770610" },
 } as const;
 
-export type StatAccent = keyof typeof STAT_ACCENTS;
-
-// Tailwind text color classes (light + dark mode)
-export const TEXT_COLORS = {
-  vote: {
-    pour: "text-green-600 dark:text-green-400",
-    contre: "text-red-600 dark:text-red-400",
-    abstention: "text-yellow-600 dark:text-yellow-400",
-  },
-  chamber: {
-    AN: "text-blue-600 dark:text-blue-400",
-    SENAT: "text-pink-700 dark:text-pink-400",
-    PE: "text-violet-600 dark:text-violet-400",
-    GOUVERNEMENT: "text-emerald-600 dark:text-emerald-400",
-  },
-  affairStatus: {
-    CONDAMNATION_DEFINITIVE: "text-red-800 dark:text-red-400",
-  },
-  ui: {
-    warning: "text-amber-600 dark:text-amber-400",
-  },
-} as const;
-
 // Type helpers
 export type ColorCategory = keyof typeof COLORS;
-export type VoteColor = keyof typeof COLORS.vote;
-export type ChamberColor = keyof typeof COLORS.chamber;
-export type AffairStatusColor = keyof typeof COLORS.affairStatus;
-export type AffairCategoryColor = keyof typeof COLORS.affairCategory;
-export type PositionColor = keyof typeof COLORS.position;
 
 /**
  * Get a color value by path
@@ -160,35 +132,4 @@ export function getColor(
     return theme === "light" ? "#888888" : "#666666";
   }
   return colorVariant[theme];
-}
-
-/**
- * Get all colors for a category
- * @param category - The color category
- * @param theme - 'light' or 'dark'
- * @returns Object with all colors in the category
- */
-export function getCategoryColors(
-  category: ColorCategory,
-  theme: "light" | "dark" = "light"
-): Record<string, string> {
-  const categoryColors = COLORS[category] as Record<string, ColorVariant>;
-  return Object.entries(categoryColors).reduce(
-    (acc, [key, variant]) => {
-      acc[key] = variant[theme];
-      return acc;
-    },
-    {} as Record<string, string>
-  );
-}
-
-/**
- * Get Tailwind class for a color if available
- * @param category - The color category
- * @param key - The specific color key
- * @returns Tailwind class or undefined
- */
-export function getTailwindClass(category: ColorCategory, key: string): string | undefined {
-  const categoryColors = COLORS[category] as Record<string, ColorVariant>;
-  return categoryColors?.[key]?.tailwind;
 }

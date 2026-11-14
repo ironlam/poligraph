@@ -30,20 +30,6 @@ export interface CandidateMatch {
   };
 }
 
-/** Mandate period for TemporalSignal */
-export interface MandatePeriod {
-  start: Date;
-  end: Date | null;
-  type: string;
-}
-
-/** Party membership for PartyContextSignal */
-export interface PartyMembershipRecord {
-  partyId: string;
-  partyName: string;
-  current: boolean;
-}
-
 export interface ResolveResult {
   sourceId: string;
   politicianId: string | null;

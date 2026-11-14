@@ -38,8 +38,6 @@ export function getBallotPhase(status: ElectionStatus): BallotPhase {
 
 export const SENATE_SEATS_TOTAL = SENATE_STATUTORY_SEATS_TOTAL;
 export const SENATE_SEATS_AT_STAKE = SENATE_STATUTORY_SEATS_BY_SERIES[2];
-export const SENATE_SEATS_OTHER_SERIES = SENATE_SEATS_TOTAL - SENATE_SEATS_AT_STAKE;
-
 /**
  * "Série" carries the whole page and nothing on it defined the word.
  *
@@ -269,28 +267,6 @@ export const POLL_EARLY_CLOSE_NOTE =
   "Ces heures sont des bornes, pas des horaires garantis : dès que tous les électeurs ont " +
   "voté dans toutes les sections, le président du collège peut déclarer le scrutin clos " +
   "plus tôt.";
-
-/**
- * The hours above cover the 63 departments and collectivities. They are not extended to
- * the sixty-fourth constituency, and the wording says only what is verifiable today: the
- * 21 April decree convenes the listed departments and collectivities, so it fixes nothing
- * for the Français établis hors de France. It does not follow that no official hour will
- * exist. A dedicated text set 9 h to 15 h in 2023, the Sénat announces the same for 2026,
- * and France Diplomatie states its own arrangements are still to be published.
- *
- * Saying only "the 21 April decree does not fix them" was true and concealed a rule that is
- * published and in force. Article 50 of décret n° 2014-290 of 4 March 2014 fixes 9 h to 15 h
- * for this college, with the same early-closing faculty. Stating the real hours with their
- * own source is both more useful and more honest than reporting an absence that is not one.
- *
- * The six seats are statutory, not a count of our rows: tableau n° 5 annexé au code électoral
- * lists "Français établis hors de France" with 6 seats in each série. Our own data holds six
- * série-2 mandates with a null `departmentCode`, which confirms the import; it is not the
- * source, and a count would publish five the day a seat fell vacant. `SOURCE_TABLEAU_5` is
- * cited under the note, because article 50 establishes the hours and says nothing about how
- * many seats are renewed.
- */
-export const FEHF_SEATS_AT_STAKE = FEHF_REGIME.seatsAtStake;
 export const FEHF_NOTE =
   "Les Français établis hors de France relèvent d'un dispositif distinct, que le décret du " +
   "21 avril 2026 ne convoque pas. Leur collège élit 6 des 178 sièges renouvelés, et son " +

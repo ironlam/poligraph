@@ -54,9 +54,6 @@ export { PartyContextSignal } from "./signals/party-context";
 // Frequency cache
 export { NameFrequencyCache } from "./frequency";
 
-// Phase 2 types
-export type { MandatePeriod, PartyMembershipRecord } from "./types";
-
 // Comparators
 export { JaroWinklerComparator } from "./comparators/jaro-winkler";
 export { DamerauLevenshteinComparator } from "./comparators/damerau-levenshtein";

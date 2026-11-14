@@ -31,7 +31,6 @@ export const ParityBracketRowSchema = z.object({
   maleCount: z.number().int(),
   totalCount: z.number().int(),
 });
-export type ParityBracketRow = z.infer<typeof ParityBracketRowSchema>;
 export const ParityBySizeSchema = z.array(ParityBracketRowSchema);
 export type ParityBySize = z.infer<typeof ParityBySizeSchema>;
 
@@ -43,7 +42,6 @@ export const DeptPartyRowSchema = z.object({
   totalLists: z.number().int(),
   dominantParty: z.string().nullable(),
 });
-export type DeptPartyRow = z.infer<typeof DeptPartyRowSchema>;
 export const DeptPartyDataSchema = z.array(DeptPartyRowSchema);
 export type DeptPartyData = z.infer<typeof DeptPartyDataSchema>;
 
@@ -82,8 +80,6 @@ export const OutgoingSenateGroupSchema = z.object({
   held: z.number().int(),
   atStake: z.number().int(),
 });
-export type OutgoingSenateGroup = z.infer<typeof OutgoingSenateGroupSchema>;
-
 export const OutgoingSenateCompositionSchema = z.object({
   capturedAt: z.string(),
   /** Total sitting senators at capture time, both series. */
@@ -120,10 +116,6 @@ export const MUNICIPALES_SNAPSHOT_KEYS = {
   parityBySize: "municipales-2026-parite-by-bracket",
   deptParty: "municipales-2026-dept-party-counts",
 } as const;
-
-export type MunicipalesSnapshotKey =
-  (typeof MUNICIPALES_SNAPSHOT_KEYS)[keyof typeof MUNICIPALES_SNAPSHOT_KEYS];
-
 /**
  * Write-once key. `scripts/capture-senate-composition.ts` refuses to run if a row
  * already carries it, so a second capture cannot overwrite the first.

@@ -21,5 +21,3 @@ export const feedbackSchema = z.object({
   // Champ piège : invisible pour une personne, rempli par la plupart des robots.
   website: z.string().max(200).optional(),
 });
-
-export type FeedbackInput = z.infer<typeof feedbackSchema>;

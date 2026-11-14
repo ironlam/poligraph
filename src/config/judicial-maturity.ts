@@ -85,12 +85,6 @@ export const NON_DEFINITIVE_CONVICTION_STATUSES: AffairStatus[] = CONDAMNATION_S
 export const PROCEDURE_VALIDEE_STATUSES: AffairStatus[] = Object.entries(STATUS_TO_MATURITY)
   .filter(([, tier]) => tier === "PROCEDURE_VALIDEE")
   .map(([status]) => status as AffairStatus);
-
-/** Tier 2 + 3 - procedures en cours (for display: groups validated + enquete) */
-export const EN_COURS_STATUSES: AffairStatus[] = Object.entries(STATUS_TO_MATURITY)
-  .filter(([, tier]) => tier === "PROCEDURE_VALIDEE" || tier === "ENQUETE")
-  .map(([status]) => status as AffairStatus);
-
 /** Tier 4 - close sans condamnation statuses */
 export const CLOSE_STATUSES: AffairStatus[] = Object.entries(STATUS_TO_MATURITY)
   .filter(([, tier]) => tier === "CLOSE_SANS_CONDAMNATION")

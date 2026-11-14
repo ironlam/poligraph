@@ -364,19 +364,6 @@ export function moderationInputFingerprint(input: ModerationInput): string {
   return createHash("sha256").update(canonicalJson(input)).digest("hex").slice(0, 16);
 }
 
-/** Request body shared by the synchronous and the batch path. */
-export function buildModerationParams(input: ModerationInput): Record<string, unknown> {
-  return {
-    model: MODEL,
-    max_tokens: MAX_TOKENS,
-    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-    tools: [MODERATION_TOOL],
-    tool_choice: { type: "tool", name: "moderate_affair" },
-    thinking: { type: "disabled" },
-    messages: [{ role: "user", content: buildUserContent(input) }],
-  };
-}
-
 /**
  * Validate and normalize a raw moderation payload into a ModerationResult.
  * Provider- and transport-agnostic: every safety guard lives here rather than
@@ -503,13 +490,6 @@ export async function moderateAffair(input: ModerationInput): Promise<Moderation
  */
 export function getAIRateLimitMs(): number {
   return AI_RATE_LIMIT_MS;
-}
-
-/**
- * Check if a category is sensitive (requires human review).
- */
-export function isSensitiveCategory(category: string): boolean {
-  return SENSITIVE_CATEGORIES.has(category);
 }
 
 function validateEnum<T extends string>(value: string, validValues: readonly T[], fallback: T): T {

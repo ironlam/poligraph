@@ -228,10 +228,3 @@ export class ProgressTracker {
     }
   }
 }
-
-/**
- * Create a simple progress tracker
- */
-export function createProgress(total: number, label?: string): ProgressTracker {
-  return new ProgressTracker({ total, label });
-}

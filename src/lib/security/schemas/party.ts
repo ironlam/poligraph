@@ -50,11 +50,6 @@ export const createPartyMembershipSchema = z.object({
   endDate: z.string().nullable().optional(),
   role: z.enum(VALID_PARTY_ROLES).nullable().optional(),
 });
-
-export const endPartyMembershipSchema = z.object({
-  endDate: z.string().optional(),
-});
-
 export const updatePartyMembershipSchema = z.object({
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),

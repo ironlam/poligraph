@@ -12,8 +12,6 @@ import { normalizeCandidateName } from "./presidentielle-communes";
 
 export const CC_ROUND1_URL = "https://www.conseil-constitutionnel.fr/decision/2022/2022195PDR.htm";
 export const CC_ROUND2_URL = "https://www.conseil-constitutionnel.fr/decision/2022/2022197PDR.htm";
-export const CC_QUALIFIED_URL =
-  "https://www.conseil-constitutionnel.fr/decision/2022/2022196PDR.htm";
 
 export interface RoundTotals {
   registeredVoters: number;

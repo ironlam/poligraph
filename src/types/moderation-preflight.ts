@@ -3,8 +3,6 @@ import { z } from "zod";
 import { ISSUE_TYPES } from "@/services/affair-moderation";
 
 export const AttributionConfidenceSchema = z.enum(["STRONG", "WEAK", "MISMATCH"]);
-export type AttributionConfidence = z.infer<typeof AttributionConfidenceSchema>;
-
 export const AttributionAuditSchema = z.object({
   confidence: AttributionConfidenceSchema,
   reasoning: z.string(),
@@ -19,8 +17,6 @@ export const ModerationIssueSchema = z.object({
   type: z.enum(ISSUE_TYPES),
   detail: z.string(),
 });
-export type ModerationIssue = z.infer<typeof ModerationIssueSchema>;
-
 export const DraftCandidateSchema = z.object({
   id: z.string(),
   title: z.string(),

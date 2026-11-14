@@ -527,8 +527,3 @@ interface RawWikidataEntity {
   descriptions?: Record<string, { value: string }>;
   claims?: WikidataClaims;
 }
-
-/**
- * Default Wikidata service instance
- */
-export const wikidataService = new WikidataService();

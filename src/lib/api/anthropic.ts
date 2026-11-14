@@ -153,24 +153,6 @@ function recordUsage(key: string, usage: NonNullable<AnthropicResponse["usage"]>
   usageByKey.set(key, t);
 }
 
-/**
- * Record usage from a response this wrapper did not issue, so a transport that
- * bypasses `callAnthropic` (the Batch API) still lands in the same meter.
- *
- * Give batch traffic its own label: every token in a batch bills at half the
- * standard rate, so folding it into the synchronous label would make the totals
- * impossible to convert back into money.
- */
-export function recordAnthropicUsage(
-  label: string,
-  model: string,
-  usage: NonNullable<AnthropicResponse["usage"]> | undefined
-): void {
-  if (!usage) return;
-  recordUsage(`${label}@${model}`, usage);
-  logUsage(label, model, usage);
-}
-
 function logUsage(
   label: string,
   model: string,

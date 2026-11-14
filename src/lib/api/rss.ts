@@ -410,8 +410,3 @@ export class RSSClient {
     return [...RSS_FEEDS];
   }
 }
-
-/**
- * Default RSS client instance
- */
-export const rssClient = new RSSClient();

@@ -26,9 +26,3 @@ export const updatePoliticianSchema = z.object({
     )
     .optional(),
 });
-
-export const detectDuplicatesSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  birthDate: z.string().nullable().optional(),
-});

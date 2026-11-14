@@ -8,8 +8,6 @@ export const CRITICAL_SCRIPTS = [
   "sync-press-analysis",
 ] as const;
 
-export type CriticalScript = (typeof CRITICAL_SCRIPTS)[number];
-
 export function isCriticalScript(script: string): boolean {
   return (CRITICAL_SCRIPTS as readonly string[]).includes(script);
 }

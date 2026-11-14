@@ -12,9 +12,6 @@
  */
 import { db } from "@/lib/db";
 
-/** Marker for rows closed by the historical backfill rather than by a decision. */
-export const APPLIED_BY_BACKFILL = "backfill-orphelines-2026-09-08";
-
 /**
  * Close every pending review attached to the given affairs.
  *

@@ -20,34 +20,6 @@ import { isTruncatedClaim, TRUNCATED_CLAIM_DETAIL } from "./claim-integrity";
 
 /** Longest a short identity field may be before it goes into the prompt. */
 const FIELD_LIMIT = 240;
-
-/**
- * Word bounds. Three roles, none of which can safely share a number.
- *
- * A single number played both roles and could not: the prompt asked for "entre 90 et 200 mots",
- * and the screen refused anything under 90. So the length we WANT was also the length below which
- * we threw the text away. On a first run thirteen of twenty candidacies came back between 27 and
- * 75 words, all correct, all rejected. Nathalie Arthaud, who has no mandate, no recorded vote and
- * five measures, wrote 81 honest words, was told the minimum was 90, had nothing left but filler,
- * failed twice, and her fiche kept no summary at all.
- *
- * Splitting the roles dissolves it:
- *
- * - {@link synthesisTargetRange} is what the prompt asks for. It is a target, and being under it is
- *   a disappointment, not a fault. It follows the material, one term per thing there is to say, so
- *   a candidacy with a one-line career is not asked for the paragraph it cannot fill.
- * - {@link synthesisFloor} is what the screen refuses. It catches an answer that is not an answer:
- *   an empty reply, one line, a truncation. It sits far below the target on purpose, because every
- *   attempt to make it double as a quality bar has rejected honest work.
- * - {@link SYNTHESIS_HARD_MAX_WORDS} catches the opposite failure, a runaway response. It sits
- *   above the target because a modest provider overrun is not an editorial defect by itself.
- *
- * A normally documented candidacy still targets 90 words. Only a programme large enough to make
- * that format structurally selective gets more room. Checked against the twenty declared
- * candidacies in production before that extension, every stored synthesis clears its own floor,
- * the tightest margin being 27 words against a floor of 25.
- */
-export const SYNTHESIS_MAX_WORDS = 200;
 /** Four programme axes plus a career paragraph fit without turning into a catalogue. */
 export const LARGE_SYNTHESIS_MAX_WORDS = 250;
 /**

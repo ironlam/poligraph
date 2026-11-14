@@ -81,28 +81,3 @@ export const AFFAIR_STATUS_MARKER_COLORS: Record<AffairStatus, string> = {
   CLASSEMENT_SANS_SUITE: "#6b7280",
   INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: "#6b7280",
 };
-
-// Configuration de la timeline
-export const TIMELINE_CONFIG = {
-  // Dimensions
-  height: {
-    header: 30, // Espace pour les années
-    rowHeight: 32, // Hauteur de chaque ligne de mandats
-    barHeight: 24, // Hauteur des barres de mandats
-    affairsRow: 40, // Hauteur de la zone des affaires
-    padding: 16, // Padding vertical
-  },
-  // Marges
-  margin: {
-    left: 70, // Espace pour les labels de lignes
-    right: 20,
-  },
-  // Styles
-  style: {
-    barRadius: 4, // Rayon des coins des barres
-    markerSize: 12, // Taille des marqueurs d'affaires
-    axisColor: "#e5e7eb",
-    textColor: "#6b7280",
-    hoverOpacity: 0.8,
-  },
-};

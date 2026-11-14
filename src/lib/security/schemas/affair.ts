@@ -28,18 +28,6 @@ const VALID_INVOLVEMENTS = ["DIRECT", "INDIRECT", "MENTIONED_ONLY", "VICTIM", "P
 
 const VALID_SEVERITIES = ["CRITIQUE", "GRAVE", "MODEREE", "MINEURE"] as const;
 
-const VALID_CATEGORIES = [
-  "PROBITE",
-  "FISCALITE",
-  "FINANCEMENT_POLITIQUE",
-  "ABUS_POUVOIR",
-  "VIOLENCE",
-  "MOEURS",
-  "CONFLIT_INTERETS",
-  "EMPLOI_FICTIF",
-  "AUTRE",
-] as const;
-
 /**
  * Ordre de juridiction. Doit rester identique à l'enum Prisma
  * `JurisdictionOrder`, comme `VALID_STATUSES` : une valeur manquante ici est un
@@ -70,18 +58,4 @@ export const bulkAffairSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(200),
   action: z.string().min(1),
   value: z.unknown().optional(),
-});
-
-export const createAffairSchema = z.object({
-  title: z.string().min(1).max(500),
-  politicianId: z.string().min(1),
-  status: z.enum(VALID_STATUSES),
-  involvement: z.enum(VALID_INVOLVEMENTS),
-  severity: z.enum(VALID_SEVERITIES),
-  category: z.enum(VALID_CATEGORIES),
-  description: z.string().nullable().optional(),
-  startDate: z.string().nullable().optional(),
-  factsDate: z.string().nullable().optional(),
-  verdictDate: z.string().nullable().optional(),
-  publicationStatus: z.enum(["PUBLISHED", "DRAFT", "ARCHIVED", "EXCLUDED", "REJECTED"]).optional(),
 });

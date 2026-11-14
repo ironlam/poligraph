@@ -243,13 +243,3 @@ export class CheckpointManager {
     return cleaned;
   }
 }
-
-/**
- * Create a checkpoint manager for a sync source
- */
-export function createCheckpoint(
-  source: string,
-  options?: CheckpointManagerOptions
-): CheckpointManager {
-  return new CheckpointManager(source, options);
-}

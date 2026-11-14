@@ -172,34 +172,6 @@ export async function getAdjacentVoteDates(
   };
 }
 
-/**
- * Get today's vote summary for the homepage widget.
- */
-export async function getTodayVotesSummary(): Promise<{
-  total: number;
-  adopted: number;
-  rejected: number;
-  date: string;
-}> {
-  "use cache";
-  cacheTag("votes", "homepage");
-  cacheLife("synced");
-
-  const dateStr = getParisToday();
-  const { start, end } = parseDateRange(dateStr);
-
-  const results = await db.scrutin.groupBy({
-    by: ["result"],
-    where: { votingDate: { gte: start, lt: end } },
-    _count: true,
-  });
-
-  const adopted = results.find((r) => r.result === "ADOPTED")?._count ?? 0;
-  const rejected = results.find((r) => r.result === "REJECTED")?._count ?? 0;
-
-  return { total: adopted + rejected, adopted, rejected, date: dateStr };
-}
-
 // ---------------------------------------------------------------------------
 // Votes listing page — sort
 // ---------------------------------------------------------------------------
@@ -517,36 +489,6 @@ export async function getTypeCounts() {
   });
 }
 
-/** Theme counts including key vote counts for the hub. */
-export async function getThemeCountsWithKeyVotes() {
-  "use cache";
-  cacheTag("votes", "votes-key");
-  cacheLife("synced");
-
-  const [allCounts, keyCounts] = await Promise.all([
-    db.scrutin.groupBy({
-      by: ["theme"],
-      _count: true,
-      orderBy: { _count: { theme: "desc" } },
-    }),
-    db.scrutin.groupBy({
-      by: ["theme"],
-      where: { importance: { isKeyVote: true } },
-      _count: true,
-    }),
-  ]);
-
-  const keyMap = new Map(keyCounts.filter((c) => c.theme).map((c) => [c.theme!, c._count]));
-
-  return allCounts
-    .filter((c) => c.theme !== null)
-    .map((c) => ({
-      theme: c.theme!,
-      total: c._count,
-      keyVotes: keyMap.get(c.theme!) ?? 0,
-    }));
-}
-
 // ---------------------------------------------------------------------------
 // Hub page — data functions
 // ---------------------------------------------------------------------------
@@ -562,19 +504,6 @@ export async function getLastScrutinDate(): Promise<Date | null> {
     select: { votingDate: true },
   });
   return last?.votingDate ?? null;
-}
-
-/** 8 most recent scrutins for the hub page hero section. */
-export async function getLatestScrutins() {
-  "use cache";
-  cacheTag("votes");
-  cacheLife("synced");
-
-  return db.scrutin.findMany({
-    orderBy: SCRUTIN_RECENT_FIRST,
-    take: 8,
-    select: DAILY_SELECT,
-  });
 }
 
 /** Today's vote counts by chamber. */
@@ -618,41 +547,6 @@ export async function getHubStats(): Promise<{
   ]);
 
   return { totalScrutins, totalDossiers };
-}
-
-/** Per-chamber vote count and adoption rate. */
-export async function getChamberAdoptionRates(): Promise<
-  Array<{
-    chamber: Chamber;
-    total: number;
-    adopted: number;
-    adoptionRate: number;
-  }>
-> {
-  "use cache";
-  cacheTag("votes");
-  cacheLife("synced");
-
-  const results = await db.scrutin.groupBy({
-    by: ["chamber", "result"],
-    _count: true,
-  });
-
-  const byC = new Map<Chamber, { total: number; adopted: number }>();
-
-  for (const r of results) {
-    const entry = byC.get(r.chamber) ?? { total: 0, adopted: 0 };
-    entry.total += r._count;
-    if (r.result === "ADOPTED") entry.adopted += r._count;
-    byC.set(r.chamber, entry);
-  }
-
-  return Array.from(byC.entries()).map(([chamber, { total, adopted }]) => ({
-    chamber,
-    total,
-    adopted,
-    adoptionRate: total > 0 ? Math.round((adopted / total) * 100) : 0,
-  }));
 }
 
 // ---------------------------------------------------------------------------

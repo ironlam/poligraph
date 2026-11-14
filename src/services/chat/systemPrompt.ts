@@ -80,6 +80,3 @@ FORMAT DE RÉPONSE :
 - Pour les affaires : faits, statut, puis rappel présomption d'innocence
 - Toujours terminer par le(s) lien(s) pertinent(s) fournis dans les données`;
 }
-
-/** @deprecated Use getSystemPrompt() instead */
-export const SYSTEM_PROMPT = getSystemPrompt();
