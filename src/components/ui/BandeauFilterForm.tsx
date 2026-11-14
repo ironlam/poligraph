@@ -29,7 +29,10 @@ export function BandeauFilterForm({
   return (
     <Form action={action} role="search" className="w-full space-y-4">
       <div>
-        <label htmlFor={`${idPrefix}-search`} className="mb-2 block text-sm font-bold text-white">
+        <label
+          htmlFor={`${idPrefix}-search`}
+          className="mb-2 block text-sm font-bold text-white max-sm:sr-only"
+        >
           Recherche
         </label>
         <div className="flex items-stretch gap-2 rounded-xl bg-white p-1.5">

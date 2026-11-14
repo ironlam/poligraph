@@ -74,11 +74,11 @@ export default async function ElectionsPage({ searchParams }: PageProps) {
       <div className="container mx-auto px-4 pt-4 pb-8">
         <Breadcrumb items={[{ label: "Élections" }]} />
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">
+        <div className="mb-4 sm:mb-8">
+          <h1 className="text-2xl font-display font-extrabold tracking-tight sm:mb-2 sm:text-3xl">
             Calendrier électoral
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground max-sm:sr-only">
             Retrouvez les dates des prochaines élections en France, avec compte à rebours et
             informations sur chaque scrutin.
           </p>
@@ -99,8 +99,14 @@ export default async function ElectionsPage({ searchParams }: PageProps) {
           <div className="mb-6">
             <p className="text-sm font-medium mb-2">Filtrer par type</p>
             <div className="flex flex-wrap gap-2">
-              <Link href={buildUrl({ type: undefined })}>
-                <Badge variant={!typeFilter ? "default" : "outline"} className="cursor-pointer">
+              <Link
+                href={buildUrl({ type: undefined })}
+                className="inline-flex min-h-11 items-center"
+              >
+                <Badge
+                  variant={!typeFilter ? "default" : "outline"}
+                  className="cursor-pointer px-3 py-1.5 text-sm"
+                >
                   Toutes ({elections.length})
                 </Badge>
               </Link>
@@ -115,8 +121,12 @@ export default async function ElectionsPage({ searchParams }: PageProps) {
                     href={buildUrl({
                       type: isActive ? undefined : t.type,
                     })}
+                    className="inline-flex min-h-11 items-center"
                   >
-                    <Badge variant={isActive ? "default" : "outline"} className="cursor-pointer">
+                    <Badge
+                      variant={isActive ? "default" : "outline"}
+                      className="cursor-pointer px-3 py-1.5 text-sm"
+                    >
                       {icon} {label} ({t._count})
                     </Badge>
                   </Link>

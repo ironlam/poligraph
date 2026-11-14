@@ -247,17 +247,22 @@ export default async function AffairesPage({ searchParams }: PageProps) {
             <BandeauSurtitre>Affaires</BandeauSurtitre>
             <h1
               id="affaires-titre"
-              className="mt-4 font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl"
+              className="font-display text-2xl font-extrabold leading-tight tracking-tight sm:mt-4 sm:text-5xl"
             >
               Affaires judiciaires
             </h1>
-            <p className="mt-4 max-w-2xl text-base text-white/85 sm:text-lg">
-              Procédures visant des responsables politiques, chacune appuyée sur au moins une source
-              vérifiable. Toute personne mise en cause dans une procédure judiciaire est présumée
-              innocente jusqu{"'"}à ce qu{"'"}elle ait été déclarée coupable par une décision de
-              justice définitive.
+            {/* Below sm the description leaves the screen, never the presumption of innocence: it
+                is the one sentence a reader of this list must see before the first affair. */}
+            <p className="mt-2 max-w-2xl text-sm text-white/85 sm:mt-4 sm:text-lg">
+              <span className="max-sm:sr-only">
+                Procédures visant des responsables politiques, chacune appuyée sur au moins une
+                source vérifiable.{" "}
+              </span>
+              Toute personne mise en cause dans une procédure judiciaire est présumée innocente
+              jusqu{"'"}à ce qu{"'"}elle ait été déclarée coupable par une décision de justice
+              définitive.
             </p>
-            <div className="mt-6">
+            <div className="mt-3 sm:mt-6">
               <BandeauFilterForm
                 action="/affaires"
                 idPrefix="affaires"

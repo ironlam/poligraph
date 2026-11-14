@@ -14,18 +14,18 @@ function CounterCard({ count, label, href, color }: CounterCardProps) {
   return (
     <Link href={href} prefetch={false}>
       <Card
-        className="relative border-l-4 transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5"
+        className="relative h-full border-l-4 transition-all cursor-pointer hover:shadow-md max-sm:py-0 sm:hover:-translate-y-0.5"
         style={{ borderLeftColor: color }}
       >
-        <CardContent className="p-4">
+        <CardContent className="p-3 sm:p-4">
           <ArrowRight
-            className="absolute top-3 right-3 h-4 w-4 text-muted-foreground"
+            className="absolute top-3 right-3 h-4 w-4 text-muted-foreground max-sm:hidden"
             aria-hidden="true"
           />
           <div className="text-2xl md:text-3xl font-display font-extrabold tracking-tight">
             {count.toLocaleString("fr-FR")}
           </div>
-          <div className="text-sm font-medium mt-1 leading-tight">{label}</div>
+          <div className="mt-1 text-xs font-medium leading-tight sm:text-sm">{label}</div>
         </CardContent>
       </Card>
     </Link>
@@ -118,11 +118,11 @@ function CertaintyBar({ kpis }: { kpis: HomepageKPIs }) {
           applique.
         </p>
 
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:gap-5">
+        <div className="mt-3 flex flex-col sm:flex-row sm:gap-5">
           <Link
             href="/affaires"
             prefetch={false}
-            className="group inline-flex items-center gap-1.5 text-sm font-medium text-primary"
+            className="group inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary"
           >
             Voir les affaires documentées
             <ArrowUpRight
@@ -133,7 +133,7 @@ function CertaintyBar({ kpis }: { kpis: HomepageKPIs }) {
           <Link
             href="/affaires/condamnations?view=stats"
             prefetch={false}
-            className="group inline-flex items-center gap-1.5 text-sm font-medium text-primary"
+            className="group inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary"
           >
             Condamnations par parti
             <ArrowUpRight
@@ -150,8 +150,9 @@ function CertaintyBar({ kpis }: { kpis: HomepageKPIs }) {
 export function KPIStrip({ kpis }: { kpis: HomepageKPIs }) {
   return (
     <section>
-      <h2 className="mb-4 text-lg font-display font-bold">Poligraph en chiffres</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <h2 className="mb-3 text-lg font-display font-bold sm:mb-4">Poligraph en chiffres</h2>
+      {/* Three figures side by side at every width: stacked, they took a whole phone screen. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <CounterCard
           count={kpis.politiciansCount}
           label="Politiques suivis"
