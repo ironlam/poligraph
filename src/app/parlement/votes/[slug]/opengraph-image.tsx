@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og";
 import type { Chamber, Prisma, VotingResult } from "@/generated/prisma";
 import { db } from "@/lib/db";
-import { OG_SIZE, OWL_DATA_URI } from "@/lib/og-utils";
-import { loadOgFonts, OG_FONT_DISPLAY, OG_FONT_TEXT } from "@/lib/og/fonts";
+import { OG_SIZE } from "@/lib/og-utils";
+import { loadOgFonts, OG_FONT_DISPLAY } from "@/lib/og/fonts";
 import { toPublicTitleView } from "@/lib/votes/to-public-title-view";
 import {
   scrutinOgHeadline,
@@ -11,7 +11,14 @@ import {
   type VoteSegmentKey,
 } from "@/lib/votes/og-card";
 import { extractScrutinNumber } from "@/lib/votes/scrutin-number";
-import { BRAND_NAVY, BRAND_PAGE, BRAND_RED } from "@/config/brand";
+import {
+  OG_AN_CHIP,
+  OG_INK as INK,
+  OG_VOTE_FILL,
+  OgBrandFrame as Frame,
+  OgFooter,
+  OgWordmark as Wordmark,
+} from "@/lib/og/frame";
 import { CHAMBER_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels";
 import { formatDate } from "@/lib/utils";
 
@@ -21,25 +28,10 @@ export const contentType = "image/png";
 
 // Dark-theme values of the Poligraph design-system tokens, read on the navy ground. Vote fills
 // are the desaturated `vote-*` tokens: a vivid green and red would cast one side as the good one.
-const INK = {
-  title: "#ffffff",
-  body: "#e6ebf2",
-  muted: "#b8c4d6",
-  rule: "#23416b",
-  track: "#1c3a63",
-  chipBorder: "#4a6286",
-  chipText: "#c9d3e1",
-  onFill: "#1a1a2e",
-};
-
-const VOTE_FILL: Record<VoteSegmentKey, string> = {
-  pour: "#7ab892",
-  contre: "#c88a8a",
-  abstention: "#92959c",
-};
+const VOTE_FILL: Record<VoteSegmentKey, string> = OG_VOTE_FILL;
 
 const CHAMBER_CHIP: Record<Chamber, { border: string; text: string }> = {
-  AN: { border: "#60a5fa", text: "#9cc6fb" },
+  AN: OG_AN_CHIP,
   SENAT: { border: "#f472b6", text: "#f9a8d4" },
 };
 
@@ -120,48 +112,6 @@ function ResultIcon({ kind }: { kind: "check" | "x" }) {
       {kind === "x" && <path d="M18 6 6 18" />}
       {kind === "x" && <path d="m6 6 12 12" />}
     </svg>
-  );
-}
-
-function Frame({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        height: "100%",
-        background: BRAND_NAVY,
-        color: INK.title,
-        fontFamily: OG_FONT_TEXT,
-      }}
-    >
-      <div style={{ display: "flex", height: 10, flexShrink: 0 }}>
-        <div style={{ flex: 1, background: BRAND_NAVY, borderBottom: `2px solid ${BRAND_PAGE}` }} />
-        <div style={{ flex: 1, background: BRAND_PAGE }} />
-        <div style={{ flex: 1, background: BRAND_RED }} />
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Wordmark() {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <img src={OWL_DATA_URI} width={48} height={48} alt="" />
-      <span
-        style={{
-          fontFamily: OG_FONT_DISPLAY,
-          fontWeight: 800,
-          fontSize: 30,
-          letterSpacing: -0.5,
-          color: INK.title,
-        }}
-      >
-        Poligraph
-      </span>
-    </div>
   );
 }
 
@@ -345,25 +295,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         </div>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "22px 64px 28px 64px",
-          marginTop: 22,
-          borderTop: `1px solid ${INK.rule}`,
-        }}
-      >
-        <span style={{ fontSize: 20, color: INK.muted }}>
-          {`Source officielle : ${chamberLabel}`}
-        </span>
-        <span
-          style={{ fontFamily: OG_FONT_DISPLAY, fontWeight: 800, fontSize: 24, color: INK.title }}
-        >
-          poligraph.fr
-        </span>
-      </div>
+      <OgFooter source={`Source officielle : ${chamberLabel}`} />
     </Frame>,
     { ...OG_SIZE, fonts }
   );
