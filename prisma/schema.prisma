@@ -2407,6 +2407,11 @@ model Candidacy {
   round2Pct   Decimal? @db.Decimal(5, 2)
   isElected   Boolean  @default(false)
 
+  /// Seats won by the list at the municipal council, as published by the ministry. Written on
+  /// the head of the list only (listPosition = 1), null on the other members and until imported. Never a criterion
+  /// for a win: proportional representation gives seats to losing lists too.
+  municipalSeats Int?
+
   presidentialData CandidacyPresidential?
   communeResults   CommuneCandidacyResult[]
 

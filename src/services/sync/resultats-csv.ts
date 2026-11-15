@@ -15,10 +15,11 @@
 
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
-import { normalizeListName } from "./resultats-t1";
+import { matchListCandidacies, planSeatWrites } from "./list-seats";
 import {
   splitCsvLine,
   parseWideResultRow2026,
+  withDecidedSeats,
   type CommuneResult2026,
   type ListResult2026,
 } from "./parse-wide-results-2026";
@@ -39,6 +40,8 @@ interface SyncOptions {
   dryRun?: boolean;
   dept?: string;
   round?: 1 | 2;
+  /** Write the seats of each list and nothing else: no votes, participation or snapshot. */
+  seatsOnly?: boolean;
 }
 
 interface SyncStats {
@@ -75,7 +78,7 @@ function parseCsvLines(text: string): CommuneResult2026[] {
   for (const line of dataLines) {
     const cols = splitCsvLine(line);
     if (cols.length < 18) continue;
-    results.push(parseWideResultRow2026(cols));
+    results.push(withDecidedSeats(parseWideResultRow2026(cols)));
   }
   return results;
 }
@@ -124,50 +127,17 @@ async function findMatchingCandidacyIds(
   communeId: string,
   list: ListResult2026
 ): Promise<string[]> {
-  const normalizedName = normalizeListName(list.listName);
-
   const candidacies = await db.candidacy.findMany({
     where: { electionId, communeId },
     select: { id: true, listName: true },
   });
-
-  // Try exact normalized match first
-  let matchingIds = candidacies
-    .filter((c) => c.listName && normalizeListName(c.listName) === normalizedName)
-    .map((c) => c.id);
-
-  // Fallback: try short name match
-  if (matchingIds.length === 0 && list.listShortName) {
-    const normalizedShort = normalizeListName(list.listShortName);
-    matchingIds = candidacies
-      .filter((c) => c.listName && normalizeListName(c.listName) === normalizedShort)
-      .map((c) => c.id);
+  const { ids, partial } = matchListCandidacies(candidacies, list);
+  if (partial) {
+    console.warn(
+      `  [FALLBACK] "${list.listName}" matched ${ids.length} via partial in ${communeId}`
+    );
   }
-
-  // Fallback: partial keyword match
-  if (matchingIds.length === 0) {
-    const words = normalizedName
-      .split(" ")
-      .filter((w) => w.length > 3)
-      .slice(0, 3);
-    if (words.length > 0) {
-      matchingIds = candidacies
-        .filter((c) => {
-          if (!c.listName) return false;
-          const norm = normalizeListName(c.listName);
-          return words.every((w) => norm.includes(w));
-        })
-        .map((c) => c.id);
-
-      if (matchingIds.length > 0) {
-        console.warn(
-          `  [FALLBACK] "${list.listName}" matched ${matchingIds.length} via partial in ${communeId}`
-        );
-      }
-    }
-  }
-
-  return matchingIds;
+  return ids;
 }
 
 async function updateCandidacyResultsT1(
@@ -214,6 +184,42 @@ async function updateCandidacyResultsT2(
   return matchingIds.length;
 }
 
+const SEAT_BATCH = 1000;
+
+/**
+ * Seats of each list, written on its head of list and nowhere else: no vote, percentage or
+ * elected flag is touched. Batched, and a row already holding the value is not rewritten.
+ */
+async function syncSeats(electionId: string, communes: CommuneResult2026[], dryRun: boolean) {
+  const heads = await db.candidacy.findMany({
+    where: { electionId, listPosition: 1, communeId: { not: null } },
+    select: { id: true, listName: true, communeId: true },
+  });
+  const plan = planSeatWrites(
+    communes,
+    heads.flatMap((h) => (h.communeId ? [{ ...h, communeId: h.communeId }] : []))
+  );
+  for (const reason of plan.skipped) console.warn(`  [WARN] Seats, ${reason}`);
+
+  let written = 0;
+  if (!dryRun) {
+    for (let i = 0; i < plan.rows.length; i += SEAT_BATCH) {
+      const values = plan.rows
+        .slice(i, i + SEAT_BATCH)
+        .map((row) => Prisma.sql`(${row.id}::text, ${row.seats}::int)`);
+      written += await db.$executeRaw`
+        UPDATE "Candidacy" AS c SET "municipalSeats" = v.seats
+        FROM (VALUES ${Prisma.join(values)}) AS v(id, seats)
+        WHERE c.id = v.id AND c."municipalSeats" IS DISTINCT FROM v.seats`;
+    }
+  }
+  console.log(`Communes with seats: ${plan.communes}`);
+  console.log(`Lists with seats: ${plan.lists} (${plan.seats} seats)`);
+  console.log(`Heads of list matched: ${plan.rows.length}`);
+  console.log(`Lists left out: ${plan.skipped.length}`);
+  console.log(`Rows written: ${written}`);
+}
+
 async function updateResultsSnapshot(stats: Record<string, number>) {
   const key = "municipales-2026-resultats";
   const existing = await db.statsSnapshot.findUnique({ where: { key } });
@@ -233,7 +239,12 @@ async function updateResultsSnapshot(stats: Record<string, number>) {
 
 // --- Main sync function ---
 
-export async function syncResultatsCsv({ dryRun = false, dept, round = 1 }: SyncOptions = {}) {
+export async function syncResultatsCsv({
+  dryRun = false,
+  dept,
+  round = 1,
+  seatsOnly = false,
+}: SyncOptions = {}) {
   const roundLabel = round === 1 ? "T1" : "T2";
   console.log(`\n=== Sync Resultats CSV 2026 ${roundLabel} ${dryRun ? "(DRY RUN)" : ""} ===\n`);
 
@@ -270,6 +281,12 @@ export async function syncResultatsCsv({ dryRun = false, dept, round = 1 }: Sync
   if (dept) {
     allResults = allResults.filter((r) => r.deptCode === dept);
     console.log(`Filtered to ${allResults.length} communes for dept ${dept}\n`);
+  }
+
+  if (seatsOnly) {
+    await syncSeats(election.id, allResults, dryRun);
+    await db.$disconnect();
+    return;
   }
 
   const stats: SyncStats = {
@@ -386,6 +403,8 @@ export async function syncResultatsCsv({ dryRun = false, dept, round = 1 }: Sync
     }
     console.log("\nStatsSnapshot updated");
   }
+
+  await syncSeats(election.id, allResults, dryRun);
 
   // National participation (weighted by registered voters)
   let totalRegistered = 0;
