@@ -1,0 +1,112 @@
+import { Judgement } from "@/generated/prisma";
+import { getDepartmentName } from "@/config/departments";
+import { getRegionByCode } from "@/config/regions";
+import type { ResolveResult } from "@/lib/identity";
+import { FIRST_NAME_EXACT_LLR } from "@/lib/identity/signals/constants";
+import { functionRank } from "@/lib/territoires/executif";
+import { parseConseilRows, type ConseilMembreRow } from "./conseils-parse";
+import { parseFrenchDate } from "./rne-parse";
+
+/**
+ * Linking of the presidents of departmental and regional councils to a `Politician` (D22).
+ * Pure: no network, no database.
+ */
+
+export type ExecutifNiveau = "DEPARTEMENTAL" | "REGIONAL";
+
+/** A president line of the RNE file. The birth date is read for the resolver, never stored. */
+export interface PresidentRow extends ConseilMembreRow {
+  niveau: ExecutifNiveau;
+  birthDate: Date | null;
+}
+
+export function parsePresidentRows(
+  niveau: ExecutifNiveau,
+  records: Record<string, string | undefined>[]
+): PresidentRow[] {
+  return records.flatMap((record) => {
+    if (functionRank(record["Libellé de la fonction"]?.trim() || null) !== 0) return [];
+    const [row] = parseConseilRows(niveau, [record]).rows;
+    if (!row) return [];
+    return [{ ...row, niveau, birthDate: parseFrenchDate(record["Date de naissance"] ?? "") }];
+  });
+}
+
+export function executifSourceId(row: Pick<PresidentRow, "niveau" | "rowKey">): string {
+  return `conseil:${row.niveau}:${row.rowKey}`;
+}
+
+/**
+ * - LINK: same person, the mandate can be written.
+ * - REVIEW: plausible, a human decides (an UNDECIDED `IdentityDecision` is written).
+ * - HOMONYME: same family name, another first name. Reported, nothing written.
+ * - SANS_FICHE: no candidate.
+ */
+export type ExecutifVerdict = "LINK" | "REVIEW" | "HOMONYME" | "SANS_FICHE";
+
+/**
+ * The resolver's SAME is not enough here. Measured on production on 2026-11-15, the rarity of a
+ * family name alone carried SAME over a different first name (4 of 27 without birth date, 1 of
+ * 19 with it). A link therefore also requires an exact first name AND a matching birth date.
+ * A prior decision confirmed SAME (by this rule or by a reviewer) comes back with no candidate
+ * list: it is trusted as is.
+ */
+export function classifyExecutif(result: ResolveResult | undefined): ExecutifVerdict {
+  if (!result?.politicianId) return "SANS_FICHE";
+  if (result.decision === Judgement.SAME && result.candidates.length === 0) return "LINK";
+
+  const signals =
+    result.candidates.find((c) => c.politicianId === result.politicianId)?.fellegiSunter?.signals ??
+    [];
+  const logLR = (id: string) => signals.find((s) => s.id === id)?.logLR ?? 0;
+  const firstNameExact = logLR("first-name") === FIRST_NAME_EXACT_LLR;
+  const birthDateMatches = logLR("birthdate") > 0;
+
+  if (result.decision === Judgement.SAME && firstNameExact && birthDateMatches) return "LINK";
+  if (result.decision === Judgement.SAME || firstNameExact) return "REVIEW";
+  return "HOMONYME";
+}
+
+export interface ExecutifMandateData {
+  type: "PRESIDENT_DEPARTEMENT" | "PRESIDENT_REGION";
+  title: string;
+  institution: string;
+  constituency: string;
+  departmentCode: string | null;
+  startDate: Date;
+}
+
+/**
+ * Mandate fields for a president line, or null when the territory is not in the referentials
+ * or the register gives no start date: nothing is guessed. `constituency` carries the region
+ * name because it is the key `readRegionTerritoire` reads a regional presidency by.
+ */
+export function buildExecutifMandate(row: PresidentRow): ExecutifMandateData | null {
+  const startDate = row.functionStart ?? row.mandateStart;
+  if (!startDate) return null;
+  const president = row.gender === "F" ? "Présidente" : "Président";
+
+  if (row.niveau === "DEPARTEMENTAL") {
+    const name = getDepartmentName(row.territoryCode);
+    if (!name) return null;
+    return {
+      type: "PRESIDENT_DEPARTEMENT",
+      title: `${president} du conseil départemental (${name})`,
+      institution: `Conseil départemental (${name})`,
+      constituency: name,
+      departmentCode: row.territoryCode,
+      startDate,
+    };
+  }
+
+  const region = getRegionByCode(row.territoryCode);
+  if (!region) return null;
+  return {
+    type: "PRESIDENT_REGION",
+    title: `${president} du conseil régional (${region.name})`,
+    institution: `Conseil régional (${region.name})`,
+    constituency: region.name,
+    departmentCode: region.departmentCodes.length === 1 ? region.departmentCodes[0]! : null,
+    startDate,
+  };
+}
