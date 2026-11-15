@@ -49,6 +49,8 @@ import { ScrutinResultCard } from "@/components/votes/ScrutinResultCard";
 import { ScrutinOfficialGroups } from "@/components/votes/ScrutinOfficialGroups";
 import { GroupPositions } from "@/components/votes/GroupPositions";
 import { ScrutinContext } from "@/components/votes/ScrutinContext";
+import { ScrutinParDepartement } from "@/components/votes/ScrutinParDepartement";
+import { getScrutinVotesParDepartement } from "@/lib/data/scrutin-departements";
 import { HistoricalGroupPositions } from "@/components/votes/HistoricalGroupPositions";
 import { HISTORICAL_GROUP_POSITIONS_PUBLIC } from "@/config/historical-positions";
 import { readHistoricalGroupPositions } from "@/lib/data/historical-group-positions";
@@ -285,6 +287,10 @@ export default async function ScrutinPage({ params }: PageProps) {
       ? getScrutinOfficialGroups(scrutin.id, scrutin.legislature)
       : Promise.resolve(null),
   ]);
+  // After the batch above, not inside it: the pool holds four connections and this page already
+  // opens three at once. One indexed query (9 to 18 ms by EXPLAIN on the largest scrutins,
+  // 2026-11-15), cached per scrutin.
+  const parDepartement = await getScrutinVotesParDepartement(scrutin.id);
 
   const isKeyVote = !!scrutin.importance?.isKeyVote;
 
@@ -540,6 +546,8 @@ export default async function ScrutinPage({ params }: PageProps) {
             </Link>
           )}
         </ScrutinVideoLayout>
+
+        <ScrutinParDepartement departements={parDepartement} chamber={scrutin.chamber} />
 
         {/* Synthèse PoliGraph, enjeux et B. Votes individuels (tabbed) */}
         <ScrutinContext
