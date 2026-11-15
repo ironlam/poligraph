@@ -20,7 +20,11 @@ import {
 import { getCommuneDossier } from "@/lib/data/territoires";
 import { getCommuneElections } from "@/lib/data/territoire-elections";
 import { getCommuneChiffres } from "@/lib/data/territoire-chiffres";
-import { hasChiffres, TerritoireChiffres } from "@/components/territoires/TerritoireChiffres";
+import {
+  chiffresSourceLignes,
+  hasChiffres,
+  TerritoireChiffres,
+} from "@/components/territoires/TerritoireChiffres";
 import { communeScrutins } from "@/lib/territoires/commune-elections";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
@@ -126,7 +130,10 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
           </div>
           <div className="space-y-4">
             <EchelleTerritoires barreaux={echelleCommune(dossier)} />
-            <CommuneSidebar dossier={dossier} />
+            <CommuneSidebar
+              dossier={dossier}
+              chiffresSources={hasChiffres(chiffres) ? chiffresSourceLignes(chiffres) : []}
+            />
           </div>
         </div>
       </div>
