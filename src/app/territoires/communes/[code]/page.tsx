@@ -7,6 +7,7 @@ import { AdministrativeAreaJsonLd } from "@/components/seo/JsonLd";
 import { Agir } from "@/components/territoires/Agir";
 import { CommuneBandeau } from "@/components/territoires/CommuneBandeau";
 import { EchelleTerritoires } from "@/components/territoires/EchelleTerritoires";
+import { FilTerritoire } from "@/components/territoires/FilTerritoire";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import { VotesParlementaires, type VotesMode } from "@/components/territoires/VotesParlementaires";
 import { getVotesDeputesDepartement } from "@/lib/data/territoire-votes";
@@ -20,6 +21,7 @@ import {
 import { getCommuneDossier } from "@/lib/data/territoires";
 import { getCommuneElections } from "@/lib/data/territoire-elections";
 import { getCommuneChiffres } from "@/lib/data/territoire-chiffres";
+import { getFilTerritoire } from "@/lib/data/territoire-fil";
 import {
   chiffresSourceLignes,
   hasChiffres,
@@ -72,10 +74,11 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
   const { identity } = dossier;
   // The dossier knows 2026 and the presidential only: the earlier municipales come from the
   // elections reader, so the count and the lines match the dedicated page.
-  const [elections, chiffres, votes] = await Promise.all([
+  const [elections, chiffres, votes, fil] = await Promise.all([
     getCommuneElections(identity.inseeCode),
     getCommuneChiffres(identity.inseeCode),
     getVotesDeputesDepartement(identity.department.code),
+    getFilTerritoire("COM", identity.inseeCode),
   ]);
   // A name only when the base establishes one deputy for the commune; otherwise no name.
   const { deputes } = dossier.parlement;
@@ -121,6 +124,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
       <div className="container mx-auto max-w-6xl px-4 py-6 md:py-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0 space-y-6">
+            <FilTerritoire evenements={fil} />
             <QuiDecideSection dossier={dossier} />
             <ParlementSection dossier={dossier} />
             <VotesParlementaires votes={votes} mode={votesMode} />
