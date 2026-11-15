@@ -3041,6 +3041,32 @@ model TerritoireRepere {
   @@index([importId])
 }
 
+/// One dated fact of the "fil du territoire" (Territoires v2, lot B). The sentence shown to the
+/// reader is rendered from `payload` by a tested template: it is never stored, and never written
+/// by a language model. Created by prisma/migrations/manual/2026-11-15-territoire-evenements.sql.
+model TerritoireEvenement {
+  id            String              @id @default(cuid())
+  /// CHANGEMENT_MAIRE, CHANGEMENT_PRESIDENT, RESULTAT_ELECTION: the closed list and the payload
+  /// schema of each type live in src/lib/territoires/evenements.ts.
+  type          String
+  territoryType RepereTerritoryType
+  /// INSEE code of the commune, department or region.
+  territoryCode String
+  /// Date of the fact, never the date it was imported.
+  occurredOn    DateTime            @db.Date
+  payload       Json
+  sourceLabel   String
+  sourceUrl     String
+  /// Public surfaces read PUBLISHED only. A producer publishes directly only a fact the site
+  /// already shows; everything else is written as DRAFT.
+  status        CurationStatus      @default(DRAFT)
+  /// Idempotence key of the producer: the same fact is never written twice.
+  dedupeKey     String              @unique
+  createdAt     DateTime            @default(now())
+
+  @@index([territoryType, territoryCode, status, occurredOn])
+}
+
 /// Nature of an intercommunal body, as coded by INSEE and BANATIC. MET69 is the Métropole de
 /// Lyon: a territorial collectivity with special status, listed by the source alongside the EPCI
 /// but not an EPCI itself. EPT: territorial public establishment of the Métropole du Grand Paris,
