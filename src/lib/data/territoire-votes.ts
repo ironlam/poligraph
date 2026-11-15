@@ -8,8 +8,8 @@ import type { PositionEnregistree } from "@/lib/territoires/votes-parlementaires
 
 /**
  * Reader of « Vos parlementaires ont voté » (Territoires v2, D26): the three latest scrutins of
- * the Assemblée nationale that decide a text or a motion, with the position of each current
- * deputy of one department. The selection is the same for every territory: type and date only,
+ * a chamber that decide a text or a motion, with the position of each current deputy (or
+ * senator) of one department. The selection is the same for every territory: type and date only,
  * never `isKeyVote`, never a theme, never a party.
  */
 
@@ -45,10 +45,28 @@ export async function getVotesDeputesDepartement(departmentCode: string): Promis
   "use cache";
   cacheLife("synced");
   cacheTag("votes", "politicians", `territoire:${departmentCode}`);
+  return readVotes(departmentCode, "AN", "DEPUTE");
+}
 
+/**
+ * Same reading for the Sénat and the senators of the department. `deputeSlugs` then holds the
+ * senators' slugs: the shape is shared so both chambers are presented alike.
+ */
+export async function getVotesSenateursDepartement(departmentCode: string): Promise<VotesDeputes> {
+  "use cache";
+  cacheLife("synced");
+  cacheTag("votes", "politicians", `territoire:${departmentCode}`);
+  return readVotes(departmentCode, "SENAT", "SENATEUR");
+}
+
+async function readVotes(
+  departmentCode: string,
+  chamber: "AN" | "SENAT",
+  mandateType: "DEPUTE" | "SENATEUR"
+): Promise<VotesDeputes> {
   const [scrutins, deputes] = await Promise.all([
     db.scrutin.findMany({
-      where: { chamber: "AN", type: { in: ["FINAL", "MOTION"] }, slug: { not: null } },
+      where: { chamber, type: { in: ["FINAL", "MOTION"] }, slug: { not: null } },
       orderBy: SCRUTIN_RECENT_FIRST,
       take: VOTES_TERRITOIRE_LIMIT,
       select: {
@@ -77,13 +95,13 @@ export async function getVotesDeputesDepartement(departmentCode: string): Promis
     db.politician.findMany({
       where: {
         ...PUBLIC_POLITICIAN_WHERE,
-        mandates: { some: { type: "DEPUTE", isCurrent: true, departmentCode } },
+        mandates: { some: { type: mandateType, isCurrent: true, departmentCode } },
       },
       select: {
         id: true,
         slug: true,
         mandates: {
-          where: { type: "DEPUTE", isCurrent: true, departmentCode },
+          where: { type: mandateType, isCurrent: true, departmentCode },
           select: { startDate: true },
           take: 1,
         },

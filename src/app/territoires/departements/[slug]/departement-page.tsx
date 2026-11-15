@@ -8,7 +8,10 @@ import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import { COMMUNES_ANCHOR } from "@/lib/territoires/departement-communes";
 import { Agir } from "@/components/territoires/Agir";
 import { VotesParlementaires } from "@/components/territoires/VotesParlementaires";
-import { getVotesDeputesDepartement } from "@/lib/data/territoire-votes";
+import {
+  getVotesDeputesDepartement,
+  getVotesSenateursDepartement,
+} from "@/lib/data/territoire-votes";
 import { CommuneIndex } from "@/components/territoires/CommuneIndex";
 import {
   DepartementConseil,
@@ -33,12 +36,13 @@ export async function DepartementPageBody({
 
   // The bare page opens on the largest communes; the A to Z views list them all.
   const accueil = query.letter === null && query.page === 1;
-  const [territoire, deputies, senators, grandes, votes] = await Promise.all([
+  const [territoire, deputies, senators, grandes, votes, votesSenat] = await Promise.all([
     getDepartementTerritoire(dept.code, query),
     getDeputesByDepartment(dept.code),
     getSenateursByDepartment(dept.code),
     accueil ? getDepartementGrandesCommunes(dept.code) : [],
     getVotesDeputesDepartement(dept.code),
+    getVotesSenateursDepartement(dept.code),
   ]);
 
   if (!territoire) notFound();
@@ -90,7 +94,7 @@ export async function DepartementPageBody({
         <div className="flex min-w-0 flex-col gap-5">
           <DepartementConseil territoire={territoire} />
           <CommuneIndex slug={slug} territoire={territoire} grandes={grandes} />
-          <VotesParlementaires votes={votes} mode={{ kind: "decompte" }} />
+          <VotesParlementaires votes={votes} mode={{ kind: "decompte" }} senat={votesSenat} />
           {agir && <Agir niveau="departement" departmentCode={dept.code} />}
         </div>
         <DepartementParlement deputies={deputies} senators={senators} />

@@ -17,7 +17,10 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { getVotesDeputesDepartement } from "@/lib/data/territoire-votes";
+import {
+  getVotesDeputesDepartement,
+  getVotesSenateursDepartement,
+} from "@/lib/data/territoire-votes";
 
 const scrutin = (over: Record<string, unknown> = {}) => ({
   id: "s1",
@@ -110,5 +113,18 @@ describe("getVotesDeputesDepartement", () => {
     h.scrutins.mockResolvedValueOnce([scrutin({ votesAgainst: 40 })]);
     const incomplet = await getVotesDeputesDepartement("29");
     expect(incomplet.scrutins[0]?.sansVote).toEqual([]);
+  });
+
+  it("lit le Sénat et les sénateurs du département avec la même sélection", async () => {
+    h.scrutins.mockResolvedValueOnce([scrutin({ chamber: "SENAT" })]);
+    await getVotesSenateursDepartement("29");
+    expect(h.scrutins.mock.calls[0]?.[0].where).toEqual({
+      chamber: "SENAT",
+      type: { in: ["FINAL", "MOTION"] },
+      slug: { not: null },
+    });
+    expect(h.politicians.mock.calls[0]?.[0].where.mandates).toEqual({
+      some: { type: "SENATEUR", isCurrent: true, departmentCode: "29" },
+    });
   });
 });
