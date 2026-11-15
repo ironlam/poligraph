@@ -6,6 +6,7 @@ import {
   classifyExecutif,
   executifSourceId,
   parsePresidentRows,
+  registreDepasse,
   type PresidentRow,
 } from "./executifs-plan";
 
@@ -140,5 +141,23 @@ describe("buildExecutifMandate", () => {
   it("territoire inconnu ou date de début absente : rien", () => {
     expect(buildExecutifMandate(row({ territoryCode: "6AE" }))).toBeNull();
     expect(buildExecutifMandate(row({ functionStart: null, mandateStart: null }))).toBeNull();
+  });
+});
+
+describe("registreDepasse", () => {
+  const registre = new Date("2026-08-11T12:00:00Z");
+
+  it("retient le lien quand un mandat parlementaire commence après le registre", () => {
+    expect(registreDepasse(registre, [new Date("2026-10-01")])).toBe(true);
+  });
+
+  it("laisse passer un mandat parlementaire antérieur au registre, ou l'absence de mandat", () => {
+    expect(registreDepasse(registre, [new Date("2024-07-08")])).toBe(false);
+    expect(registreDepasse(registre, [])).toBe(false);
+  });
+
+  it("sans date de registre, tout mandat parlementaire courant retient le lien", () => {
+    expect(registreDepasse(null, [new Date("2020-10-01")])).toBe(true);
+    expect(registreDepasse(null, [])).toBe(false);
   });
 });

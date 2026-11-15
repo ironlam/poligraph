@@ -110,3 +110,15 @@ export function buildExecutifMandate(row: PresidentRow): ExecutifMandateData | n
     startDate,
   };
 }
+
+/**
+ * True when the register cannot vouch for the presidency any more: the person started a
+ * parliamentary mandate after the file was published. A member of Parliament may not chair a
+ * departmental or regional council, so one of the two ended and the file does not say which.
+ * Measured 2026-11-15: a file of 11 August listed six presidents elected senators on 1 October.
+ * Without a file date, any current parliamentary mandate holds the link back.
+ */
+export function registreDepasse(registerDate: Date | null, mandatsParlementaires: Date[]): boolean {
+  if (!registerDate) return mandatsParlementaires.length > 0;
+  return mandatsParlementaires.some((start) => start > registerDate);
+}
