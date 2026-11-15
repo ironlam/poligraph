@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   readHistorical: vi.fn(),
 }));
 
+vi.mock("@/lib/data/scrutin-departements", () => ({
+  getScrutinVotesParDepartement: vi.fn(async () => []),
+}));
 vi.mock("@/config/historical-positions", () => ({
   get HISTORICAL_GROUP_POSITIONS_PUBLIC() {
     return mocks.enabled;
