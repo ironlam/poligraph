@@ -7,6 +7,7 @@ import { getDepartmentShapeWithDot } from "@/lib/og-department-shape";
 import { communePhraseReponse } from "@/lib/territoires/commune-bandeau";
 import { formatPopulation, natureLabel, territoireLabel } from "@/lib/territoires/commune-display";
 import { phraseTexte, territoireOg, TERRITOIRE_OG_SHAPE } from "@/lib/territoires/og";
+import { communeCodeFromSegment } from "@/lib/territoires/paths";
 
 export const alt = "Commune sur Poligraph : maire, élus et résultats";
 export const size = OG_SIZE;
@@ -15,7 +16,8 @@ export const contentType = "image/png";
 export default async function Image({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   // Same reader and same sentence as the page: only a public, established mayor is ever named.
-  const dossier = await getCommuneDossier(code);
+  const inseeCode = communeCodeFromSegment(code);
+  const dossier = inseeCode ? await getCommuneDossier(inseeCode) : null;
   if (!dossier) notFound();
 
   const { identity, population } = dossier;

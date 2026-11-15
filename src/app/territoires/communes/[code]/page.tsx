@@ -27,7 +27,11 @@ import { communeScrutins } from "@/lib/territoires/commune-elections";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
 import { communeDescription, communeTitle } from "@/lib/territoires/commune-display";
-import { territoireCommunePath, territoireDepartementPath } from "@/lib/territoires/paths";
+import {
+  communeCodeFromSegment,
+  territoireCommunePath,
+  territoireDepartementPath,
+} from "@/lib/territoires/paths";
 
 // ISR: 24 h backstop; freshness comes from the reader's cache tags.
 export const revalidate = 86400;
@@ -41,7 +45,11 @@ interface PageProps {
   params: Promise<{ code: string }>;
 }
 
-const loadDossier = cache((code: string) => getCommuneDossier(code));
+/** The segment is `brest-29019` or the bare code: only the code finds the commune. */
+const loadDossier = cache((segment: string) => {
+  const code = communeCodeFromSegment(segment);
+  return code ? getCommuneDossier(code) : null;
+});
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { code } = await params;
@@ -58,7 +66,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       maireEtabli: dossier.maire.state === "ETABLI",
     }),
     openGraph: { title, description },
-    alternates: { canonical: territoireCommunePath(dossier.identity.inseeCode) },
+    // The readable address, whatever name the request carried in front of the code.
+    alternates: {
+      canonical: territoireCommunePath(dossier.identity.inseeCode, dossier.identity.name),
+    },
   };
 }
 
@@ -90,7 +101,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
     <>
       <AdministrativeAreaJsonLd
         name={identity.name}
-        url={`${SITE_URL}${territoireCommunePath(identity.inseeCode)}`}
+        url={`${SITE_URL}${territoireCommunePath(identity.inseeCode, identity.name)}`}
         identifier={{ propertyID: "Code INSEE", value: identity.inseeCode }}
         containedInPlace={
           departmentName

@@ -423,7 +423,10 @@ describe("doctrine — the Territoires shard mirrors isIndexableTerritoireCommun
   });
 
   it("lists the dedicated elections page only for the same communes, and only with results", () => {
-    expect(territoiresShard).toContain("territoireCommuneElectionsPath(c.id)");
+    // Readable address: the sitemap must announce the canonical URL, never the bare code that
+    // only answers by a 308.
+    expect(territoiresShard).toContain("territoireCommunePath(c.id, c.name)");
+    expect(territoiresShard).toContain("territoireCommuneElectionsPath(c.id, c.name)");
     expect(territoiresShard).toContain("c.electionsLastmod != null");
     expect(territoiresShard).toContain('"CommuneElectionRound" r WHERE r."communeId" = c."id"');
     // The lastmod follows the results, not the mayor's mandate.
@@ -436,7 +439,9 @@ describe("doctrine — the Territoires shard mirrors isIndexableTerritoireCommun
       "utf8"
     );
     expect(page).toContain("territoireCommuneRobotsMetadata(data.indexSignals)");
-    expect(page).toContain("territoireCommuneElectionsPath(data.commune.inseeCode)");
+    expect(page).toContain(
+      "territoireCommuneElectionsPath(data.commune.inseeCode, data.commune.name)"
+    );
   });
 
   it("never filters the mayors on publication before counting them", () => {

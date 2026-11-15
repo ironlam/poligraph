@@ -981,9 +981,9 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
   cacheLife("synced");
 
   const communes = await db.$queryRaw<
-    Array<{ id: string; lastmod: Date; electionsLastmod: Date | null }>
+    Array<{ id: string; name: string; lastmod: Date; electionsLastmod: Date | null }>
   >(Prisma.sql`
-    SELECT c."id", maire."lastmod",
+    SELECT c."id", c."name", maire."lastmod",
       (
         SELECT MAX(r."updatedAt") FROM "CommuneElectionRound" r WHERE r."communeId" = c."id"
       ) AS "electionsLastmod"
@@ -1038,7 +1038,7 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     })),
     ...communes.map((c) => ({
-      url: `${SITE_URL}${territoireCommunePath(c.id)}`,
+      url: `${SITE_URL}${territoireCommunePath(c.id, c.name)}`,
       lastModified: c.lastmod,
       changeFrequency: "monthly" as const,
       priority: 0.5,
@@ -1048,7 +1048,7 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
     ...communes
       .filter((c) => c.electionsLastmod != null)
       .map((c) => ({
-        url: `${SITE_URL}${territoireCommuneElectionsPath(c.id)}`,
+        url: `${SITE_URL}${territoireCommuneElectionsPath(c.id, c.name)}`,
         lastModified: c.electionsLastmod as Date,
         changeFrequency: "monthly" as const,
         priority: 0.4,
