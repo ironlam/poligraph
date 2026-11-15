@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { COMPETENCES_SOURCE } from "@/config/territoires-competences";
+import { COMPETENCES_MENTION, COMPETENCES_SOURCE } from "@/config/territoires-competences";
 import { LigneSource } from "@/components/territoires/LigneSource";
 import type { Barreau } from "@/lib/territoires/echelle";
 import { formatDateFrUTC } from "@/lib/utils";
@@ -54,8 +54,9 @@ export function EchelleTerritoires({ barreaux }: { barreaux: Barreau[] }) {
           </li>
         ))}
       </ol>
+      <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{COMPETENCES_MENTION}</p>
       <LigneSource
-        className="mt-4"
+        className="mt-2"
         periode={`Vérifié le ${formatDateFrUTC(COMPETENCES_SOURCE.checkedAt)}`}
         sources={[COMPETENCES_SOURCE]}
       />

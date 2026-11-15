@@ -3,7 +3,11 @@ import {
   getCollectivitesForRegion,
 } from "@/config/collectivites-particulieres";
 import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
-import { COMPETENCES_TERRITOIRES, type NiveauTerritoire } from "@/config/territoires-competences";
+import {
+  COMPETENCES_GRAND_PARIS,
+  COMPETENCES_TERRITOIRES,
+  type NiveauTerritoire,
+} from "@/config/territoires-competences";
 import type { CommuneDossier } from "@/lib/data/territoires";
 import { territoireLabel } from "@/lib/territoires/commune-display";
 import { territoireDepartementPath, territoireRegionPath } from "@/lib/territoires/paths";
@@ -22,6 +26,7 @@ export interface Barreau {
 }
 
 const STATUT_PARTICULIER = "statut particulier, voir sa page";
+const GRAND_PARIS_SIREN = "200054781";
 
 /**
  * Rungs for a commune page, from the commune up. The ordinary competences of a level are given
@@ -44,14 +49,20 @@ export function echelleCommune(dossier: CommuneDossier): Barreau[] {
     },
   ];
   if (intercommunalite?.state === "DISPONIBLE") {
-    for (const body of intercommunalite.intercommunalites) {
+    const bodies = intercommunalite.intercommunalites;
+    // The Métropole du Grand Paris (alone in Paris, with an EPT elsewhere) and the EPT split
+    // between them what one intercommunalité holds elsewhere.
+    const grandParis = bodies.some((b) => b.nature === "EPT" || b.siren === GRAND_PARIS_SIREN);
+    for (const body of bodies) {
       // The Métropole de Lyon is a collectivité, not an intercommunalité: its note says so.
       if (body.nature === "MET69") continue;
       barreaux.push({
         niveau: "intercommunalite",
         titre: "Intercommunalité",
         nom: body.name,
-        competences: COMPETENCES_TERRITOIRES.intercommunalite,
+        competences: grandParis
+          ? COMPETENCES_GRAND_PARIS
+          : COMPETENCES_TERRITOIRES.intercommunalite,
         ici: false,
       });
     }

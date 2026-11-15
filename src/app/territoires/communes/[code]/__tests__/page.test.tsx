@@ -150,6 +150,7 @@ describe("/territoires/communes/[code]", () => {
       "/territoires/regions/bretagne",
     ]);
     expect(echelle.textContent).toContain("Collèges, aide sociale");
+    expect(echelle.textContent).toContain("à titre indicatif et non exhaustif");
     expect(echelle.textContent).toContain("Vérifié le 15 novembre 2026");
     expect(
       echelle.querySelector('a[href^="https://www.collectivites-locales.gouv.fr/"]')
@@ -360,7 +361,13 @@ describe("/territoires/communes/[code]", () => {
     ).not.toBeNull();
     expect(document.getElementById("qui-decide-titre")?.textContent).toBe("Élus et institutions");
     expect(text).not.toContain("Qui décide");
-    expect(text).not.toMatch(/Décisions|Socle officiel|Dossier curé|intercommunalit|superficie/i);
+    expect(text).not.toMatch(/Décisions|Socle officiel|Dossier curé|superficie/i);
+    // No intercommunality block without an import. The word itself belongs to the fixed text of
+    // the territories ladder, which is why the check is scoped to the elected-officials section.
+    expect(document.querySelector("#qui-decide")?.textContent).not.toMatch(/intercommunalit/i);
+    expect(
+      document.querySelectorAll('section[aria-labelledby="echelle-titre"] ol > li')
+    ).toHaveLength(3);
     const volet = document.querySelector("#sources details");
     expect(volet?.hasAttribute("open")).toBe(false);
     expect(volet?.querySelector("summary")?.textContent).toBe("Sources de cette page");
