@@ -5,6 +5,8 @@ import { formatDate } from "@/lib/utils";
 import { formatCompte } from "@/lib/territoires/format";
 import { TERRITOIRES_DONNEES_PATH, territoireDepartementPath } from "@/lib/territoires/paths";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
+import { Executif } from "@/components/territoires/Executif";
+import { rangsExecutif } from "@/lib/territoires/executif";
 
 const CARD = "scroll-mt-32 rounded-xl border border-border bg-card p-4 sm:p-6";
 
@@ -35,7 +37,13 @@ export function RegionConseil({ data }: { data: RegionTerritoire }) {
       </h2>
       <div className="mt-3">
         {data.conseil.state === "DISPONIBLE" ? (
-          <ConseilMembres conseil={data.conseil} groupLabel="section départementale" />
+          <div className="flex flex-col gap-4">
+            <Executif
+              titre="Vice-présidence du conseil régional"
+              rangs={rangsExecutif(data.conseil.membres)}
+            />
+            <ConseilMembres conseil={data.conseil} groupLabel="section départementale" />
+          </div>
         ) : (
           <p className="text-sm">
             La composition du conseil régional n{"'"}est pas établie dans nos données.

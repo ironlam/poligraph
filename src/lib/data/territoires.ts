@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { Prisma, type DataSource } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { functionRank } from "@/lib/territoires/executif";
 import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
@@ -870,15 +871,6 @@ const RNE_CONSEILS_SOURCE: SourceRef = {
   label: "Répertoire national des élus, ministère de l'Intérieur",
   url: "https://www.data.gouv.fr/datasets/repertoire-national-des-elus-1",
 };
-
-/** "Président" first, then "1er", "2ème"... Vice-présidents, then any other function. */
-export function functionRank(label: string | null): number {
-  if (!label) return 1000;
-  if (/^présidente?\b/i.test(label) || /^maire$/i.test(label)) return 0;
-  const m = label.match(/^(\d+)(?:er|ère|ème|e)\b/i);
-  if (m) return Number(m[1]);
-  return 500;
-}
 
 async function readConseil(
   niveau: "MUNICIPAL" | "DEPARTEMENTAL" | "REGIONAL",

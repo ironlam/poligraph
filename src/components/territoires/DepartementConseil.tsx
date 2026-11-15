@@ -3,6 +3,8 @@ import type { CollectiviteParticuliere } from "@/config/collectivites-particulie
 import type { DepartementTerritoire } from "@/lib/data/territoires";
 import { DepartementSection } from "@/components/territoires/DepartementSection";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
+import { Executif } from "@/components/territoires/Executif";
+import { rangsExecutif } from "@/lib/territoires/executif";
 
 /**
  * Collectivités that exercise the departmental competences in place of a departmental council:
@@ -139,7 +141,13 @@ export function DepartementConseil({ territoire }: DepartementConseilProps) {
       </div>
 
       {conseil.state === "DISPONIBLE" ? (
-        <ConseilMembres conseil={conseil} groupLabel="canton" />
+        <>
+          <Executif
+            titre="Vice-présidence du conseil départemental"
+            rangs={rangsExecutif(conseil.membres)}
+          />
+          <ConseilMembres conseil={conseil} groupLabel="canton" />
+        </>
       ) : (
         <p className="text-sm">
           La composition du conseil départemental n{"'"}est pas établie dans nos données.

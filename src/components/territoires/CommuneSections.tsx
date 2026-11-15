@@ -6,6 +6,7 @@ import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { IntercommunaliteCard } from "@/components/territoires/IntercommunaliteCard";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
+import { Executif } from "@/components/territoires/Executif";
 import { LigneSource } from "@/components/territoires/LigneSource";
 import { PresidentielleAgregatNote } from "@/components/territoires/CommunePresidentielle";
 import { ScrutinLine } from "@/components/territoires/CommuneElections";
@@ -23,6 +24,8 @@ import {
 } from "@/lib/territoires/commune-elections";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { communeSources } from "@/lib/territoires/commune-sources";
+import { rangsExecutif } from "@/lib/territoires/executif";
+import { isIndexableTerritoireCommune } from "@/lib/seo/territoire-robots";
 import { formatDate } from "@/lib/utils";
 import {
   TERRITOIRES_DONNEES_PATH,
@@ -226,7 +229,18 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
         <div className="mt-4 rounded-xl border p-4">
           <p className="text-sm text-muted-foreground">Conseil municipal</p>
           {dossier.conseilMunicipal.state === "DISPONIBLE" ? (
-            <div className="mt-1">
+            <div className="mt-1 flex flex-col gap-4">
+              {/* Detailed executive on indexable communes only (D25): elsewhere the register
+                  list stays as it is. */}
+              {isIndexableTerritoireCommune({
+                population: dossier.population.value,
+                maireEtabli: maire.state === "ETABLI",
+              }) && (
+                <Executif
+                  titre="Adjointes et adjoints au maire"
+                  rangs={rangsExecutif(dossier.conseilMunicipal.membres)}
+                />
+              )}
               <ConseilMembres conseil={dossier.conseilMunicipal} groupLabel="" />
             </div>
           ) : (
