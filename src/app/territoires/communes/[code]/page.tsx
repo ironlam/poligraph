@@ -2,7 +2,9 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SITE_URL } from "@/config/site";
+import { aUneMairie } from "@/config/territoires-agir";
 import { AdministrativeAreaJsonLd } from "@/components/seo/JsonLd";
+import { Agir } from "@/components/territoires/Agir";
 import { CommuneBandeau } from "@/components/territoires/CommuneBandeau";
 import { EchelleTerritoires } from "@/components/territoires/EchelleTerritoires";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
@@ -76,7 +78,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
     { href: "#parlement", label: "Parlement" },
     ...(hasChiffres(chiffres) ? [{ href: "#chiffres", label: "Chiffres" }] : []),
     { href: "#elections", label: "Élections" },
-    { href: "#sources", label: "Sources" },
+    ...(aUneMairie(identity.department.code) ? [{ href: "#agir", label: "Agir" }] : []),
   ];
   const departmentName = identity.department.name ?? identity.territoireHorsRegion?.name ?? null;
 
@@ -107,6 +109,10 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
             <ParlementSection dossier={dossier} />
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}
             <ElectionsSection dossier={dossier} scrutins={scrutins} />
+            <Agir
+              departmentCode={identity.department.code}
+              horsRegion={identity.territoireHorsRegion !== null}
+            />
           </div>
           <div className="space-y-4">
             <EchelleTerritoires barreaux={echelleCommune(dossier)} />
