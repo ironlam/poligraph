@@ -64,3 +64,40 @@ describe("sync-daily : embeddings des affaires", () => {
     });
   });
 });
+
+describe("sync-daily : une seule exécution par étape", () => {
+  // scripts/sync-daily.ts runs these on the same schedule. Scheduled here too, each one ran
+  // twice per slot, model calls included, inside a lambda that also serves page requests.
+  const OWNED_BY_THE_WORKFLOW = [
+    "legislation",
+    "legislation-content",
+    "summaries-dossiers",
+    "generate-scrutin-summaries",
+    "press-rss",
+    "press-analysis",
+    "reconcile-affairs",
+    "factchecks",
+    "classify-themes",
+    "embeddings-factchecks",
+    "embeddings-press",
+    "prominence",
+    "publication-status",
+    "compute-stats",
+    "indexnow",
+  ];
+
+  it("ne planifie aucune étape que le workflow quotidien exécute déjà", async () => {
+    const step = await runDaily();
+    const names = step.run.mock.calls.map((call) => (call as unknown[])[0]);
+
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.filter((name) => OWNED_BY_THE_WORKFLOW.includes(name as string))).toEqual([]);
+  });
+
+  it("garde les synchros de votes, que les étapes suivantes lisent", async () => {
+    const step = await runDaily();
+    const names = step.run.mock.calls.map((call) => (call as unknown[])[0]);
+
+    expect(names).toEqual(expect.arrayContaining(["scrutins-an", "scrutins-senat"]));
+  });
+});
