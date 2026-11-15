@@ -6,7 +6,7 @@
  */
 
 import { db } from "@/lib/db";
-import { PublicationStatus } from "@/generated/prisma";
+import { PublicationStatus, type Prisma } from "@/generated/prisma";
 import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { determineStatus, type PoliticianRow } from "./publication-status-rules";
 
@@ -33,51 +33,78 @@ export interface PublicationStatusStats {
 // Main service
 // ---------------------------------------------------------------------------
 
+/**
+ * Rows per read. Prisma loads each relation of a batch with one `IN (...)` over its ids, and
+ * PostgreSQL caps a statement at 32 767 parameters: one unbounded read of the 50 000 profiles
+ * fails with P2029. Measured in the daily sync from 2026-11-12 at the latest.
+ */
+const READ_BATCH = 5000;
+
+const POLITICIAN_SELECT = {
+  id: true,
+  birthDate: true,
+  deathDate: true,
+  photoUrl: true,
+  biography: true,
+  publicationStatus: true,
+  statusOverride: true,
+  prominenceScore: true,
+  mandates: {
+    where: { isCurrent: true },
+    select: { id: true },
+    take: 1,
+  },
+  // Rule 3b needs to know whether we publish a judicial affair about this
+  // person. Restricted to DIRECT, matching how the prominence affairs score
+  // counts them: being merely mentioned is not a reason to publish a profile.
+  affairs: {
+    where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
+    select: { id: true },
+    take: 1,
+  },
+  // A published presidential fiche is an explicit editorial decision, just like a
+  // published direct affair. Require the identity fields enforced by the admin
+  // publication action so an incomplete legacy row cannot publish a profile.
+  candidacies: {
+    where: {
+      election: { type: "PRESIDENTIELLE" },
+      status: { not: null },
+      sourceUrl: { not: null },
+      sourceLabel: { not: null },
+      presidentialData: { is: { publicationStatus: PublicationStatus.PUBLISHED } },
+    },
+    select: { id: true },
+    take: 1,
+  },
+} satisfies Prisma.PoliticianSelect;
+
+async function readInBatches<T extends { id: string }>(
+  read: (cursor: string | null) => Promise<T[]>
+): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor: string | null = null;
+  for (;;) {
+    const batch = await read(cursor);
+    rows.push(...batch);
+    if (batch.length < READ_BATCH) return rows;
+    cursor = batch[batch.length - 1]!.id;
+  }
+}
+
 export async function assignPublicationStatus(
   options: PublicationStatusOptions = {}
 ): Promise<PublicationStatusStats> {
   const { dryRun = false, politicianIds } = options;
 
-  const politicians = await db.politician.findMany({
-    where: politicianIds ? { id: { in: politicianIds } } : undefined,
-    select: {
-      id: true,
-      birthDate: true,
-      deathDate: true,
-      photoUrl: true,
-      biography: true,
-      publicationStatus: true,
-      statusOverride: true,
-      prominenceScore: true,
-      mandates: {
-        where: { isCurrent: true },
-        select: { id: true },
-        take: 1,
-      },
-      // Rule 3b needs to know whether we publish a judicial affair about this
-      // person. Restricted to DIRECT, matching how the prominence affairs score
-      // counts them: being merely mentioned is not a reason to publish a profile.
-      affairs: {
-        where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
-        select: { id: true },
-        take: 1,
-      },
-      // A published presidential fiche is an explicit editorial decision, just like a
-      // published direct affair. Require the identity fields enforced by the admin
-      // publication action so an incomplete legacy row cannot publish a profile.
-      candidacies: {
-        where: {
-          election: { type: "PRESIDENTIELLE" },
-          status: { not: null },
-          sourceUrl: { not: null },
-          sourceLabel: { not: null },
-          presidentialData: { is: { publicationStatus: PublicationStatus.PUBLISHED } },
-        },
-        select: { id: true },
-        take: 1,
-      },
-    },
-  });
+  const politicians = await readInBatches((cursor) =>
+    db.politician.findMany({
+      where: politicianIds ? { id: { in: politicianIds } } : undefined,
+      orderBy: { id: "asc" },
+      take: READ_BATCH,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: POLITICIAN_SELECT,
+    })
+  );
 
   // Rule 3d: government functions whose start is proved by an official act. Separate
   // query because `mandates` above is already filtered on isCurrent.
@@ -133,10 +160,12 @@ export async function assignPublicationStatus(
   // Apply batch updates
   if (!dryRun) {
     for (const [status, ids] of changes) {
-      await db.politician.updateMany({
-        where: { id: { in: ids } },
-        data: { publicationStatus: status },
-      });
+      for (let i = 0; i < ids.length; i += READ_BATCH) {
+        await db.politician.updateMany({
+          where: { id: { in: ids.slice(i, i + READ_BATCH) } },
+          data: { publicationStatus: status },
+        });
+      }
     }
     // Publications and depublications in one request, after every write: a profile that left
     // PUBLISHED loses its stored document, a new one gets built.
