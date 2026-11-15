@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SITE_URL } from "@/config/site";
 import { AdministrativeAreaJsonLd } from "@/components/seo/JsonLd";
-import { CommuneHero } from "@/components/territoires/CommuneHero";
+import { CommuneBandeau } from "@/components/territoires/CommuneBandeau";
 import {
   CommuneSidebar,
   ElectionsSection,
@@ -110,7 +110,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
             : undefined
         }
       />
-      <CommuneHero dossier={dossier} />
+      <CommuneBandeau dossier={dossier} />
 
       <div className="container mx-auto max-w-6xl px-4 py-6 md:py-8">
         <nav aria-label="Sections de la page" className="mb-6">

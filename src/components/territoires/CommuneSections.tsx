@@ -10,6 +10,7 @@ import { PresidentielleAgregatNote } from "@/components/territoires/CommunePresi
 import { ScrutinLine } from "@/components/territoires/CommuneElections";
 import type { CommuneDossier, ParlementaireRef, SourceRef } from "@/lib/data/territoires";
 import {
+  availableInformation,
   deputeNoun,
   formatCirconscription,
   formatPopulation,
@@ -502,9 +503,15 @@ function ErreurContent() {
 
 export function CommuneSidebar({ dossier }: { dossier: CommuneDossier }) {
   const { population, identity, surface } = dossier;
+  const available = availableInformation(dossier.coverage);
   return (
     <aside id="sources" aria-label="Sources et réutilisation" className="scroll-mt-20 space-y-4">
-      {/* Population is already the second fact of the banner: on a phone it is not repeated. */}
+      {available.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Informations disponibles : {available.join(", ")}.
+        </p>
+      )}
+      {/* Population is already the first fact of the banner: on a phone it is not repeated. */}
       <div className="hidden md:block">
         <SideCard title="Quelques repères">
           <p className="text-sm text-muted-foreground">Population</p>
