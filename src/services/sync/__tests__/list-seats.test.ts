@@ -5,18 +5,24 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 import { matchListCandidacies, planSeatWrites } from "../list-seats";
 import type { CommuneResult2026, ListResult2026 } from "../parse-wide-results-2026";
 
-function list(listName: string, seatsCM: number | null, listShortName = ""): ListResult2026 {
-  return { listName, listShortName, seatsCM } as ListResult2026;
+function list(
+  listName: string,
+  seatsCM: number | null,
+  listShortName = "",
+  [firstName, lastName] = ["", ""]
+): ListResult2026 {
+  return { listName, listShortName, seatsCM, firstName, lastName } as ListResult2026;
 }
 
 function commune(inseeCode: string, lists: ListResult2026[]): CommuneResult2026 {
   return { inseeCode, lists } as CommuneResult2026;
 }
 
-const head = (id: string, communeId: string, listName: string | null) => ({
+const head = (id: string, communeId: string, listName: string | null, candidateName = "") => ({
   id,
   communeId,
   listName,
+  candidateName,
 });
 
 describe("matchListCandidacies", () => {
@@ -126,5 +132,40 @@ describe("planSeatWrites", () => {
     expect(plan.rows).toEqual([]);
     expect(plan.clear).toEqual(["p1", "p2"]);
     expect(plan.skipped).toEqual(['2 heads match: "Paris" in 75056']);
+  });
+
+  // Rodez, second round of 2026: the winning list changed its name between the rounds.
+  describe("liste fusionnée entre les deux tours", () => {
+    const rodez = [
+      head("m", "12202", "RODEZ POUR LA VIE AVEC STEPHANE MAZARS", "Stéphane MAZARS"),
+      head("o", "12202", "Autre liste", "Anne MARTIN"),
+    ];
+    const autre = list("Autre liste", 9);
+
+    it("rattache les sièges à la tête de liste qui conduit la liste fusionnée", () => {
+      const fusion = list("RODEZ POUR LA VIE, EN PARTAGE !", 26, "", ["Stephane", "Mazars"]);
+      const plan = planSeatWrites([commune("12202", [fusion, autre])], rodez);
+      expect(plan.rows).toEqual([
+        { id: "m", seats: 26 },
+        { id: "o", seats: 9 },
+      ]);
+      expect(plan.clear).toEqual([]);
+    });
+
+    it("ne rattache rien sur un nom approchant ou porté par deux têtes de liste", () => {
+      const approchant = list("Nouvelle liste", 26, "", ["Stéphanie", "Mazars"]);
+      expect(planSeatWrites([commune("12202", [approchant, autre])], rodez).rows).toEqual([]);
+
+      const homonymes = [...rodez, head("m2", "12202", "Encore une liste", "MAZARS Stéphane")];
+      const fusion = list("Nouvelle liste", 26, "", ["Stéphane", "Mazars"]);
+      expect(planSeatWrites([commune("12202", [fusion, autre])], homonymes).rows).toEqual([]);
+    });
+
+    it("refuse une tête de liste déjà prise par une autre liste du fichier", () => {
+      const fusion = list("Nouvelle liste", 26, "", ["Anne", "Martin"]);
+      const plan = planSeatWrites([commune("12202", [autre, fusion])], rodez);
+      expect(plan.rows).toEqual([]);
+      expect(plan.skipped).toEqual(['head already taken: "Nouvelle liste" in 12202']);
+    });
   });
 });

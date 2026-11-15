@@ -39,6 +39,24 @@ export function matchListCandidacies(
 
 export interface ListHead extends NamedCandidacy {
   communeId: string;
+  candidateName: string;
+}
+
+/**
+ * Head of list carrying the name of the person who leads the list in the file. Used when the list
+ * name is unknown in base: a list merged between the rounds takes a new name but keeps, as its
+ * leader, the head of one of the first-round lists. Only a single, exact name counts.
+ */
+export function matchHeadByPerson(
+  heads: ListHead[],
+  list: Pick<ListResult2026, "lastName" | "firstName">
+): string | null {
+  if (!list.lastName.trim() || !list.firstName.trim()) return null;
+  const names = [`${list.firstName} ${list.lastName}`, `${list.lastName} ${list.firstName}`].map(
+    normalizeListName
+  );
+  const found = heads.filter((head) => names.includes(normalizeListName(head.candidateName)));
+  return found.length === 1 ? found[0]!.id : null;
 }
 
 export interface SeatWritePlan {
@@ -54,8 +72,8 @@ export interface SeatWritePlan {
 }
 
 /**
- * One write per list with published seats, on its head of list, matched by exact name or short
- * label only. All or nothing per commune: when one list matches no head, several heads, or a head
+ * One write per list with published seats, on its head of list, matched by exact list name or
+ * short label, else by the name of the person leading the list. All or nothing per commune: when one list matches no head, several heads, or a head
  * already taken by another list, the commune gets no seats at all and loses those it had, so that
  * seats in base always add up to the whole council.
  */
@@ -92,9 +110,12 @@ export function planSeatWrites(communes: CommuneResult2026[], heads: ListHead[])
       // A keyword match is a guess: a list merged between the rounds shares words with one of
       // the lists it replaces, and its seats would land on that other list.
       let reason: string | null = null;
-      if (ids.length === 0 || partial) reason = "no match";
-      else if (ids.length > 1) reason = `${ids.length} heads match`;
-      else if (taken.has(ids[0]!)) reason = "head already taken";
+      if (ids.length === 0 || partial) {
+        const byPerson = matchHeadByPerson(communeHeads, list);
+        if (byPerson) ids.splice(0, ids.length, byPerson);
+        else reason = "no match";
+      } else if (ids.length > 1) reason = `${ids.length} heads match`;
+      if (!reason && taken.has(ids[0]!)) reason = "head already taken";
       if (reason) {
         plan.skipped.push(`${reason}: ${label}`);
         complete = false;
