@@ -32,6 +32,8 @@ vi.mock("@/lib/data/territoire-elections", () => ({
 
 import Page, { generateMetadata, generateStaticParams } from "../page";
 
+const BANDEAU = 'section[aria-labelledby="commune-titre"]';
+
 async function render(data: CommuneDossier | null, code = data?.identity.inseeCode ?? "35238") {
   mocks.getCommuneDossier.mockResolvedValue(data);
   const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ code }) }));
@@ -107,16 +109,22 @@ describe("/territoires/communes/[code]", () => {
   it("ne nomme personne quand le maire n'est pas établi", async () => {
     const { document, text } = await render(withMaire("NON_ETABLI"));
 
-    expect(text).toContain("Titulaire non établi");
+    expect(document.querySelector(BANDEAU)?.textContent).toContain(
+      "Titulaire non établi : les données enregistrées ne permettent pas de désigner le maire avec certitude."
+    );
+    expect(document.querySelector(`${BANDEAU} a[href^='/politiques/']`)).toBeNull();
     expect(text).toContain("Le maire en fonction n'est pas établi dans Poligraph.");
     // The head of list may still be named in the results, never as mayor.
     expect(document.querySelector("#qui-decide a[href^='/politiques/']")).toBeNull();
   });
 
   it("dit l'absence de maire en mots, sans zéro ni tiret", async () => {
-    const { text } = await render(withMaire("ABSENT"));
+    const { document, text } = await render(withMaire("ABSENT"));
 
-    expect(text).toContain("Non renseigné");
+    expect(document.querySelector(BANDEAU)?.textContent).toContain(
+      "Aucun maire en fonction n'est enregistré."
+    );
+    expect(document.querySelector(`${BANDEAU} a[href^='/politiques/']`)).toBeNull();
     expect(text).toContain("Aucun maire en fonction n'est enregistré pour Rennes dans Poligraph.");
     expect(text).not.toMatch(/[—–]/);
   });
@@ -155,11 +163,11 @@ describe("/territoires/communes/[code]", () => {
 
   it("nomme le député de la circonscription enregistrée avec la réserve, jamais comme certain", async () => {
     const { document } = await render(grandeCommune());
-    const header = document.querySelector("header")?.textContent ?? "";
+    const header = document.querySelector(BANDEAU)?.textContent ?? "";
     const section = document.querySelector("#parlement")?.textContent ?? "";
 
     expect(header).toContain("1re circonscription enregistrée");
-    expect(header).toContain("Selon l'adresse, vérifiez avec Mon député");
+    expect(header).toContain("Selon l'adresse, vérifiez avec Mon député.");
     expect(header).not.toContain("Dominique Député");
     expect(section).toContain(
       "Rien n'établit que la commune relève de cette seule circonscription"
@@ -269,7 +277,7 @@ describe("/territoires/communes/[code]", () => {
   it("dessine la silhouette du département avec le repère de la commune, en décor", async () => {
     const { document } = await render(dossier());
 
-    const svgs = [...document.querySelectorAll("header svg:not(.lucide)")];
+    const svgs = [...document.querySelectorAll(`${BANDEAU} svg:not(.lucide)`)];
     expect(svgs.length).toBeGreaterThan(0);
     expect(svgs.every((svg) => svg.getAttribute("aria-hidden") === "true")).toBe(true);
     expect(document.querySelector("[data-territory-marker]")).not.toBeNull();
@@ -283,7 +291,7 @@ describe("/territoires/communes/[code]", () => {
     async (_, make, code) => {
       const { document } = await render(make());
 
-      const svgs = [...document.querySelectorAll("header svg:not(.lucide)")];
+      const svgs = [...document.querySelectorAll(`${BANDEAU} svg:not(.lucide)`)];
       // Its own territory, never metropolitan France: no mini inset overseas.
       expect(svgs).toHaveLength(1);
       expect(svgs[0]!.getAttribute("aria-hidden")).toBe("true");
@@ -296,17 +304,23 @@ describe("/territoires/communes/[code]", () => {
   it("relie la commune d'un DROM à sa région", async () => {
     const { document, text } = await render(reunion());
 
-    expect(text).toContain("Commune · La Réunion (974)");
+    expect(text).toContain("Commune · Code INSEE 97411");
     expect(document.querySelector('a[href="/territoires/regions/la-reunion"]')).not.toBeNull();
   });
 
   it("présente une COM hors région, avec son statut et sans région", async () => {
     const { document, text } = await render(papeete());
-    const crumbs = [...document.querySelectorAll('nav[aria-label="Fil d\'Ariane"] li')].map(
-      (li) => li.textContent
+    const crumbs = [...document.querySelectorAll('nav[aria-label="Fil d\'Ariane"] li')].map((li) =>
+      li.textContent?.replace(/[‹›]/g, "")
     );
 
-    expect(crumbs).toEqual(["Territoires", "Outre-mer", "Polynésie française (987)", "Papeete"]);
+    expect(crumbs).toEqual([
+      "Accueil",
+      "Territoires",
+      "Outre-mer",
+      "Polynésie française (987)",
+      "Papeete",
+    ]);
     expect(text).toContain("Collectivité d'outre-mer hors région");
     expect(text).toContain("Circonscription non renseignée");
     expect(document.querySelector('a[href^="/territoires/regions/"]')).toBeNull();
@@ -334,11 +348,11 @@ describe("/territoires/communes/[code]", () => {
       },
     });
 
-    const hero = document.querySelector("header")?.textContent ?? "";
+    const hero = document.querySelector(BANDEAU)?.textContent ?? "";
     expect(hero).toContain("Population municipale 2023, en vigueur au 1er janvier 2026 (INSEE)");
     expect(hero).not.toContain("geo.api.gouv.fr");
     expect(
-      document.querySelector('header a[href="https://www.insee.fr/fr/statistiques/8680726"]')
+      document.querySelector(`${BANDEAU} a[href="https://www.insee.fr/fr/statistiques/8680726"]`)
     ).not.toBeNull();
     expect(document.querySelector("#sources")?.textContent).toContain(
       "vérifiée le 11 octobre 2026"
@@ -368,7 +382,7 @@ describe("/territoires/communes/[code]", () => {
       },
     });
 
-    expect(document.querySelector("header")?.textContent).toContain(
+    expect(document.querySelector(BANDEAU)?.textContent).toContain(
       "Population municipale 2022, en vigueur au 1er janvier 2023 (ISPF)"
     );
   });
@@ -376,8 +390,8 @@ describe("/territoires/communes/[code]", () => {
   it("sans série millésimée, n'invente aucun millésime", async () => {
     const { document, text } = await render(dossier());
 
-    expect(document.querySelector("header")?.textContent).toContain(
-      "Source INSEE via geo.api.gouv.fr"
+    expect(document.querySelector(BANDEAU)?.textContent).toContain(
+      "source INSEE via geo.api.gouv.fr"
     );
     expect(text).not.toMatch(/en vigueur au/);
     expect(text).toContain("importée le");
@@ -412,8 +426,16 @@ describe("/territoires/communes/[code]", () => {
 
   it("met la réponse principale (le maire) avant les repères secondaires", async () => {
     const { document } = await render(withMaire("NON_ETABLI"));
-    const facts = [...document.querySelectorAll("header dt")].map((dt) => dt.textContent);
-    expect(facts).toEqual(["Maire", "Population", "Au Parlement"]);
+    const bandeau = document.querySelector(BANDEAU)!;
+    const facts = [...bandeau.querySelectorAll("dt")].map((dt) => dt.textContent);
+    expect(facts).toEqual(["Population", "Conseil municipal", "Parlement"]);
+    const phrase = [...bandeau.querySelectorAll("p")].find((p) =>
+      p.textContent?.startsWith("Titulaire non établi")
+    )!;
+    expect(
+      phrase.compareDocumentPosition(bandeau.querySelector("dl")!) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("publie un JSON-LD AdministrativeArea limité aux faits affichés", async () => {
@@ -570,7 +592,8 @@ describe("absence de composant client cartographique", () => {
   const ROOT = process.cwd();
   it.each([
     "src/app/territoires/communes/[code]/page.tsx",
-    "src/components/territoires/CommuneHero.tsx",
+    "src/components/territoires/CommuneBandeau.tsx",
+    "src/components/territoires/TerritoireBandeau.tsx",
     "src/components/territoires/CommuneSections.tsx",
     "src/components/territoires/IntercommunaliteCard.tsx",
     "src/components/territoires/TerritoryShape.tsx",
