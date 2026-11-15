@@ -16,6 +16,7 @@ import {
   classifyExecutif,
   executifSourceId,
   parsePresidentRows,
+  registreDepasse,
   type ExecutifNiveau,
   type ExecutifVerdict,
   type PresidentRow,
@@ -109,7 +110,15 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
   const [politicians, decisions] = await Promise.all([
     db.politician.findMany({
       where: { id: { in: politicianIds } },
-      select: { id: true, slug: true, publicationStatus: true },
+      select: {
+        id: true,
+        slug: true,
+        publicationStatus: true,
+        mandates: {
+          where: { isCurrent: true, type: { in: ["DEPUTE", "SENATEUR", "DEPUTE_EUROPEEN"] } },
+          select: { startDate: true },
+        },
+      },
     }),
     db.identityDecision.findMany({
       where: { sourceType: DataSource.RNE, sourceId: { in: sourceIds }, supersededBy: null },
@@ -163,6 +172,17 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
       line.action = "fiche non publique, pas de mandat";
       continue;
     }
+    const registerDate = registerDateFromUrl(row.sourceUrl);
+    const registerAt = registerDate ? new Date(`${registerDate}T12:00:00Z`) : null;
+    if (
+      registreDepasse(
+        registerAt,
+        politician.mandates.map((m) => m.startDate)
+      )
+    ) {
+      line.action = "à vérifier : mandat parlementaire commencé après la date du registre";
+      continue;
+    }
     const mandate = buildExecutifMandate(row);
     if (!mandate) {
       line.action = "territoire hors référentiel ou date de début absente";
@@ -190,7 +210,6 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
     line.action = "mandat créé";
     report.mandatesCreated++;
     if (dryRun) continue;
-    const registerDate = registerDateFromUrl(row.sourceUrl);
     await db.mandate.create({
       data: {
         ...mandate,
@@ -199,7 +218,7 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
         source: DataSource.RNE,
         externalId: sourceId,
         sourceUrl: row.sourceUrl,
-        lastConfirmedAt: registerDate ? new Date(`${registerDate}T12:00:00Z`) : null,
+        lastConfirmedAt: registerAt,
       },
     });
     refreshed.push(politician.id);
