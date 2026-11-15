@@ -173,15 +173,8 @@ describe("/territoires/communes/[code]", () => {
     );
     expect(agir.textContent).toContain("ne remplace pas un conseil juridique");
     expect(agir.textContent).toContain("Vérifié le 15 novembre 2026.");
-    const liens = [...agir.querySelectorAll("a")];
-    expect(liens.length).toBeGreaterThanOrEqual(8);
-    for (const a of liens) {
-      expect(a.getAttribute("href")).toMatch(
-        /^https:\/\/(www\.legifrance\.gouv\.fr|www\.service-public\.gouv\.fr|lannuaire\.service-public\.gouv\.fr)\//
-      );
-      expect(a.getAttribute("target")).toBe("_blank");
-      expect(a.getAttribute("rel")).toBe("noopener noreferrer");
-    }
+    // Hosts and wording of the links are checked on the configuration itself.
+    expect(agir.querySelectorAll('a[target="_blank"][rel="noopener noreferrer"]')).toHaveLength(9);
   });
 
   it("donne le tribunal d'une collectivité d'outre-mer selon son propre ressort", async () => {

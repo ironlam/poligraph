@@ -3,6 +3,7 @@ import { DEPARTMENTS } from "@/config/departments";
 import {
   AGIR_AVERTISSEMENT,
   AGIR_VOIES,
+  aUneMairie,
   siegeTribunalAdministratif,
   TRIBUNAL_SOURCES,
   voiesAgir,
@@ -54,6 +55,20 @@ describe("voies affichées selon le régime de la commune", () => {
     ["Haut-Rhin", "68", false],
   ])("ne cite pas le CGCT pour %s", (_, code, horsRegion) => {
     expect(ids(code, horsRegion)).toEqual(["contacter", "contester"]);
+  });
+});
+
+describe("territoires sans mairie", () => {
+  // Wallis-et-Futuna is made of circonscriptions, the TAAF of districts: sending a reader to
+  // « la mairie » there would point to an authority that does not exist.
+  it.each(["984", "986", "989"])("n'affiche pas le bloc pour le code %s", (code) => {
+    expect(aUneMairie(code)).toBe(false);
+  });
+
+  it("l'affiche pour une commune, y compris d'une collectivité d'outre-mer", () => {
+    expect(aUneMairie("35")).toBe(true);
+    expect(aUneMairie("987")).toBe(true);
+    expect(aUneMairie("975")).toBe(true);
   });
 });
 

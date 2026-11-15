@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SITE_URL } from "@/config/site";
-import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
+import { aUneMairie } from "@/config/territoires-agir";
 import { AdministrativeAreaJsonLd } from "@/components/seo/JsonLd";
 import { Agir } from "@/components/territoires/Agir";
 import { CommuneBandeau } from "@/components/territoires/CommuneBandeau";
@@ -78,9 +78,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
     { href: "#parlement", label: "Parlement" },
     ...(hasChiffres(chiffres) ? [{ href: "#chiffres", label: "Chiffres" }] : []),
     { href: "#elections", label: "Élections" },
-    ...(TERRITOIRES_SANS_COMMUNE.has(identity.department.code)
-      ? []
-      : [{ href: "#agir", label: "Agir" }]),
+    ...(aUneMairie(identity.department.code) ? [{ href: "#agir", label: "Agir" }] : []),
   ];
   const departmentName = identity.department.name ?? identity.territoireHorsRegion?.name ?? null;
 

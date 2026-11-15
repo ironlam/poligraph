@@ -1,12 +1,12 @@
 import {
   AGIR_AVERTISSEMENT,
   AGIR_VERIFIE_LE,
+  aUneMairie,
   siegeTribunalAdministratif,
   TRIBUNAL_SOURCES,
   voiesAgir,
   type AgirLien,
 } from "@/config/territoires-agir";
-import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import { SectionCard } from "@/components/territoires/CommuneSections";
 import { formatDateFrUTC } from "@/lib/utils";
 
@@ -43,8 +43,8 @@ export function Agir({
   /** Overseas collectivité outside any region: its communes follow their own statute. */
   horsRegion?: boolean;
 }) {
-  // A district without a commune has neither a municipal council nor a town hall to write to.
-  if (TERRITOIRES_SANS_COMMUNE.has(departmentCode)) return null;
+  // Without a commune there is neither a municipal council nor a town hall to write to.
+  if (!aUneMairie(departmentCode)) return null;
   const siege = siegeTribunalAdministratif(departmentCode);
   return (
     <SectionCard id="agir" title="Agir">

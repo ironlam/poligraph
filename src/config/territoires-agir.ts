@@ -8,6 +8,8 @@
  * the official page, which is kept up to date. A test refuses figures in these lines.
  */
 
+import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
+
 export interface AgirLien {
   label: string;
   url: string;
@@ -91,6 +93,17 @@ export const AGIR_VOIES: readonly AgirVoie[] = [
  * are among them was not established when this text was checked, so they are not cited there.
  */
 const ALSACE_MOSELLE: ReadonlySet<string> = new Set(["57", "67", "68"]);
+
+/**
+ * Territories whose entries in the commune reference are not communes: the TAAF districts and
+ * Clipperton (`TERRITOIRES_SANS_COMMUNE`), and the three circonscriptions of Wallis-et-Futuna.
+ * None has a town hall or a municipal council, so the block is not shown at all.
+ */
+const SANS_MAIRIE: ReadonlySet<string> = new Set([...TERRITOIRES_SANS_COMMUNE, "986"]);
+
+export function aUneMairie(departmentCode: string): boolean {
+  return !SANS_MAIRIE.has(departmentCode);
+}
 
 /**
  * Ways shown for a commune. The two that cite the CGCT are kept to the common regime: not in an

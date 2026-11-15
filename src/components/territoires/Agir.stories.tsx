@@ -11,6 +11,3 @@ export default meta;
 type Story = StoryObj<typeof Agir>;
 
 export const Commune: Story = {};
-
-/** A code outside the reference: the block keeps its fixed text and names no court. */
-export const SansTribunal: Story = { args: { departmentCode: "99" } };
