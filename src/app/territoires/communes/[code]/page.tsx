@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SITE_URL } from "@/config/site";
 import { AdministrativeAreaJsonLd } from "@/components/seo/JsonLd";
 import { CommuneBandeau } from "@/components/territoires/CommuneBandeau";
+import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import {
   CommuneSidebar,
   ElectionsSection,
@@ -18,12 +19,7 @@ import { communeScrutins } from "@/lib/territoires/commune-elections";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
 import { communeDescription, communeTitle } from "@/lib/territoires/commune-display";
-import {
-  territoireCommuneDecisionsPath,
-  territoireCommuneElectionsPath,
-  territoireCommunePath,
-  territoireDepartementPath,
-} from "@/lib/territoires/paths";
+import { territoireCommunePath, territoireDepartementPath } from "@/lib/territoires/paths";
 
 // ISR: 24 h backstop; freshness comes from the reader's cache tags.
 export const revalidate = 86400;
@@ -58,13 +54,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-const ANCHOR_ELUS = { href: "#qui-decide", label: "Élus et institutions" };
-const ANCHOR_CHIFFRES = { href: "#chiffres", label: "Le territoire en chiffres" };
-const ANCHORS_AFTER = [
-  { href: "#elections", label: "Élections" },
-  { href: "#sources", label: "Sources et réutilisation" },
-];
-
 export default async function TerritoireCommunePage({ params }: PageProps) {
   const { code } = await params;
   const dossier = await loadDossier(code);
@@ -78,18 +67,14 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
     getCommuneChiffres(identity.inseeCode),
   ]);
   const scrutins = elections?.scrutins ?? communeScrutins(dossier.elections, identity.inseeCode);
-  // No link to a sub-page while it has nothing to show (plan §7).
-  const hasElections = scrutins.length > 0;
-  const anchors = [
-    ANCHOR_ELUS,
-    ...(hasChiffres(chiffres) ? [ANCHOR_CHIFFRES] : []),
-    ...ANCHORS_AFTER,
-    ...(hasElections
-      ? [{ href: territoireCommuneElectionsPath(identity.inseeCode), label: "Tous les scrutins" }]
-      : []),
-    ...(dossier.decisionsPubliees > 0
-      ? [{ href: territoireCommuneDecisionsPath(identity.inseeCode), label: "Décisions" }]
-      : []),
+  // One word each, five at most: the tabs share one line on a phone. Sub-pages are linked from
+  // their own section.
+  const onglets = [
+    { href: "#qui-decide", label: "Élus" },
+    { href: "#parlement", label: "Parlement" },
+    ...(hasChiffres(chiffres) ? [{ href: "#chiffres", label: "Chiffres" }] : []),
+    { href: "#elections", label: "Élections" },
+    { href: "#sources", label: "Sources" },
   ];
   const departmentName = identity.department.name ?? identity.territoireHorsRegion?.name ?? null;
 
@@ -111,23 +96,9 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
         }
       />
       <CommuneBandeau dossier={dossier} />
+      <TerritoireOnglets onglets={onglets} />
 
       <div className="container mx-auto max-w-6xl px-4 py-6 md:py-8">
-        <nav aria-label="Sections de la page" className="mb-6">
-          <ul className="flex flex-wrap gap-2">
-            {anchors.map((a) => (
-              <li key={a.href}>
-                <a
-                  href={a.href}
-                  className="inline-flex min-h-11 items-center rounded-full border border-primary/30 bg-card px-4 text-sm font-medium text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  {a.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0 space-y-6">
             <QuiDecideSection dossier={dossier} />

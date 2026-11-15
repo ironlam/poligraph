@@ -21,7 +21,6 @@ const meta: Meta<typeof TerritoireBandeau> = {
       { text: "Claire Martin", href: "/politiques/claire-martin" },
       { text: " est maire depuis le 22 mars 2026." },
     ],
-    source: "Source : Répertoire National des Élus",
     faits: [
       {
         label: "Population",

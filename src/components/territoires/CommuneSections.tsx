@@ -6,11 +6,11 @@ import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { IntercommunaliteCard } from "@/components/territoires/IntercommunaliteCard";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
+import { LigneSource } from "@/components/territoires/LigneSource";
 import { PresidentielleAgregatNote } from "@/components/territoires/CommunePresidentielle";
 import { ScrutinLine } from "@/components/territoires/CommuneElections";
-import type { CommuneDossier, ParlementaireRef, SourceRef } from "@/lib/data/territoires";
+import type { CommuneDossier, ParlementaireRef } from "@/lib/data/territoires";
 import {
-  availableInformation,
   deputeNoun,
   formatCirconscription,
   formatPopulation,
@@ -22,9 +22,11 @@ import {
   type CommuneScrutin,
 } from "@/lib/territoires/commune-elections";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { communeSources } from "@/lib/territoires/commune-sources";
 import { formatDate } from "@/lib/utils";
 import {
   TERRITOIRES_DONNEES_PATH,
+  territoireCommuneDecisionsPath,
   territoireCommuneElectionsPath,
   territoireDepartementPath,
 } from "@/lib/territoires/paths";
@@ -48,17 +50,6 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
   );
 }
 
-function Source({ source, date }: { source: SourceRef | null; date?: string | null }) {
-  if (!source) return null;
-  return (
-    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-      Source :{" "}
-      {source.url ? <ExternalLink href={source.url}>{source.label}</ExternalLink> : source.label}
-      {date && <> · dernière confirmation le {formatDate(date)}</>}
-    </p>
-  );
-}
-
 export function SectionCard({
   id,
   title,
@@ -75,7 +66,7 @@ export function SectionCard({
     <section
       id={id}
       aria-labelledby={headingId}
-      className="scroll-mt-20 rounded-2xl border bg-card p-5 md:p-6"
+      className="scroll-mt-32 rounded-2xl border bg-card p-5 md:p-6"
     >
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id={headingId} className="font-display text-xl font-bold md:text-2xl text-primary">
@@ -136,7 +127,7 @@ function MaireBlock({
             </Link>
           </p>
           {since && <p className="mt-1 text-sm">En fonction depuis le {formatDate(since)}.</p>}
-          <Source source={maire.source} date={maire.lastConfirmedAt} />
+          <LigneSource className="mt-2" sources={[maire.source]} />
         </div>
       </div>
     );
@@ -175,7 +166,22 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
   const { maire, mairesSecteur, identity } = dossier;
   const sansCommune = TERRITOIRES_SANS_COMMUNE.has(identity.territoireHorsRegion?.code ?? "");
   return (
-    <SectionCard id="qui-decide" title="Élus et institutions">
+    <SectionCard
+      id="qui-decide"
+      title="Élus et institutions"
+      action={
+        // No link to the sub-page while it has nothing to show.
+        dossier.decisionsPubliees > 0 && (
+          <Link
+            href={territoireCommuneDecisionsPath(identity.inseeCode)}
+            prefetch={false}
+            className={`${TAP} ${LINK} text-sm`}
+          >
+            Décisions
+          </Link>
+        )
+      }
+    >
       <MaireBlock maire={maire} communeName={identity.name} />
 
       {mairesSecteur.length > 0 && (
@@ -202,7 +208,7 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
                 </li>
               ))}
             </ul>
-            <Source source={mairesSecteur[0]!.source} />
+            <LigneSource className="mt-2" sources={[mairesSecteur[0]!.source]} />
           </Collapsible>
         </div>
       )}
@@ -249,7 +255,7 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
               <p className="text-sm text-muted-foreground">Statut particulier</p>
               <p className="font-semibold">{c.collectivite}</p>
               <p className="mt-1 text-sm">{c.note}</p>
-              <Source source={c.source} />
+              <LigneSource className="mt-2" sources={[c.source]} />
             </div>
           ))}
         </div>
@@ -308,7 +314,7 @@ function DeputeCard({
           Votes et activité
         </Link>
       </div>
-      <Source source={depute.source} date={depute.lastConfirmedAt} />
+      <LigneSource className="mt-2" sources={[depute.source]} />
     </div>
   );
 }
@@ -503,14 +509,19 @@ function ErreurContent() {
 
 export function CommuneSidebar({ dossier }: { dossier: CommuneDossier }) {
   const { population, identity, surface } = dossier;
-  const available = availableInformation(dossier.coverage);
   return (
-    <aside id="sources" aria-label="Sources et réutilisation" className="scroll-mt-20 space-y-4">
-      {available.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Informations disponibles : {available.join(", ")}.
-        </p>
-      )}
+    <aside id="sources" aria-label="Sources et réutilisation" className="scroll-mt-32 space-y-4">
+      {/* The dated detail of every fact of the page, one source line per block elsewhere. */}
+      <Collapsible summary="Sources de cette page">
+        <ul className="space-y-3 text-sm">
+          {communeSources(dossier).map((ligne) => (
+            <li key={ligne.bloc}>
+              <span className="font-semibold">{ligne.label}</span> : {ligne.etat}
+              <LigneSource className="mt-1" sources={[ligne.source]} />
+            </li>
+          ))}
+        </ul>
+      </Collapsible>
       {/* Population is already the first fact of the banner: on a phone it is not repeated. */}
       <div className="hidden md:block">
         <SideCard title="Quelques repères">

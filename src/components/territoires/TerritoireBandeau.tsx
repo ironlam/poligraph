@@ -27,8 +27,6 @@ export interface TerritoireBandeauProps {
   /** Line under the name; the code stays written here, in text. */
   identite: string;
   phrase: PhraseSegment[];
-  /** Source of the answer sentence. */
-  source?: string;
   faits: BandeauFait[];
   action?: { label: string; href: string };
   /** Decorative outline of the territory, shown from md up. */
@@ -131,7 +129,6 @@ export function TerritoireBandeau(props: TerritoireBandeauProps) {
                 )
               )}
             </p>
-            {props.source && <p className="mt-1 text-xs text-white/85">{props.source}</p>}
             <dl className="mt-4 grid grid-cols-3 divide-x divide-white/20 overflow-hidden rounded-xl border border-white/20 bg-white/5">
               {props.faits.map((fait) => (
                 <Fait key={fait.label} fait={fait} />

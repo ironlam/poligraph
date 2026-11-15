@@ -99,11 +99,20 @@ describe("/territoires/communes/[code]", () => {
 
   it("donne la date de dernière confirmation quand elle existe", async () => {
     const base = dossier();
-    const { text } = await render({
+    const date = "2026-10-01T00:00:00.000Z";
+    const { document } = await render({
       ...base,
-      maire: { ...base.maire, lastConfirmedAt: "2026-10-01T00:00:00.000Z" },
+      maire: { ...base.maire, lastConfirmedAt: date },
+      coverage: base.coverage.map((c) => (c.bloc === "maire" ? { ...c, date } : c)),
     });
-    expect(text).toContain("dernière confirmation le 1 octobre 2026");
+    // The dated detail lives in the sources panel, with the link to the source.
+    const maire = [...document.querySelectorAll("#sources details li")].find((li) =>
+      li.textContent?.startsWith("Maire")
+    );
+    expect(maire?.textContent).toContain("dernière confirmation le 1 octobre 2026");
+    expect(maire?.querySelector("a")?.getAttribute("href")).toBe(
+      "https://www.data.gouv.fr/fr/datasets/repertoire-national-des-elus-1/"
+    );
   });
 
   it("ne nomme personne quand le maire n'est pas établi", async () => {
@@ -239,26 +248,36 @@ describe("/territoires/communes/[code]", () => {
     expect(text).toContain("Aucun résultat des municipales 2026 n'est enregistré");
   });
 
-  it("navigue par ancres, sans onglet Décisions ni badge de dossier", async () => {
+  it("navigue par onglets d'un mot, sans onglet Décisions ni badge de dossier", async () => {
     const { document, text } = await render(dossier());
 
     const anchors = [...document.querySelectorAll('nav[aria-label="Sections de la page"] a')];
     expect(anchors.map((a) => a.getAttribute("href"))).toEqual([
       "#qui-decide",
+      "#parlement",
       "#elections",
       "#sources",
-      "/territoires/communes/35238/elections",
     ]);
-    for (const id of ["qui-decide", "elections", "sources"]) {
+    expect(anchors.map((a) => a.textContent)).toEqual([
+      "Élus",
+      "Parlement",
+      "Élections",
+      "Sources",
+    ]);
+    for (const id of ["qui-decide", "parlement", "elections", "sources"]) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
-    expect(anchors[0]?.textContent).toBe("Élus et institutions");
+    // The sub-page left the tabs: it stays one click away, from its own section.
+    expect(
+      document.querySelector('#elections a[href="/territoires/communes/35238/elections"]')
+    ).not.toBeNull();
     expect(document.getElementById("qui-decide-titre")?.textContent).toBe("Élus et institutions");
     expect(text).not.toContain("Qui décide");
     expect(text).not.toMatch(/Décisions|Socle officiel|Dossier curé|intercommunalit|superficie/i);
-    expect(text).toContain(
-      "Informations disponibles : maire, population, circonscription législative, sénateurs du département, résultats des municipales 2026."
-    );
+    const volet = document.querySelector("#sources details");
+    expect(volet?.hasAttribute("open")).toBe(false);
+    expect(volet?.querySelector("summary")?.textContent).toBe("Sources de cette page");
+    expect(volet?.textContent).toContain("Conseil municipal : non établi dans nos données");
   });
 
   it("propose la réutilisation et le signalement existants", async () => {
@@ -594,6 +613,8 @@ describe("absence de composant client cartographique", () => {
     "src/app/territoires/communes/[code]/page.tsx",
     "src/components/territoires/CommuneBandeau.tsx",
     "src/components/territoires/TerritoireBandeau.tsx",
+    "src/components/territoires/TerritoireOnglets.tsx",
+    "src/components/territoires/LigneSource.tsx",
     "src/components/territoires/CommuneSections.tsx",
     "src/components/territoires/IntercommunaliteCard.tsx",
     "src/components/territoires/TerritoryShape.tsx",

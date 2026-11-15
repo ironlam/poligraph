@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  availableInformation,
   communeTitle,
   formatCirconscription,
   formatPct,
@@ -20,15 +19,6 @@ describe("commune-display", () => {
     expect(formatPopulation(1)).toBe("1 habitant");
     expect(formatPct(54.2)).toBe("54,2 %");
     expect(formatPct(1234.5)).toBe("1 234,5 %");
-  });
-
-  it("ne liste que les blocs disponibles, sans l'identité", () => {
-    expect(availableInformation(withMaire("NON_ETABLI").coverage)).toEqual([
-      "population",
-      "circonscription législative",
-      "sénateurs du département",
-      "résultats des municipales 2026",
-    ]);
   });
 
   it("accorde la fonction à la civilité, sans deviner", () => {
