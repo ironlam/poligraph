@@ -1,5 +1,5 @@
 /**
- * Fixed text of the « Agir » block of a commune page: what an inhabitant may do, said in one
+ * Fixed text of the « Agir » block of the Territoires pages: what an inhabitant may do, said in one
  * sentence per way, each with its official source. Written by hand and read against the sources
  * on the date below, without review by a lawyer.
  *
@@ -83,6 +83,117 @@ export const AGIR_VOIES: readonly AgirVoie[] = [
   },
 ];
 
+const ANNUAIRE: AgirLien = {
+  label: "Annuaire de l'administration",
+  url: "https://lannuaire.service-public.gouv.fr/",
+};
+
+/**
+ * Asking for a consultation of the voters (CGCT, first part, which applies to every collectivité
+ * of the common regime, Alsace-Moselle included). The share of voters required is left to the
+ * article. No Service Public page covers it: the two articles are the only sources.
+ */
+const VOIE_PARTICIPER: AgirVoie = {
+  id: "participer",
+  titre: "Demander une consultation",
+  texte:
+    "Des électeurs peuvent demander que la collectivité organise une consultation sur une affaire de sa compétence. La décision revient à son assemblée, et la consultation n'est qu'une demande d'avis.",
+  liens: [
+    {
+      label: "Code général des collectivités territoriales, article L. 1112-16",
+      url: `${LEGIFRANCE}/LEGIARTI000045210334`,
+    },
+    {
+      label: "Code général des collectivités territoriales, article L. 1112-17",
+      url: `${LEGIFRANCE}/LEGIARTI000006389074`,
+    },
+  ],
+};
+
+const VOIE_VOTER: AgirVoie = {
+  id: "voter",
+  titre: "S'inscrire pour voter",
+  texte:
+    "Pour voter, il faut être inscrit sur les listes électorales. La demande peut se faire en ligne.",
+  liens: [
+    {
+      label: "Listes électorales : première inscription (Service Public)",
+      url: `${SERVICE_PUBLIC}/F1367`,
+    },
+    { label: "Demande d'inscription en ligne (Service Public)", url: `${SERVICE_PUBLIC}/R16396` },
+  ],
+};
+
+/** Ways of a department or a region: the same rights, stated by the articles of their own part. */
+function voiesAssemblee(c: {
+  conseil: string;
+  de: string;
+  elleMeme: string;
+  seances: AgirLien;
+  documents: AgirLien;
+}): readonly AgirVoie[] {
+  return [
+    {
+      id: "assister",
+      titre: `Assister au ${c.conseil}`,
+      texte: `Les séances du ${c.conseil} sont publiques.`,
+      liens: [c.seances],
+    },
+    {
+      id: "documents",
+      titre: "Obtenir un document",
+      // The enumeration of the article was read in part: "notamment" says the list is longer.
+      texte: `Toute personne peut demander communication de documents ${c.de}, notamment les délibérations de la commission permanente, les budgets et les comptes.`,
+      liens: [
+        c.documents,
+        {
+          label: "Faire la demande, et que faire en cas de refus (Service Public)",
+          url: `${SERVICE_PUBLIC}/F2467`,
+        },
+      ],
+    },
+    {
+      id: "contacter",
+      titre: `Contacter le ${c.conseil}`,
+      texte: `Les coordonnées officielles du ${c.conseil} figurent dans l'annuaire de l'administration.`,
+      liens: [ANNUAIRE],
+    },
+    VOIE_PARTICIPER,
+    {
+      ...AGIR_VOIES.find((voie) => voie.id === "contester")!,
+      texte: `Une décision ${c.de} peut être contestée auprès ${c.elleMeme}, puis devant le juge administratif. Les délais sont courts : lisez-les sur les fiches officielles.`,
+    },
+  ];
+}
+
+export const AGIR_VOIES_DEPARTEMENT = voiesAssemblee({
+  conseil: "conseil départemental",
+  de: "du département",
+  elleMeme: "du département lui-même",
+  seances: {
+    label: "Code général des collectivités territoriales, article L. 3121-11",
+    url: `${LEGIFRANCE}/LEGIARTI000027574231`,
+  },
+  documents: {
+    label: "Code général des collectivités territoriales, article L. 3121-17",
+    url: `${LEGIFRANCE}/LEGIARTI000044190600`,
+  },
+});
+
+export const AGIR_VOIES_REGION = voiesAssemblee({
+  conseil: "conseil régional",
+  de: "de la région",
+  elleMeme: "de la région elle-même",
+  seances: {
+    label: "Code général des collectivités territoriales, article L. 4132-10",
+    url: `${LEGIFRANCE}/LEGIARTI000006392142`,
+  },
+  documents: {
+    label: "Code général des collectivités territoriales, article L. 4132-16",
+    url: `${LEGIFRANCE}/LEGIARTI000044190631`,
+  },
+});
+
 /**
  * Territories whose entries in the commune reference have no town hall or municipal council, so
  * the block is not shown at all: the TAAF districts and Clipperton (`TERRITOIRES_SANS_COMMUNE`),
@@ -134,17 +245,33 @@ const NOUVELLE_CALEDONIE: Record<string, Pick<AgirVoie, "texte" | "liens">> = {
  * - Polynésie française: both articles apply (CGCT, art. L. 2573-5). The Service Public page on
  *   requesting a document is left out there: its application was not verified;
  * - Nouvelle-Calédonie: its own code of communes, above.
+ * Registering to vote and the consultation of the voters are kept to the common regime: their
+ * application to the three collectivités above was not verified.
  */
 export function voiesAgir(departmentCode: string): readonly AgirVoie[] {
+  const [assister, documents, contacter, contester] = AGIR_VOIES as [
+    AgirVoie,
+    AgirVoie,
+    AgirVoie,
+    AgirVoie,
+  ];
+  // Outside the common regime, neither the consultation of the voters nor the registration to
+  // vote is shown: the application of the first part of the CGCT was not verified, and the
+  // online registration service is not open to the voters of New Caledonia.
   if (departmentCode === "988") {
-    return AGIR_VOIES.map((voie) => ({ ...voie, ...NOUVELLE_CALEDONIE[voie.id] }));
+    return [
+      { ...assister, ...NOUVELLE_CALEDONIE.assister },
+      { ...documents, ...NOUVELLE_CALEDONIE.documents },
+      contacter,
+      contester,
+    ];
   }
   if (departmentCode === "987") {
-    return AGIR_VOIES.map((voie) =>
-      voie.id === "documents" ? { ...voie, liens: voie.liens.slice(0, 1) } : voie
-    );
+    const sansFiche = { ...documents, liens: documents.liens.slice(0, 1) };
+    return [assister, sansFiche, contacter, contester];
   }
-  return AGIR_VOIES;
+  if (departmentCode === "975") return [assister, documents, contacter, contester];
+  return [assister, documents, contacter, VOIE_PARTICIPER, VOIE_VOTER, contester];
 }
 
 /**

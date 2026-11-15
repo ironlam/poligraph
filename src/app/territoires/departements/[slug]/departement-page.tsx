@@ -6,6 +6,7 @@ import type { CommuneListQuery } from "@/lib/territoires/departement-communes";
 import { DepartementBandeau } from "@/components/territoires/DepartementBandeau";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import { COMMUNES_ANCHOR } from "@/lib/territoires/departement-communes";
+import { Agir } from "@/components/territoires/Agir";
 import { CommuneIndex } from "@/components/territoires/CommuneIndex";
 import {
   DepartementConseil,
@@ -58,6 +59,9 @@ export async function DepartementPageBody({
       ? { href: "#collectivite-competente", label: "Collectivité" }
       : { href: "#conseil", label: "Conseil" };
 
+  // The block speaks of the conseil départemental: it is shown only where there is one.
+  const agir = premier.href === "#conseil";
+
   return (
     <div className="pb-10">
       <DepartementBandeau
@@ -73,12 +77,14 @@ export async function DepartementPageBody({
           premier,
           { href: `#${COMMUNES_ANCHOR}`, label: "Communes" },
           { href: "#parlement", label: "Parlement" },
+          ...(agir ? [{ href: "#agir", label: "Agir" }] : []),
         ]}
       />
       <div className="container mx-auto grid max-w-6xl items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
         <div className="flex min-w-0 flex-col gap-5">
           <DepartementConseil territoire={territoire} />
           <CommuneIndex slug={slug} territoire={territoire} />
+          {agir && <Agir niveau="departement" departmentCode={dept.code} />}
         </div>
         <DepartementParlement deputies={deputies} senators={senators} />
       </div>

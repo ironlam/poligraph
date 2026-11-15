@@ -1,6 +1,8 @@
 import {
   AGIR_AVERTISSEMENT,
   AGIR_VERIFIE_LE,
+  AGIR_VOIES_DEPARTEMENT,
+  AGIR_VOIES_REGION,
   aUneMairie,
   siegeTribunalAdministratif,
   TRIBUNAL_SOURCES,
@@ -35,20 +37,36 @@ function Liens({ liens }: { liens: readonly AgirLien[] }) {
  * only fact proper to the territory is the seat of its administrative court. The block informs;
  * it gives no advice on a particular case and says so.
  */
-export function Agir({ departmentCode }: { departmentCode: string }) {
+export function Agir(
+  props:
+    | { niveau?: "commune"; departmentCode: string }
+    | { niveau: "departement"; departmentCode: string }
+    | { niveau: "region" }
+) {
+  const niveau = props.niveau ?? "commune";
+  const departmentCode = "departmentCode" in props ? props.departmentCode : null;
   // Without a commune there is neither a municipal council nor a town hall to write to.
-  if (!aUneMairie(departmentCode)) return null;
-  const siege = siegeTribunalAdministratif(departmentCode);
+  if (niveau === "commune" && !aUneMairie(departmentCode!)) return null;
+  const voies =
+    niveau === "region"
+      ? AGIR_VOIES_REGION
+      : niveau === "departement"
+        ? AGIR_VOIES_DEPARTEMENT
+        : voiesAgir(departmentCode!);
+  // A commune and a departmental council sit in their department. The seat of a regional council
+  // is not recorded here, so no court is named for a region.
+  const siege = departmentCode ? siegeTribunalAdministratif(departmentCode) : null;
+  const auteur = niveau === "departement" ? "du département" : "de la commune";
   return (
     <SectionCard id="agir" title="Agir">
       <ul className="divide-y divide-border">
-        {voiesAgir(departmentCode).map((voie) => (
+        {voies.map((voie) => (
           <li key={voie.id} className="py-3 first:pt-0">
             <h3 className="font-semibold">{voie.titre}</h3>
             <p className="mt-1 text-sm">{voie.texte}</p>
             {voie.id === "contester" && siege && (
               <p className="mt-2 text-sm">
-                Pour une décision de la commune, le tribunal administratif compétent est en principe
+                Pour une décision {auteur}, le tribunal administratif compétent est en principe
                 celui qui siège à <strong>{siege}</strong>.
               </p>
             )}

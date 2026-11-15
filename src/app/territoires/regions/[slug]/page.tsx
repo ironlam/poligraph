@@ -6,6 +6,7 @@ import { getElections } from "@/lib/data/elections";
 import { REGIONS } from "@/config/regions";
 import { territoireRegionPath } from "@/lib/territoires/paths";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
+import { Agir } from "@/components/territoires/Agir";
 import { RegionBandeau } from "@/components/territoires/RegionBandeau";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import {
@@ -86,6 +87,8 @@ export default async function RegionPage({ params }: PageProps) {
     { href: "#departements", label: "Départements" },
     ...(elections.length > 0 ? [{ href: "#elections", label: "Élections" }] : []),
     { href: "#parlement", label: "Parlement" },
+    // The block speaks of the conseil régional: not where a single collectivité replaces it.
+    ...(particuliere ? [] : [{ href: "#agir", label: "Agir" }]),
   ];
 
   return (
@@ -98,6 +101,7 @@ export default async function RegionPage({ params }: PageProps) {
           <RegionConseil data={data} />
           <RegionDepartements data={data} />
           <RegionElections elections={elections} />
+          {!particuliere && <Agir niveau="region" />}
         </div>
         <aside className="space-y-6" aria-label="Compléments">
           <RegionParlement data={data} />

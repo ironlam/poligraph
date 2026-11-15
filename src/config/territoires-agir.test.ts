@@ -3,6 +3,8 @@ import { DEPARTMENTS } from "@/config/departments";
 import {
   AGIR_AVERTISSEMENT,
   AGIR_VOIES,
+  AGIR_VOIES_DEPARTEMENT,
+  AGIR_VOIES_REGION,
   aUneMairie,
   siegeTribunalAdministratif,
   TRIBUNAL_SOURCES,
@@ -15,9 +17,17 @@ const HOTES_OFFICIELS = [
   "lannuaire.service-public.gouv.fr",
 ];
 
+// Every line that can be displayed: the three levels and each territorial variant of a commune.
+const TOUTES_LES_VOIES = [
+  ...AGIR_VOIES,
+  ...AGIR_VOIES_DEPARTEMENT,
+  ...AGIR_VOIES_REGION,
+  ...["35", "975", "987", "988"].flatMap((code) => voiesAgir(code)),
+];
+
 describe("texte du bloc Agir", () => {
   it("ne cite que des sources officielles, en https", () => {
-    const liens = [...AGIR_VOIES.flatMap((v) => v.liens), ...TRIBUNAL_SOURCES];
+    const liens = [...TOUTES_LES_VOIES.flatMap((v) => v.liens), ...TRIBUNAL_SOURCES];
     expect(liens.length).toBeGreaterThan(0);
     for (const lien of liens) {
       const url = new URL(lien.url);
@@ -29,7 +39,7 @@ describe("texte du bloc Agir", () => {
   // A deadline or a threshold copied here would go stale and mislead: the page sends the reader
   // to the source instead.
   it("n'écrit aucun délai, seuil ni montant", () => {
-    for (const voie of AGIR_VOIES) {
+    for (const voie of TOUTES_LES_VOIES) {
       expect(voie.texte, voie.id).not.toMatch(/\d|\bmois\b|\bjours?\b|\beuros?\b/i);
       expect(voie.texte).not.toMatch(/[–—]/);
       expect(voie.liens.length, voie.id).toBeGreaterThan(0);
@@ -40,14 +50,17 @@ describe("texte du bloc Agir", () => {
 
 describe("voies affichées selon le régime de la commune", () => {
   const ids = (code: string) => voiesAgir(code).map((v) => v.id);
-  const TOUTES = ["assister", "documents", "contacter", "contester"];
+  const TOUTES = ["assister", "documents", "contacter", "participer", "voter", "contester"];
+  // Neither the consultation of the voters nor the registration to vote is asserted where its
+  // application was not verified: the online service is closed to the voters of New Caledonia.
+  const SANS_CONSULTATION = ["assister", "documents", "contacter", "contester"];
   const labels = (code: string, id: string) =>
     voiesAgir(code)
       .find((v) => v.id === id)!
       .liens.map((l) => l.label);
 
   // Article L. 2541-1 of the CGCT does not set L. 2121-18 nor L. 2121-26 aside for Alsace-Moselle.
-  it.each(["35", "974", "57", "67", "68", "975"])(
+  it.each(["35", "974", "57", "67", "68"])(
     "donne les quatre voies et cite le CGCT pour le code %s",
     (code) => {
       expect(ids(code)).toEqual(TOUTES);
@@ -57,7 +70,7 @@ describe("voies affichées selon le régime de la commune", () => {
   );
 
   it("cite le code des communes de la Nouvelle-Calédonie, pas le CGCT", () => {
-    expect(ids("988")).toEqual(TOUTES);
+    expect(ids("988")).toEqual(SANS_CONSULTATION);
     expect(labels("988", "assister")).toEqual([
       "Code des communes de la Nouvelle-Calédonie, article L. 121-15",
     ]);
@@ -69,10 +82,33 @@ describe("voies affichées selon le régime de la commune", () => {
   });
 
   it("cite le CGCT en Polynésie française, sans la fiche dont l'application n'est pas vérifiée", () => {
-    expect(ids("987")).toEqual(TOUTES);
+    expect(ids("987")).toEqual(SANS_CONSULTATION);
+    expect(ids("975")).toEqual(SANS_CONSULTATION);
     expect(labels("987", "documents")).toEqual([
       "Code général des collectivités territoriales, article L. 2121-26",
     ]);
+  });
+});
+
+describe("voies du département et de la région", () => {
+  it.each([
+    ["département", AGIR_VOIES_DEPARTEMENT, "conseil départemental", "L. 3121-11", "L. 3121-17"],
+    ["région", AGIR_VOIES_REGION, "conseil régional", "L. 4132-10", "L. 4132-16"],
+  ] as const)("cite les articles propres au %s", (_, voies, conseil, seances, documents) => {
+    expect(voies.map((v) => v.id)).toEqual([
+      "assister",
+      "documents",
+      "contacter",
+      "participer",
+      "contester",
+    ]);
+    expect(voies[0]?.texte).toBe(`Les séances du ${conseil} sont publiques.`);
+    expect(voies[0]?.liens[0]?.label).toContain(seances);
+    expect(voies[1]?.liens[0]?.label).toContain(documents);
+    // No word of the commune leaks into another level.
+    expect(voies.map((v) => `${v.titre} ${v.texte}`).join(" ")).not.toMatch(
+      /mairie|municipal|commune/
+    );
   });
 });
 
