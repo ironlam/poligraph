@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   }),
 }));
 
+vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: vi.fn(async () => []) }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
   notFound: mocks.notFound,

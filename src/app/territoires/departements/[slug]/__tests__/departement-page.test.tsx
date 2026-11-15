@@ -14,6 +14,7 @@ const territoireMock = vi.fn();
 const deputesMock = vi.fn();
 const senateursMock = vi.fn();
 
+vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: vi.fn(async () => []) }));
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/lib/data/territoires", () => ({
   getDepartementTerritoire: (...args: unknown[]) => territoireMock(...args),

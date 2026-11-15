@@ -7,6 +7,8 @@ import { REGIONS } from "@/config/regions";
 import { territoireRegionPath } from "@/lib/territoires/paths";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Agir } from "@/components/territoires/Agir";
+import { FilTerritoire } from "@/components/territoires/FilTerritoire";
+import { getFilTerritoire } from "@/lib/data/territoire-fil";
 import { RegionBandeau } from "@/components/territoires/RegionBandeau";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import {
@@ -76,7 +78,10 @@ export default async function RegionPage({ params }: PageProps) {
   if (!data) notFound();
 
   const particuliere = data.collectivitesParticulieres.length > 0;
-  const elections = await loadRegionElections(particuliere);
+  const [elections, fil] = await Promise.all([
+    loadRegionElections(particuliere),
+    getFilTerritoire("REG", data.region.code),
+  ]);
 
   // One word each. The first tab names the block shown for this region; the elections tab
   // exists only with its section.
@@ -97,6 +102,7 @@ export default async function RegionPage({ params }: PageProps) {
       <TerritoireOnglets onglets={onglets} />
       <div className="container mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
+          <FilTerritoire evenements={fil} />
           <RegionCollectivites data={data} />
           <RegionConseil data={data} />
           <RegionDepartements data={data} />

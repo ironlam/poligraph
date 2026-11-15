@@ -7,6 +7,7 @@ import { AdministrativeAreaJsonLd } from "@/components/seo/JsonLd";
 import { Agir } from "@/components/territoires/Agir";
 import { CommuneBandeau } from "@/components/territoires/CommuneBandeau";
 import { EchelleTerritoires } from "@/components/territoires/EchelleTerritoires";
+import { FilTerritoire } from "@/components/territoires/FilTerritoire";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import { echelleCommune } from "@/lib/territoires/echelle";
 import {
@@ -18,6 +19,7 @@ import {
 import { getCommuneDossier } from "@/lib/data/territoires";
 import { getCommuneElections } from "@/lib/data/territoire-elections";
 import { getCommuneChiffres } from "@/lib/data/territoire-chiffres";
+import { getFilTerritoire } from "@/lib/data/territoire-fil";
 import { hasChiffres, TerritoireChiffres } from "@/components/territoires/TerritoireChiffres";
 import { communeScrutins } from "@/lib/territoires/commune-elections";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
@@ -66,9 +68,10 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
   const { identity } = dossier;
   // The dossier knows 2026 and the presidential only: the earlier municipales come from the
   // elections reader, so the count and the lines match the dedicated page.
-  const [elections, chiffres] = await Promise.all([
+  const [elections, chiffres, fil] = await Promise.all([
     getCommuneElections(identity.inseeCode),
     getCommuneChiffres(identity.inseeCode),
+    getFilTerritoire("COM", identity.inseeCode),
   ]);
   const scrutins = elections?.scrutins ?? communeScrutins(dossier.elections, identity.inseeCode);
   // One word each, five at most: the tabs share one line on a phone. Sub-pages are linked from
@@ -105,6 +108,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
       <div className="container mx-auto max-w-6xl px-4 py-6 md:py-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0 space-y-6">
+            <FilTerritoire evenements={fil} />
             <QuiDecideSection dossier={dossier} />
             <ParlementSection dossier={dossier} />
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}

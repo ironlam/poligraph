@@ -7,6 +7,8 @@ import { DepartementBandeau } from "@/components/territoires/DepartementBandeau"
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import { COMMUNES_ANCHOR } from "@/lib/territoires/departement-communes";
 import { Agir } from "@/components/territoires/Agir";
+import { FilTerritoire } from "@/components/territoires/FilTerritoire";
+import { getFilTerritoire } from "@/lib/data/territoire-fil";
 import { CommuneIndex } from "@/components/territoires/CommuneIndex";
 import {
   DepartementConseil,
@@ -29,10 +31,11 @@ export async function DepartementPageBody({
   const dept = getDepartmentBySlug(slug);
   if (!dept) notFound();
 
-  const [territoire, deputies, senators] = await Promise.all([
+  const [territoire, deputies, senators, fil] = await Promise.all([
     getDepartementTerritoire(dept.code, query),
     getDeputesByDepartment(dept.code),
     getSenateursByDepartment(dept.code),
+    getFilTerritoire("DEP", dept.code),
   ]);
 
   if (!territoire) notFound();
@@ -82,6 +85,7 @@ export async function DepartementPageBody({
       />
       <div className="container mx-auto grid max-w-6xl items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
         <div className="flex min-w-0 flex-col gap-5">
+          <FilTerritoire evenements={fil} />
           <DepartementConseil territoire={territoire} />
           <CommuneIndex slug={slug} territoire={territoire} />
           {agir && <Agir niveau="departement" departmentCode={dept.code} />}
