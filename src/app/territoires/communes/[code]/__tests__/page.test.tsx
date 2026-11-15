@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   }),
 }));
 
+vi.mock("@/lib/data/territoire-votes", () => ({
+  getVotesDeputesDepartement: vi.fn(async () => ({ scrutins: [], deputeSlugs: [] })),
+}));
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
   notFound: mocks.notFound,
