@@ -29,13 +29,14 @@ function runWithTimeout<T>(name: string, fn: () => Promise<T>, ms: number): Prom
 }
 
 // Steps the GitHub Actions daily sync (scripts/sync-daily.ts) already runs on the same schedule
-// are deliberately absent: legislation and its content, dossier and scrutin summaries, press RSS,
-// affair reconciliation, fact-checks, theme classification, fact-check and press embeddings,
+// are deliberately absent: legislation and its content, dossier and scrutin summaries, affair
+// reconciliation, fact-checks, theme classification, fact-check and press embeddings,
 // prominence, publication status and IndexNow. Running them here as well paid twice for the same
 // work, model calls included, inside a lambda that also serves page requests. What they write
 // reaches the pages through the purge at the end of that script, not through this function.
 // The two vote syncs stay: this function purges "votes" itself, and the steps below read the
-// scrutins they import. src/inngest/functions/__tests__/sync-daily.test.ts fails if one comes back.
+// scrutins they import. The press RSS import stays too, see its step.
+// src/inngest/functions/__tests__/sync-daily.test.ts fails if one of the others comes back.
 const DAILY_STEPS: DailyStep[] = [
   {
     name: "scrutins-an",
@@ -238,6 +239,15 @@ const DAILY_STEPS: DailyStep[] = [
       if (stats.approved > 0) revalidateTags(["votes"], "max");
       console.info("[sync-daily] approve-policy-titles", stats);
       return stats;
+    },
+  },
+  {
+    // Kept here although the workflow imports the press too: this function starts on time, while
+    // the workflow has been starting 4 to 7 hours late, and the morning import feeds the affair watch.
+    name: "press-rss",
+    run: async () => {
+      const { syncPress } = await import("@/services/sync/press");
+      return syncPress();
     },
   },
   // press-analysis step removed here (#765). It ran on the same 0 5,11,19 cron

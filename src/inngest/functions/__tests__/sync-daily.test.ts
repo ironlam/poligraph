@@ -73,7 +73,6 @@ describe("sync-daily : une seule exécution par étape", () => {
     "legislation-content",
     "summaries-dossiers",
     "generate-scrutin-summaries",
-    "press-rss",
     "press-analysis",
     "reconcile-affairs",
     "factchecks",
@@ -94,10 +93,10 @@ describe("sync-daily : une seule exécution par étape", () => {
     expect(names.filter((name) => OWNED_BY_THE_WORKFLOW.includes(name as string))).toEqual([]);
   });
 
-  it("garde les synchros de votes, que les étapes suivantes lisent", async () => {
+  it("garde les synchros de votes, que les étapes suivantes lisent, et l'import de presse", async () => {
     const step = await runDaily();
     const names = step.run.mock.calls.map((call) => (call as unknown[])[0]);
 
-    expect(names).toEqual(expect.arrayContaining(["scrutins-an", "scrutins-senat"]));
+    expect(names).toEqual(expect.arrayContaining(["scrutins-an", "scrutins-senat", "press-rss"]));
   });
 });
