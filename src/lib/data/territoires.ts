@@ -1133,6 +1133,73 @@ export async function getDepartementTerritoire(
 
 const FIRST_LETTER = Prisma.sql`upper(left(unaccent(c."name"), 1))`;
 
+type CommuneListRow = { id: string; name: string; population: number | null };
+
+/** Rows of a commune list, each with its mayor as the base establishes it. */
+async function withMaires(communeRows: CommuneListRow[]): Promise<DepartementCommuneRow[]> {
+  const ids = communeRows.map((c) => c.id);
+  const mayors = ids.length
+    ? await db.mandate.findMany({
+        where: {
+          type: "MAIRE",
+          isCurrent: true,
+          localData: { communeId: { in: ids }, sectorLabel: null },
+        },
+        select: {
+          localData: { select: { communeId: true } },
+          politician: { select: { ...PERSON_SELECT, publicationStatus: true } },
+        },
+        // At most a handful of conflicts on top of one mayor per commune.
+        take: DEPARTEMENT_PAGE_SIZE * 3,
+      })
+    : [];
+
+  const mayorsByCommune = new Map<string, (typeof mayors)[number]["politician"][]>();
+  for (const m of mayors) {
+    const communeId = m.localData?.communeId;
+    if (!communeId) continue;
+    mayorsByCommune.set(communeId, [...(mayorsByCommune.get(communeId) ?? []), m.politician]);
+  }
+
+  return communeRows.map((c) => {
+    const { state, holder } = resolveTitulaire(mayorsByCommune.get(c.id) ?? []);
+    return {
+      inseeCode: c.id,
+      name: c.name,
+      population: c.population,
+      maire: { state, person: holder ? personRef(holder) : null },
+    };
+  });
+}
+
+/** Communes shown on the department page before the reader asks for the full A to Z list. */
+export const DEPARTEMENT_GRANDES_COMMUNES = 8;
+
+/** The most populated communes of a department, largest first. Empty for an unknown code. */
+export async function getDepartementGrandesCommunes(
+  code: string
+): Promise<DepartementCommuneRow[]> {
+  const departmentCode = normalizeDepartmentCode(code);
+  return departmentCode ? readDepartementGrandesCommunes(departmentCode) : [];
+}
+
+async function readDepartementGrandesCommunes(
+  departmentCode: string
+): Promise<DepartementCommuneRow[]> {
+  "use cache";
+  cacheLife("synced");
+  cacheTag(...TERRITOIRE_TAGS, `territoire:${departmentCode}`);
+
+  const communeRows = await db.$queryRaw<CommuneListRow[]>(Prisma.sql`
+    SELECT c."id", c."name", c."population"
+    FROM "Commune" c
+    WHERE c."departmentCode" = ${departmentCode}
+    ORDER BY c."population" DESC NULLS LAST, unaccent(c."name"), c."id"
+    LIMIT ${DEPARTEMENT_GRANDES_COMMUNES}
+  `);
+  return withMaires(communeRows);
+}
+
 async function readDepartementTerritoire(
   departmentCode: string,
   letter: string | null,
@@ -1159,7 +1226,7 @@ async function readDepartementTerritoire(
 
   const communeRows =
     offset < total
-      ? await db.$queryRaw<{ id: string; name: string; population: number | null }[]>(Prisma.sql`
+      ? await db.$queryRaw<CommuneListRow[]>(Prisma.sql`
           SELECT c."id", c."name", c."population"
           FROM "Commune" c
           WHERE c."departmentCode" = ${departmentCode}
@@ -1169,39 +1236,7 @@ async function readDepartementTerritoire(
         `)
       : [];
 
-  const ids = communeRows.map((c) => c.id);
-  const mayors = ids.length
-    ? await db.mandate.findMany({
-        where: {
-          type: "MAIRE",
-          isCurrent: true,
-          localData: { communeId: { in: ids }, sectorLabel: null },
-        },
-        select: {
-          localData: { select: { communeId: true } },
-          politician: { select: { ...PERSON_SELECT, publicationStatus: true } },
-        },
-        // At most a handful of conflicts on top of one mayor per commune.
-        take: DEPARTEMENT_PAGE_SIZE * 3,
-      })
-    : [];
-
-  const mayorsByCommune = new Map<string, (typeof mayors)[number]["politician"][]>();
-  for (const m of mayors) {
-    const communeId = m.localData?.communeId;
-    if (!communeId) continue;
-    mayorsByCommune.set(communeId, [...(mayorsByCommune.get(communeId) ?? []), m.politician]);
-  }
-
-  const rows: DepartementCommuneRow[] = communeRows.map((c) => {
-    const { state, holder } = resolveTitulaire(mayorsByCommune.get(c.id) ?? []);
-    return {
-      inseeCode: c.id,
-      name: c.name,
-      population: c.population,
-      maire: { state, person: holder ? personRef(holder) : null },
-    };
-  });
+  const rows = await withMaires(communeRows);
 
   const mandatePresidence = await readPresidence({ type: "PRESIDENT_DEPARTEMENT", departmentCode });
   const conseil = await readConseil("DEPARTEMENTAL", departmentCode);

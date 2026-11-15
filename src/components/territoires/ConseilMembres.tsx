@@ -70,27 +70,27 @@ export function ConseilMembres({
               ))}
             </ul>
           )}
+          {conseil.source && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Source :{" "}
+              {conseil.source.url ? (
+                <a
+                  href={conseil.source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-foreground"
+                  aria-label={`${conseil.source.label} (nouvel onglet)`}
+                >
+                  {conseil.source.label}
+                </a>
+              ) : (
+                conseil.source.label
+              )}
+              . Liste nominative sans lien vers une fiche.
+            </p>
+          )}
         </div>
       </details>
-      {conseil.source && (
-        <p className="text-xs text-muted-foreground">
-          Source :{" "}
-          {conseil.source.url ? (
-            <a
-              href={conseil.source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
-              aria-label={`${conseil.source.label} (nouvel onglet)`}
-            >
-              {conseil.source.label}
-            </a>
-          ) : (
-            conseil.source.label
-          )}
-          . Liste nominative sans lien vers une fiche.
-        </p>
-      )}
     </div>
   );
 }

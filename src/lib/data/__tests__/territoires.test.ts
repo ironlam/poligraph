@@ -60,6 +60,7 @@ vi.mock("@/lib/db", () => ({
 import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import {
   getCommuneDossier,
+  getDepartementGrandesCommunes,
   getDepartementTerritoire,
   getRegionTerritoire,
   matchDepartements,
@@ -645,6 +646,34 @@ describe("getDepartementTerritoire", () => {
     expect(result?.conseil.state).toBe("NON_ETABLI");
     expect(mocks.departementVintages).toHaveBeenCalledWith("13");
     expect(result?.populationVintages).toEqual([]);
+  });
+});
+
+describe("getDepartementGrandesCommunes", () => {
+  it("refuse un code invalide sans interroger la base", async () => {
+    expect(await getDepartementGrandesCommunes("1; DROP")).toEqual([]);
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("rend les communes dans l'ordre de la requête, par population, avec l'état du maire", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([
+      { id: "13055", name: "Marseille", population: 870000 },
+      { id: "13001", name: "Aix-en-Provence", population: 147000 },
+    ]);
+    mocks.mandateFindMany.mockResolvedValue([
+      { localData: { communeId: "13001" }, politician: person("maire-aix") },
+    ]);
+
+    const rows = await getDepartementGrandesCommunes("13");
+
+    expect(rows.map((r) => [r.inseeCode, r.name, r.maire.person?.slug ?? null])).toEqual([
+      ["13055", "Marseille", null],
+      ["13001", "Aix-en-Provence", "maire-aix"],
+    ]);
+    // The order and the limit belong to the query: largest first, eight rows.
+    const sql = mocks.queryRaw.mock.calls[0]![0] as { strings: string[]; values: unknown[] };
+    expect(sql.strings.join("?")).toMatch(/ORDER BY c\."population" DESC NULLS LAST/);
+    expect(sql.values.at(-1)).toBe(8);
   });
 });
 
