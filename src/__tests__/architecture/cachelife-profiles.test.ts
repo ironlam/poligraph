@@ -26,8 +26,8 @@ const SRC_DIR = join(process.cwd(), "src");
 
 /**
  * Boundaries allowed to keep a shorter profile, with the reason each one is a
- * deliberate trade-off rather than an oversight. Both are documented in the
- * file that carries them.
+ * deliberate trade-off rather than an oversight. Both are admin-only readers,
+ * documented in the file that carries them: no public route consumes them.
  */
 const SHORTER_PROFILE_ALLOWED = new Map([
   [
@@ -44,19 +44,11 @@ const SHORTER_PROFILE_ALLOWED = new Map([
       reason: "admin dashboard: exact duplicate count is shared and invalidated after mutations",
     },
   ],
-  [
-    "lib/data/elections.ts",
-    {
-      profile: "hours",
-      reason: "flips on the clock on polling day, and no tag purge happens that day",
-    },
-  ],
 ]);
 
 /**
  * The offending profiles of one file. An exemption covers a single named profile, not the file:
- * `elections.ts` legitimately carries one `hours` next to four `synced`, and skipping the whole
- * file would let a `minutes` land there unnoticed.
+ * skipping the whole file would let another short profile land there unnoticed.
  */
 function offendingProfiles(relativePath: string, profiles: string[]): string[] {
   const exemption = SHORTER_PROFILE_ALLOWED.get(relativePath);
@@ -116,9 +108,10 @@ describe("profils cacheLife et revalidate ISR effectif", () => {
   });
 
   it("n'exempte que la frontière nommée, pas tout le fichier", () => {
-    expect(offendingProfiles("lib/data/elections.ts", ["hours", "synced", "synced"])).toEqual([]);
-    expect(offendingProfiles("lib/data/elections.ts", ["hours", "minutes"])).toEqual(["minutes"]);
-    expect(offendingProfiles("lib/data/pipelines.ts", ["minutes"])).toEqual([]);
+    expect(offendingProfiles("lib/data/pipelines.ts", ["minutes", "synced"])).toEqual([]);
+    expect(offendingProfiles("lib/data/pipelines.ts", ["minutes", "hours"])).toEqual(["hours"]);
+    // The header reads this file on every page: no short profile is tolerated there any more.
+    expect(offendingProfiles("lib/data/elections.ts", ["hours", "synced"])).toEqual(["hours"]);
     expect(offendingProfiles("lib/data/pipelines.ts", ["hours"])).toEqual(["hours"]);
     expect(offendingProfiles("lib/data/statistics.ts", ["minutes"])).toEqual(["minutes"]);
   });

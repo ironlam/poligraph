@@ -530,22 +530,25 @@ export const getCommuneResults2014 = cache(async function getCommuneResults2014(
  * the homepage banner: the stored `status` is only advanced by the candidacy sync, so the round
  * dates are what actually prove the ballot happened.
  *
- * `hours`, not `synced`: this answer flips on the clock, not only on a database write. Nothing
- * purges the "elections" tag on polling day (the daily sync revalidates "votes" alone), so with
- * `synced` the menu would keep saying "À venir" for up to 24 h after the ballot. `hours` is also
- * the profile `revalidateTag("elections", ELECTION_PROFILE)` already passes on the purge side.
+ * The clock is read here, outside the cached rows, so a cached entry does not keep the verdict of
+ * the moment it was cached. The rows are `synced` like every other boundary: this reader sits in
+ * the header of every page, and a shorter profile would lower the ISR revalidate and expire of
+ * the whole site. A page already rendered keeps its menu until it is regenerated.
  */
-export async function getPastElectionSlugs(): Promise<string[]> {
+export async function getPastElectionSlugs(now: Date = new Date()): Promise<string[]> {
+  const rows = await loadNavElectionRows();
+  return rows.filter((election) => isElectionOver(election, now)).map((election) => election.slug);
+}
+
+async function loadNavElectionRows() {
   "use cache";
   cacheTag("elections");
-  cacheLife("hours");
+  cacheLife("synced");
 
-  const rows = await db.election.findMany({
+  return db.election.findMany({
     where: { slug: { in: NAV_ELECTIONS.map((item) => item.slug) } },
     select: { slug: true, status: true, round1Date: true, round2Date: true },
   });
-
-  return rows.filter((election) => isElectionOver(election)).map((election) => election.slug);
 }
 
 // ============================================

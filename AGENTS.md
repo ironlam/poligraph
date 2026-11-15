@@ -217,8 +217,11 @@ Two distinct resolver systems:
   effective ISR revalidate is the MIN of its own and of every `"use cache"` boundary it reads, so a
   single short profile re-blocks the whole route: that is what produced 8.7M ISR writes in July 2026.
   Freshness comes from `revalidateTag`, not from the timer. Two documented exceptions carry a shorter
-  profile: the admin pipeline dashboard, and election data that flips on the clock rather than on a
-  write. Enforced by `src/__tests__/architecture/cachelife-profiles.test.ts`, which also checks that
+  profile, both read by the admin only: the pipeline dashboard and the duplicate count. A public
+  answer that flips on the clock (is this ballot over?) caches its rows under `synced` and reads
+  the clock outside the cached function, as `getPastElectionSlugs` does: the header reads it on
+  every page, and under `hours` every route was revalidated each hour and expired after a day.
+  Enforced by `src/__tests__/architecture/cachelife-profiles.test.ts`, which also checks that
   each exemption still matches reality.
 - `cacheTag()` uses entity-based tags (`politicians`, `affairs`, `parties`, `elections`) for targeted invalidation.
 - `export const revalidate = N` (ISR) for listing pages with search.
