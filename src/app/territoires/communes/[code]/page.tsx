@@ -8,6 +8,8 @@ import { Agir } from "@/components/territoires/Agir";
 import { CommuneBandeau } from "@/components/territoires/CommuneBandeau";
 import { EchelleTerritoires } from "@/components/territoires/EchelleTerritoires";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
+import { VotesParlementaires, type VotesMode } from "@/components/territoires/VotesParlementaires";
+import { getVotesDeputesDepartement } from "@/lib/data/territoire-votes";
 import { echelleCommune } from "@/lib/territoires/echelle";
 import {
   CommuneSidebar,
@@ -70,10 +72,20 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
   const { identity } = dossier;
   // The dossier knows 2026 and the presidential only: the earlier municipales come from the
   // elections reader, so the count and the lines match the dedicated page.
-  const [elections, chiffres] = await Promise.all([
+  const [elections, chiffres, votes] = await Promise.all([
     getCommuneElections(identity.inseeCode),
     getCommuneChiffres(identity.inseeCode),
+    getVotesDeputesDepartement(identity.department.code),
   ]);
+  // A name only when the base establishes one deputy for the commune; otherwise no name.
+  const { deputes } = dossier.parlement;
+  const depute =
+    deputes.couvertureCirconscriptions !== "PLUSIEURS" && deputes.state === "DISPONIBLE"
+      ? deputes.deputes[0]
+      : undefined;
+  const votesMode: VotesMode = depute
+    ? { kind: "depute", depute: { slug: depute.slug, fullName: depute.fullName } }
+    : { kind: "renvoi" };
   const scrutins = elections?.scrutins ?? communeScrutins(dossier.elections, identity.inseeCode);
   // One word each, five at most: the tabs share one line on a phone. Sub-pages are linked from
   // their own section.
@@ -111,6 +123,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
           <div className="min-w-0 space-y-6">
             <QuiDecideSection dossier={dossier} />
             <ParlementSection dossier={dossier} />
+            <VotesParlementaires votes={votes} mode={votesMode} />
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}
             <ElectionsSection dossier={dossier} scrutins={scrutins} />
             <Agir departmentCode={identity.department.code} />

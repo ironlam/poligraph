@@ -15,6 +15,10 @@ const grandesMock = vi.fn();
 const deputesMock = vi.fn();
 const senateursMock = vi.fn();
 
+vi.mock("@/lib/data/territoire-votes", () => ({
+  getVotesDeputesDepartement: vi.fn(async () => ({ scrutins: [], deputeSlugs: [] })),
+  getVotesSenateursDepartement: vi.fn(async () => ({ scrutins: [], deputeSlugs: [] })),
+}));
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/lib/data/territoires", () => ({
   getDepartementTerritoire: (...args: unknown[]) => territoireMock(...args),
