@@ -19,6 +19,15 @@ describe("getScrutinVotesParDepartement", () => {
     expect(sql.values).toEqual(["s1"]);
   });
 
+  // Régression : deux mandats qui se chevauchent doublaient le vote dans les totaux.
+  it("compte un vote une seule fois et écarte un votant à départements ambigus", async () => {
+    h.queryRaw.mockResolvedValueOnce([]);
+    await getScrutinVotesParDepartement("s1");
+    const sql = (h.queryRaw.mock.calls[0]?.[0] as { sql: string }).sql;
+    expect(sql).toContain("GROUP BY v.id, v.position");
+    expect(sql).toContain(`HAVING count(DISTINCT m."departmentCode") = 1`);
+  });
+
   it("regroupe par département, dans l'ordre des codes, avec le lien de la page", async () => {
     h.queryRaw.mockResolvedValueOnce([
       { code: "29", position: "CONTRE", n: 6 },

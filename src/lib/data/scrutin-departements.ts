@@ -38,15 +38,20 @@ export async function getScrutinVotesParDepartement(
 
   // Every member of the two chambers at most: bounded by the 101 departments times 5 positions.
   const rows = await db.$queryRaw<Row[]>(Prisma.sql`
-    SELECT m."departmentCode" AS code, v.position::text AS position, count(*)::int AS n
-    FROM "Vote" v
-    JOIN "Scrutin" s ON s.id = v."scrutinId"
-    JOIN "Mandate" m ON m."politicianId" = v."politicianId"
-      AND m.type = (CASE WHEN s.chamber = 'AN' THEN 'DEPUTE' ELSE 'SENATEUR' END)::"MandateType"
-      AND m."departmentCode" IS NOT NULL
-      AND m."startDate" <= s."votingDate"
-      AND (m."endDate" IS NULL OR m."endDate" >= s."votingDate")
-    WHERE v."scrutinId" = ${scrutinId}
+    SELECT t.code, t.position, count(*)::int AS n
+    FROM (
+      SELECT v.id, v.position::text AS position, min(m."departmentCode") AS code
+      FROM "Vote" v
+      JOIN "Scrutin" s ON s.id = v."scrutinId"
+      JOIN "Mandate" m ON m."politicianId" = v."politicianId"
+        AND m.type = (CASE WHEN s.chamber = 'AN' THEN 'DEPUTE' ELSE 'SENATEUR' END)::"MandateType"
+        AND m."departmentCode" IS NOT NULL
+        AND m."startDate" <= s."votingDate"
+        AND (m."endDate" IS NULL OR m."endDate" >= s."votingDate")
+      WHERE v."scrutinId" = ${scrutinId}
+      GROUP BY v.id, v.position
+      HAVING count(DISTINCT m."departmentCode") = 1
+    ) t
     GROUP BY 1, 2
     LIMIT 1000
   `);
