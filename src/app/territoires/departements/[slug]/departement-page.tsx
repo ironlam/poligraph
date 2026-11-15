@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getDepartmentBySlug } from "@/config/departments";
 import { getDeputesByDepartment, getSenateursByDepartment } from "@/lib/data/departments";
-import { getDepartementTerritoire } from "@/lib/data/territoires";
+import { getDepartementGrandesCommunes, getDepartementTerritoire } from "@/lib/data/territoires";
 import type { CommuneListQuery } from "@/lib/territoires/departement-communes";
 import { DepartementBandeau } from "@/components/territoires/DepartementBandeau";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
@@ -29,10 +29,13 @@ export async function DepartementPageBody({
   const dept = getDepartmentBySlug(slug);
   if (!dept) notFound();
 
-  const [territoire, deputies, senators] = await Promise.all([
+  // The bare page opens on the largest communes; the A to Z views list them all.
+  const accueil = query.letter === null && query.page === 1;
+  const [territoire, deputies, senators, grandes] = await Promise.all([
     getDepartementTerritoire(dept.code, query),
     getDeputesByDepartment(dept.code),
     getSenateursByDepartment(dept.code),
+    accueil ? getDepartementGrandesCommunes(dept.code) : [],
   ]);
 
   if (!territoire) notFound();
@@ -83,7 +86,7 @@ export async function DepartementPageBody({
       <div className="container mx-auto grid max-w-6xl items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
         <div className="flex min-w-0 flex-col gap-5">
           <DepartementConseil territoire={territoire} />
-          <CommuneIndex slug={slug} territoire={territoire} />
+          <CommuneIndex slug={slug} territoire={territoire} grandes={grandes} />
           {agir && <Agir niveau="departement" departmentCode={dept.code} />}
         </div>
         <DepartementParlement deputies={deputies} senators={senators} />
