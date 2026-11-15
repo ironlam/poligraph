@@ -51,8 +51,9 @@ export interface SeatWritePlan {
 }
 
 /**
- * One write per list with published seats, on its head of list. A list matching no head, several
- * heads, or a head already taken by another list is left out and reported.
+ * One write per list with published seats, on its head of list, matched by exact name or short
+ * label only. A list matching no head, several heads, or a head already taken by another list is
+ * left out and reported.
  */
 export function planSeatWrites(communes: CommuneResult2026[], heads: ListHead[]): SeatWritePlan {
   const headsByCommune = new Map<string, ListHead[]>();
@@ -72,9 +73,11 @@ export function planSeatWrites(communes: CommuneResult2026[], heads: ListHead[])
     for (const list of withSeats) {
       plan.lists++;
       plan.seats += list.seatsCM!;
-      const { ids } = matchListCandidacies(communeHeads, list);
+      const { ids, partial } = matchListCandidacies(communeHeads, list);
       const label = `"${list.listName}" in ${commune.inseeCode}`;
-      if (ids.length === 0) plan.skipped.push(`no match: ${label}`);
+      // A keyword match is a guess: a list merged between the rounds shares words with one of
+      // the lists it replaces, and its seats would land on that other list.
+      if (ids.length === 0 || partial) plan.skipped.push(`no match: ${label}`);
       else if (ids.length > 1) plan.skipped.push(`${ids.length} heads match: ${label}`);
       else if (taken.has(ids[0]!)) plan.skipped.push(`head already taken: ${label}`);
       else {

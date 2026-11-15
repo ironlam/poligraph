@@ -91,6 +91,21 @@ describe("planSeatWrites", () => {
     ]);
   });
 
+  // Second round: a merged list carries a new name sharing its words with a first-round list.
+  it("refuse un rapprochement par mots-clés, qui poserait les sièges sur une autre liste", () => {
+    const plan = planSeatWrites(
+      [
+        commune("35238", [
+          list("Ensemble pour notre ville demain", 30),
+          list("Ensemble pour notre ville", 5),
+        ]),
+      ],
+      [head("h1", "35238", "ENSEMBLE POUR NOTRE VILLE")]
+    );
+    expect(plan.rows).toEqual([{ id: "h1", seats: 5 }]);
+    expect(plan.skipped).toEqual(['no match: "Ensemble pour notre ville demain" in 35238']);
+  });
+
   it("laisse de côté une liste que plusieurs têtes de liste rapprochent", () => {
     const plan = planSeatWrites(
       [commune("75056", [list("Paris", 9)])],
