@@ -825,9 +825,9 @@ export interface PresidenceBlock {
 }
 
 /**
- * Executive mandates are entered by hand, not synced: on 2026-10-11 the base held one current
- * PRESIDENT_REGION (Martinique) and one PRESIDENT_DEPARTEMENT (Bouches-du-Rhône). An empty
- * result therefore means "not recorded", never "no president": it is NON_ETABLI, not ABSENT.
+ * Executive mandates exist only for the presidents `sync:executifs` could link to a profile
+ * with certainty, plus a few entered by hand. An empty result therefore means "not recorded",
+ * never "no president": it is NON_ETABLI, not ABSENT.
  */
 async function readPresidence(where: Prisma.MandateWhereInput): Promise<PresidenceBlock> {
   const holders = await db.mandate.findMany({
