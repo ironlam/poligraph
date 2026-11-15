@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
+import { functionRank } from "@/lib/territoires/executif";
 import {
   isEvenementSourceUrl,
   territoireEvenementSchema,
@@ -150,4 +151,111 @@ export async function recordEvenements(
     console.warn(`[territoire-evenements] écriture interrompue après ${written} lignes :`, error);
   }
   return { written, rejected };
+}
+
+export interface PresidentLine {
+  territoryCode: string;
+  firstName: string;
+  lastName: string;
+  rowKey: string;
+  functionLabel: string | null;
+  functionStart: Date | null;
+}
+
+const sameWords = (a: string, b: string) =>
+  a
+    .normalize("NFD")
+    .replace(/[^a-zA-Z]/g, "")
+    .toLowerCase() ===
+  b
+    .normalize("NFD")
+    .replace(/[^a-zA-Z]/g, "")
+    .toLowerCase();
+
+/**
+ * Presidents that differ between the stored council lines and the file about to replace them.
+ * Nothing on a first import (no previous line to compare), nothing when the register gives no
+ * function start (the date of the fact is unknown), nothing when only the spelling changed.
+ */
+export function presidentChangeDrafts(
+  niveau: "DEPARTEMENTAL" | "REGIONAL",
+  stored: PresidentLine[],
+  incoming: PresidentLine[]
+): EvenementDraft[] {
+  const head = (lines: PresidentLine[]) =>
+    new Map(
+      lines.filter((l) => functionRank(l.functionLabel) === 0).map((l) => [l.territoryCode, l])
+    );
+  const before = head(stored);
+  const drafts: EvenementDraft[] = [];
+  for (const [territoryCode, now] of head(incoming)) {
+    const previous = before.get(territoryCode);
+    if (!previous || previous.rowKey === now.rowKey || !now.functionStart) continue;
+    const nom = `${now.firstName} ${now.lastName}`;
+    const predecesseur = `${previous.firstName} ${previous.lastName}`;
+    if (sameWords(nom, predecesseur)) continue;
+    drafts.push(
+      presidentChangeEvenement({
+        niveau,
+        territoryCode,
+        nom,
+        predecesseur,
+        functionStart: now.functionStart,
+      })
+    );
+  }
+  return drafts;
+}
+
+export interface MaireChange {
+  /** INSEE code, the key of `Commune`. */
+  communeId: string;
+  nom: string;
+  predecesseur: string | null;
+  functionStart: Date;
+}
+
+/**
+ * Drafts for the mayors a register import replaced. Read after the import has settled: a change
+ * is published only when the commune now has exactly one current mayor and that profile is
+ * public, which is the condition under which the commune page names a mayor.
+ */
+export async function maireChangeDrafts(changes: MaireChange[]): Promise<EvenementDraft[]> {
+  if (changes.length === 0) return [];
+  let holders: {
+    localData: { communeId: string | null } | null;
+    politician: { publicationStatus: string };
+  }[] = [];
+  try {
+    holders = await db.mandate.findMany({
+      where: {
+        type: "MAIRE",
+        isCurrent: true,
+        localData: { communeId: { in: changes.map((c) => c.communeId) } },
+      },
+      select: {
+        localData: { select: { communeId: true } },
+        politician: { select: { publicationStatus: true } },
+      },
+    });
+  } catch (error) {
+    // Same promise as `recordEvenements`: the fil never fails the sync. Unread, every change
+    // stays a draft.
+    console.warn("[territoire-evenements] maires courants illisibles :", error);
+  }
+  const byCommune = new Map<string, string[]>();
+  for (const h of holders) {
+    const id = h.localData?.communeId;
+    if (id) byCommune.set(id, [...(byCommune.get(id) ?? []), h.politician.publicationStatus]);
+  }
+  return changes.map((change) => {
+    const statuses = byCommune.get(change.communeId) ?? [];
+    return maireChangeEvenement({
+      inseeCode: change.communeId,
+      nom: change.nom,
+      predecesseur: change.predecesseur,
+      functionStart: change.functionStart,
+      shownOnSite: statuses.length === 1 && statuses[0] === "PUBLISHED",
+    });
+  });
 }

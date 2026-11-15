@@ -1,5 +1,6 @@
 import { db, type DbTransactionClient } from "@/lib/db";
 import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
+import { maireChangeDrafts, recordEvenements, type MaireChange } from "./territoire-evenements";
 import { nextAliases } from "@/lib/mandates/aliases";
 import { confirmedFromResourceUrl } from "@/lib/mandates/confirmation";
 import { writeFileSync } from "node:fs";
@@ -155,6 +156,8 @@ interface UpsertCounts {
   undecidedRows: UndecidedRow[];
   /** The rows that would become a brand-new profile, which Phase 2 then judges. */
   wouldCreate: ParsedMaireRow[];
+  /** Successions Phase 1 wrote, for the "fil du territoire". */
+  mayorChanges: MaireChange[];
   /** Ids of the profiles created PUBLISHED by this run, for the profile recompute request. */
   createdIds: string[];
   errors: string[];
@@ -477,6 +480,7 @@ async function upsertMaires(
     handledInPhase1: new Set<string>(),
     undecidedRows: [],
     wouldCreate: [],
+    mayorChanges: [],
     createdIds: [],
     errors: [],
   };
@@ -515,6 +519,16 @@ async function upsertMaires(
             return null;
           }
           return createMaire(row, verbose, confirmedAt, tx);
+        };
+        const noteSuccession = (previous: HolderFacts): void => {
+          if (!row.communeId) return;
+          const predecesseur = `${previous.firstName ?? ""} ${previous.lastName ?? ""}`.trim();
+          counts.mayorChanges.push({
+            communeId: row.communeId,
+            nom: row.fullName,
+            predecesseur: predecesseur || null,
+            functionStart: endDate,
+          });
         };
         const countPublication = (): void => {
           if (knownPersonId) {
@@ -595,6 +609,7 @@ async function upsertMaires(
             }
             counts.handledInPhase1.add(existingMandate!.mandateId);
             countPublication();
+            noteSuccession(existingMandate!.holder);
             counts.different++;
             counts.closed++;
             break;
@@ -631,6 +646,7 @@ async function upsertMaires(
             }
             counts.handledInPhase1.add(incumbent!.mandateId);
             countPublication();
+            noteSuccession(incumbent!.holder);
             counts.closed++;
             break;
 
@@ -1260,6 +1276,9 @@ export async function syncRNEMaires(
     if (statusChanged.length > 0) {
       await requestProfileRefresh({ politicianIds: statusChanged }, "sync:rne");
     }
+
+    // After Phase 2: whether a new mayor is public is only settled once the stubs are folded.
+    await recordEvenements(await maireChangeDrafts(upserted.mayorChanges));
   }
 
   return {
