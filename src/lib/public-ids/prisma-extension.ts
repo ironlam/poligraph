@@ -43,14 +43,26 @@ export const ID_COLLISION_RETRIES = 5;
  * `["\"publicId\""]`. Relevé sur une vraie erreur de production.
  *
  * Ne lire que `meta.target` rendait la garde inerte là où elle devait servir.
+ *
+ * `@prisma/adapter-pg` 7.10 ne remplit plus `fields` : il donne le nom de
+ * l'index, `<Modèle>_<colonne>_key`, dont on retire le préfixe et le suffixe.
  */
 function conflictingFields(error: Prisma.PrismaClientKnownRequestError): string[] {
   const meta = error.meta as
     | {
         target?: unknown;
-        driverAdapterError?: { cause?: { constraint?: { fields?: unknown } } };
+        modelName?: string;
+        driverAdapterError?: { cause?: { constraint?: { fields?: unknown; index?: unknown } } };
       }
     | undefined;
+
+  const index = meta?.driverAdapterError?.cause?.constraint?.index;
+  if (typeof index === "string" && meta?.modelName) {
+    const prefix = `${meta.modelName}_`;
+    if (index.startsWith(prefix) && index.endsWith("_key")) {
+      return [index.slice(prefix.length, -"_key".length)];
+    }
+  }
 
   const adapterFields = meta?.driverAdapterError?.cause?.constraint?.fields;
   const raw = Array.isArray(adapterFields) ? adapterFields : (meta?.target ?? []);
