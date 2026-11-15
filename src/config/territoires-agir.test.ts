@@ -39,29 +39,48 @@ describe("texte du bloc Agir", () => {
 });
 
 describe("voies affichées selon le régime de la commune", () => {
-  const ids = (code: string, horsRegion = false) => voiesAgir(code, horsRegion).map((v) => v.id);
+  const ids = (code: string) => voiesAgir(code).map((v) => v.id);
+  const TOUTES = ["assister", "documents", "contacter", "contester"];
+  const labels = (code: string, id: string) =>
+    voiesAgir(code)
+      .find((v) => v.id === id)!
+      .liens.map((l) => l.label);
 
-  it("donne les quatre voies sous le régime commun, outre-mer compris", () => {
-    expect(ids("35")).toEqual(["assister", "documents", "contacter", "contester"]);
-    expect(ids("974")).toEqual(["assister", "documents", "contacter", "contester"]);
+  // Article L. 2541-1 of the CGCT does not set L. 2121-18 nor L. 2121-26 aside for Alsace-Moselle.
+  it.each(["35", "974", "57", "67", "68", "975"])(
+    "donne les quatre voies et cite le CGCT pour le code %s",
+    (code) => {
+      expect(ids(code)).toEqual(TOUTES);
+      expect(labels(code, "assister")[0]).toContain("article L. 2121-18");
+      expect(labels(code, "documents")).toHaveLength(2);
+    }
+  );
+
+  it("cite le code des communes de la Nouvelle-Calédonie, pas le CGCT", () => {
+    expect(ids("988")).toEqual(TOUTES);
+    expect(labels("988", "assister")).toEqual([
+      "Code des communes de la Nouvelle-Calédonie, article L. 121-15",
+    ]);
+    expect(labels("988", "documents")).toEqual([
+      "Code des communes de la Nouvelle-Calédonie, article L. 121-19",
+    ]);
+    // Its list of documents was not read in full: none is named.
+    expect(voiesAgir("988").find((v) => v.id === "documents")?.texte).not.toMatch(/budgets/);
   });
 
-  // The CGCT articles are not cited where their application is not established.
-  it.each([
-    ["Polynésie française", "987", true],
-    ["Nouvelle-Calédonie", "988", true],
-    ["Moselle", "57", false],
-    ["Bas-Rhin", "67", false],
-    ["Haut-Rhin", "68", false],
-  ])("ne cite pas le CGCT pour %s", (_, code, horsRegion) => {
-    expect(ids(code, horsRegion)).toEqual(["contacter", "contester"]);
+  it("cite le CGCT en Polynésie française, sans la fiche dont l'application n'est pas vérifiée", () => {
+    expect(ids("987")).toEqual(TOUTES);
+    expect(labels("987", "documents")).toEqual([
+      "Code général des collectivités territoriales, article L. 2121-26",
+    ]);
   });
 });
 
 describe("territoires sans mairie", () => {
-  // Wallis-et-Futuna is made of circonscriptions, the TAAF of districts: sending a reader to
+  // Wallis-et-Futuna is made of circonscriptions, the TAAF of districts, and a collectivité took
+  // the place of the commune in Saint-Barthélemy and Saint-Martin: sending a reader to
   // « la mairie » there would point to an authority that does not exist.
-  it.each(["984", "986", "989"])("n'affiche pas le bloc pour le code %s", (code) => {
+  it.each(["977", "978", "984", "986", "989"])("n'affiche pas le bloc pour le code %s", (code) => {
     expect(aUneMairie(code)).toBe(false);
   });
 

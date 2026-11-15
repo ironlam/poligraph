@@ -20,8 +20,6 @@ export interface AgirVoie {
   titre: string;
   texte: string;
   liens: AgirLien[];
-  /** Rests on an article of the CGCT as it applies to communes under the common regime. */
-  cgct?: true;
 }
 
 const SERVICE_PUBLIC = "https://www.service-public.gouv.fr/particuliers/vosdroits";
@@ -36,7 +34,6 @@ export const AGIR_AVERTISSEMENT =
 export const AGIR_VOIES: readonly AgirVoie[] = [
   {
     id: "assister",
-    cgct: true,
     titre: "Assister au conseil municipal",
     texte: "Les séances du conseil municipal sont publiques.",
     liens: [
@@ -48,10 +45,9 @@ export const AGIR_VOIES: readonly AgirVoie[] = [
   },
   {
     id: "documents",
-    cgct: true,
     titre: "Obtenir un document",
     texte:
-      "Toute personne peut demander communication des délibérations et des procès-verbaux du conseil municipal, des budgets et des comptes de la commune.",
+      "Toute personne peut demander communication des délibérations et des procès-verbaux du conseil municipal, des budgets et des comptes de la commune, et des arrêtés municipaux.",
     liens: [
       {
         label: "Code général des collectivités territoriales, article L. 2121-26",
@@ -88,31 +84,67 @@ export const AGIR_VOIES: readonly AgirVoie[] = [
 ];
 
 /**
- * Moselle, Bas-Rhin and Haut-Rhin: the CGCT sets apart some articles on the municipal council
- * for their communes (articles L. 2541-1 and following). Whether the two articles cited above
- * are among them was not established when this text was checked, so they are not cited there.
+ * Territories whose entries in the commune reference have no town hall or municipal council, so
+ * the block is not shown at all: the TAAF districts and Clipperton (`TERRITOIRES_SANS_COMMUNE`),
+ * the three circonscriptions of Wallis-et-Futuna, and Saint-Barthélemy and Saint-Martin, where a
+ * collectivité with a conseil territorial took the place of the former commune.
  */
-const ALSACE_MOSELLE: ReadonlySet<string> = new Set(["57", "67", "68"]);
-
-/**
- * Territories whose entries in the commune reference are not communes: the TAAF districts and
- * Clipperton (`TERRITOIRES_SANS_COMMUNE`), and the three circonscriptions of Wallis-et-Futuna.
- * None has a town hall or a municipal council, so the block is not shown at all.
- */
-const SANS_MAIRIE: ReadonlySet<string> = new Set([...TERRITOIRES_SANS_COMMUNE, "986"]);
+const SANS_MAIRIE: ReadonlySet<string> = new Set([
+  ...TERRITOIRES_SANS_COMMUNE,
+  "977",
+  "978",
+  "986",
+]);
 
 export function aUneMairie(departmentCode: string): boolean {
   return !SANS_MAIRIE.has(departmentCode);
 }
 
 /**
- * Ways shown for a commune. The two that cite the CGCT are kept to the common regime: not in an
- * overseas collectivité outside any region (New Caledonia has its own code of communes), nor in
- * Alsace-Moselle, where their application was not verified.
+ * New Caledonia: the same two rights, stated by its own code of communes. The list of documents
+ * was not read in full, so the line sends the reader to the article instead of naming them.
  */
-export function voiesAgir(departmentCode: string, horsRegion: boolean): readonly AgirVoie[] {
-  const regimeCommun = !horsRegion && !ALSACE_MOSELLE.has(departmentCode);
-  return regimeCommun ? AGIR_VOIES : AGIR_VOIES.filter((voie) => !voie.cgct);
+const NOUVELLE_CALEDONIE: Record<string, Pick<AgirVoie, "texte" | "liens">> = {
+  assister: {
+    texte: "Les séances du conseil municipal sont publiques.",
+    liens: [
+      {
+        label: "Code des communes de la Nouvelle-Calédonie, article L. 121-15",
+        url: `${LEGIFRANCE}/LEGIARTI000006361708`,
+      },
+    ],
+  },
+  documents: {
+    texte:
+      "Toute personne peut demander communication de documents de la commune : leur liste figure à l'article cité.",
+    liens: [
+      {
+        label: "Code des communes de la Nouvelle-Calédonie, article L. 121-19",
+        url: `${LEGIFRANCE}/LEGIARTI000044190844`,
+      },
+    ],
+  },
+};
+
+/**
+ * Ways shown for a commune, by department code. Read on Légifrance on 2026-11-15:
+ * - Moselle, Bas-Rhin, Haut-Rhin: article L. 2541-1 of the CGCT lists the articles set aside for
+ *   their communes; L. 2121-18 and L. 2121-26 are not among them, so the common text applies;
+ * - Saint-Pierre-et-Miquelon: both articles apply (CGCT, art. L. 2571-1);
+ * - Polynésie française: both articles apply (CGCT, art. L. 2573-5). The Service Public page on
+ *   requesting a document is left out there: its application was not verified;
+ * - Nouvelle-Calédonie: its own code of communes, above.
+ */
+export function voiesAgir(departmentCode: string): readonly AgirVoie[] {
+  if (departmentCode === "988") {
+    return AGIR_VOIES.map((voie) => ({ ...voie, ...NOUVELLE_CALEDONIE[voie.id] }));
+  }
+  if (departmentCode === "987") {
+    return AGIR_VOIES.map((voie) =>
+      voie.id === "documents" ? { ...voie, liens: voie.liens.slice(0, 1) } : voie
+    );
+  }
+  return AGIR_VOIES;
 }
 
 /**

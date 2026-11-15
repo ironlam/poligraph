@@ -181,12 +181,11 @@ describe("/territoires/communes/[code]", () => {
     const { document } = await render(papeete());
     const agir = document.querySelector("#agir")!;
     expect(agir.textContent).toContain("celui qui siège à Papeete.");
-    // Its communes follow their own statute: the articles of the common regime are not cited.
-    expect([...agir.querySelectorAll("h3")].map((h) => h.textContent)).toEqual([
-      "Contacter la mairie",
-      "Contester une décision",
-    ]);
-    expect(agir.textContent).not.toContain("Code général des collectivités territoriales");
+    // The CGCT applies to the communes of Polynésie française (article L. 2573-5).
+    expect(agir.querySelectorAll("h3")).toHaveLength(4);
+    expect(agir.textContent).toContain(
+      "Code général des collectivités territoriales, article L. 2121-18"
+    );
   });
 
   it("donne la date de dernière confirmation quand elle existe", async () => {
