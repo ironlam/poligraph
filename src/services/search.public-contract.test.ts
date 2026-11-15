@@ -134,7 +134,7 @@ describe("public search publication contract", () => {
       expect.objectContaining({ where, skip: 1, take: 1 })
     );
     expect(result).toMatchObject({ total: 3, page: 2, totalPages: 3 });
-    expect(result.results[0].slug).toBe(HYDRATED_ROW.slug);
+    expect(result.results).toMatchObject([{ slug: HYDRATED_ROW.slug }]);
   });
 
   it("propagates other FTS errors", async () => {
