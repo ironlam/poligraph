@@ -1,13 +1,18 @@
 import { notFound } from "next/navigation";
 import { getDepartmentBySlug } from "@/config/departments";
 import { getDeputesByDepartment, getSenateursByDepartment } from "@/lib/data/departments";
-import { getDepartementTerritoire } from "@/lib/data/territoires";
+import { getDepartementGrandesCommunes, getDepartementTerritoire } from "@/lib/data/territoires";
 import type { CommuneListQuery } from "@/lib/territoires/departement-communes";
 import { DepartementBandeau } from "@/components/territoires/DepartementBandeau";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import { COMMUNES_ANCHOR } from "@/lib/territoires/departement-communes";
 import { Agir } from "@/components/territoires/Agir";
 import { FilTerritoire } from "@/components/territoires/FilTerritoire";
+import { VotesParlementaires } from "@/components/territoires/VotesParlementaires";
+import {
+  getVotesDeputesDepartement,
+  getVotesSenateursDepartement,
+} from "@/lib/data/territoire-votes";
 import { getFilTerritoire } from "@/lib/data/territoire-fil";
 import { CommuneIndex } from "@/components/territoires/CommuneIndex";
 import {
@@ -31,10 +36,15 @@ export async function DepartementPageBody({
   const dept = getDepartmentBySlug(slug);
   if (!dept) notFound();
 
-  const [territoire, deputies, senators, fil] = await Promise.all([
+  // The bare page opens on the largest communes; the A to Z views list them all.
+  const accueil = query.letter === null && query.page === 1;
+  const [territoire, deputies, senators, grandes, votes, votesSenat, fil] = await Promise.all([
     getDepartementTerritoire(dept.code, query),
     getDeputesByDepartment(dept.code),
     getSenateursByDepartment(dept.code),
+    accueil ? getDepartementGrandesCommunes(dept.code) : [],
+    getVotesDeputesDepartement(dept.code),
+    getVotesSenateursDepartement(dept.code),
     getFilTerritoire("DEP", dept.code),
   ]);
 
@@ -87,7 +97,8 @@ export async function DepartementPageBody({
         <div className="flex min-w-0 flex-col gap-5">
           <FilTerritoire evenements={fil} />
           <DepartementConseil territoire={territoire} />
-          <CommuneIndex slug={slug} territoire={territoire} />
+          <CommuneIndex slug={slug} territoire={territoire} grandes={grandes} />
+          <VotesParlementaires votes={votes} mode={{ kind: "decompte" }} senat={votesSenat} />
           {agir && <Agir niveau="departement" departmentCode={dept.code} />}
         </div>
         <DepartementParlement deputies={deputies} senators={senators} />

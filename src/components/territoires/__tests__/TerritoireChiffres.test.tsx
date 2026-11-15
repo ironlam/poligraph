@@ -7,7 +7,11 @@ import type { RepereRow } from "@/lib/data/territoire-reperes";
 
 vi.mock("server-only", () => ({}));
 
-import { hasChiffres, TerritoireChiffres } from "@/components/territoires/TerritoireChiffres";
+import {
+  chiffresSourceLignes,
+  hasChiffres,
+  TerritoireChiffres,
+} from "@/components/territoires/TerritoireChiffres";
 import { REPERE_METHODES } from "@/config/territoire-methodes";
 import { REPERE_INDICATORS } from "@/config/territoire-reperes";
 
@@ -130,6 +134,37 @@ describe("Le territoire en chiffres", () => {
     expect(text).toContain("Station de l'Aérodrome du Val Fictif, à 14 km");
     expect(text).toContain("11,8 °C");
     expect(doc.querySelector('a[href="/territoires/methode/climat"]')).not.toBeNull();
+  });
+
+  it("nomme les producteurs une seule fois, et confie licence et dates au volet des sources", () => {
+    const meteo = { ...source, producer: "Météo-France", methodSlug: "climat" };
+    const climat = row("climat_temp_moyenne", 11.8, { scopeKind: "STATION", source: meteo });
+    const chiffres = base({ reperes: [row("age_tranche_0_14", 17), climat] });
+    const { doc, text } = render(chiffres);
+    const lignes = [...doc.querySelectorAll("p")].filter((p) => /Sources? :/.test(p.textContent!));
+    expect(lignes).toHaveLength(1);
+    expect(lignes[0]!.textContent).toBe(
+      "Sources : INSEE (nouvel onglet) · Météo-France (nouvel onglet)"
+    );
+    expect(text).not.toContain("Licence Ouverte");
+    // The age table keeps its period beside the figures.
+    expect(text).toContain("Du 1er janvier 2022 au 31 décembre 2022.");
+    expect(chiffresSourceLignes(chiffres).map((l) => [l.label, l.row.source.producer])).toEqual([
+      ["Structure par âge", "INSEE"],
+      ["Climat", "Météo-France"],
+    ]);
+  });
+
+  it("garde la démographie visible et replie l'environnement", () => {
+    const climat = row("climat_temp_moyenne", 11.8, { unit: "°C", scopeKind: "STATION" });
+    const { doc } = render(base({ reperes: [row("age_tranche_0_14", 17), climat] }));
+    const volets = [...doc.querySelectorAll("details")];
+    expect(volets).toHaveLength(1);
+    expect(volets[0]!.hasAttribute("open")).toBe(false);
+    expect(volets[0]!.querySelector("summary")?.textContent).toBe("Environnement");
+    expect(volets[0]!.textContent).toContain("11,8 °C");
+    expect(doc.getElementById("chiffres-DEMOGRAPHIE")?.closest("details")).toBeNull();
+    expect(doc.querySelector("table")?.closest("details")).toBeNull();
   });
 
   it("affiche la période propre à la station, pas 1991-2020 par défaut", () => {

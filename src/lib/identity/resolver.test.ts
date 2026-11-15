@@ -877,6 +877,37 @@ describe("IdentityResolver", () => {
       expect(mockDecisionCreate).not.toHaveBeenCalled();
     });
 
+    it("writes no decision when persist is false, and still returns the verdict", async () => {
+      mockPoliticianFindMany.mockResolvedValue([
+        {
+          id: "pol-1",
+          firstName: "Marie",
+          lastName: "Durand",
+          birthDate: new Date("1970-01-01"),
+          mandates: [],
+        },
+      ]);
+      mockDecisionFindMany.mockResolvedValue([]);
+
+      const { results } = await resolveBatch({
+        sourceType: DataSource.RNE,
+        persist: false,
+        inputs: [
+          {
+            firstName: "Marie",
+            lastName: "Durand",
+            birthDate: new Date("1970-01-01"),
+            source: DataSource.RNE,
+            sourceId: "12345",
+          },
+        ],
+      });
+
+      expect(results[0]).toMatchObject({ politicianId: "pol-1", decision: Judgement.SAME });
+      expect(mockDecisionCreateMany).not.toHaveBeenCalled();
+      expect(mockDecisionCreate).not.toHaveBeenCalled();
+    });
+
     it("falls back to individual creates when createMany fails", async () => {
       mockPoliticianFindMany.mockResolvedValue([
         {

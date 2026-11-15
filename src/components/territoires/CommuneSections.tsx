@@ -4,7 +4,10 @@ import { ChevronDown } from "lucide-react";
 import { DATA_SOURCE_URLS } from "@/config/labels";
 import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
-import { IntercommunaliteCard } from "@/components/territoires/IntercommunaliteCard";
+import {
+  IntercommunaliteCard,
+  intercommunaliteSources,
+} from "@/components/territoires/IntercommunaliteCard";
 import { CompositionConseil } from "@/components/territoires/CompositionConseil";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
 import { Executif } from "@/components/territoires/Executif";
@@ -35,7 +38,8 @@ import {
   territoireCommuneElectionsPath,
   territoireDepartementPath,
 } from "@/lib/territoires/paths";
-import { populationVintageLabel } from "@/lib/territoires/population-label";
+import { formatEffectiveDate, populationVintageLabel } from "@/lib/territoires/population-label";
+import type { ChiffresSourceLigne } from "@/components/territoires/TerritoireChiffres";
 
 /**
  * Sections of the Territoires commune page (#1052). Server components only: no map, no client
@@ -100,7 +104,7 @@ function Collapsible({ summary, children }: { summary: string; children: React.R
   );
 }
 
-// ─── Élus et institutions ─────────────────────────────────────────────
+// ─── Vos élus ────────────────────────────────────────────────────
 
 function MaireBlock({
   maire,
@@ -132,7 +136,6 @@ function MaireBlock({
             </Link>
           </p>
           {since && <p className="mt-1 text-sm">En fonction depuis le {formatDate(since)}.</p>}
-          <LigneSource className="mt-2" sources={[maire.source]} />
         </div>
       </div>
     );
@@ -174,8 +177,8 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
   const composition = municipales ? compositionConseil(municipales.listes) : null;
   return (
     <SectionCard
-      id="qui-decide"
-      title="Élus et institutions"
+      id="vos-elus"
+      title="Vos élus"
       action={
         // No link to the sub-page while it has nothing to show.
         dossier.decisionsPubliees > 0 && (
@@ -189,6 +192,8 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
         )
       }
     >
+      {/* Former id of the section: links already shared keep landing on its title. */}
+      <span id="qui-decide" className="block scroll-mt-52" />
       <MaireBlock maire={maire} communeName={identity.name} />
 
       {mairesSecteur.length > 0 && (
@@ -234,7 +239,7 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
           <p className="text-sm text-muted-foreground">Conseil municipal</p>
           {composition && municipales && (
             <div className="mb-4 mt-1 border-b pb-4">
-              <CompositionConseil composition={composition} source={municipales.source} />
+              <CompositionConseil composition={composition} />
             </div>
           )}
           {dossier.conseilMunicipal.state === "DISPONIBLE" ? (
@@ -283,6 +288,17 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
           ))}
         </div>
       )}
+
+      {/* One source line for the block: the dated detail is in « Sources de cette page ». */}
+      <LigneSource
+        className="mt-4"
+        sources={[
+          maire.state === "ETABLI" ? maire.source : null,
+          composition ? municipales?.source : null,
+          dossier.conseilMunicipal.state === "DISPONIBLE" ? dossier.conseilMunicipal.source : null,
+          ...(dossier.intercommunalite ? intercommunaliteSources(dossier.intercommunalite) : []),
+        ]}
+      />
     </SectionCard>
   );
 }
@@ -530,7 +546,14 @@ function ErreurContent() {
   );
 }
 
-export function CommuneSidebar({ dossier }: { dossier: CommuneDossier }) {
+export function CommuneSidebar({
+  dossier,
+  chiffresSources = [],
+}: {
+  dossier: CommuneDossier;
+  /** Rows of « Le territoire en chiffres », when the page shows that block. */
+  chiffresSources?: ChiffresSourceLigne[];
+}) {
   const { population, identity, surface } = dossier;
   return (
     <aside id="sources" aria-label="Sources et réutilisation" className="scroll-mt-32 space-y-4">
@@ -538,9 +561,21 @@ export function CommuneSidebar({ dossier }: { dossier: CommuneDossier }) {
       <Collapsible summary="Sources de cette page">
         <ul className="space-y-3 text-sm">
           {communeSources(dossier).map((ligne) => (
-            <li key={ligne.bloc}>
+            <li key={ligne.label}>
               <span className="font-semibold">{ligne.label}</span> : {ligne.etat}
               <LigneSource className="mt-1" sources={[ligne.source]} />
+            </li>
+          ))}
+          {chiffresSources.map(({ label, row }) => (
+            <li key={label}>
+              <span className="font-semibold">{label}</span> : période du{" "}
+              {formatEffectiveDate(row.periodStart)} au {formatEffectiveDate(row.periodEnd)},
+              importé le {formatDate(row.source.importedAt)},{" "}
+              <ExternalLink href={row.source.licenceUrl}>{row.source.licenceName}</ExternalLink>
+              <LigneSource
+                className="mt-1"
+                sources={[{ label: row.source.producer, url: row.source.resourceUrl }]}
+              />
             </li>
           ))}
         </ul>

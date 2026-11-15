@@ -9,6 +9,7 @@ import {
   resolveRneResourceUrl,
 } from "./rne-resource";
 import { parseConseilRows, type ConseilMembreRow, type ConseilNiveau } from "./conseils-parse";
+import { presidentChangeDrafts, recordEvenements } from "./territoire-evenements";
 
 /**
  * Import of the RNE council files (departmental, regional, municipal) into `ConseilMembre`
@@ -129,8 +130,29 @@ export async function syncConseils(
     );
   }
 
+  // Read before the lines are replaced: the previous president is known only until then.
+  const presidentChanges =
+    niveau === "MUNICIPAL"
+      ? []
+      : presidentChangeDrafts(
+          niveau,
+          await db.conseilMembre.findMany({
+            where: { niveau, functionLabel: { not: null } },
+            select: {
+              territoryCode: true,
+              firstName: true,
+              lastName: true,
+              rowKey: true,
+              functionLabel: true,
+              functionStart: true,
+            },
+          }),
+          rows
+        );
+
   await replaceLevel(niveau, rows, sourceUrl, registerDate);
   report.written = true;
+  await recordEvenements(presidentChanges);
   return report;
 }
 

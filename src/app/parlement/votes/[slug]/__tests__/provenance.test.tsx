@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
 // result, order of the blocks, masking of the computed positions). The switch is pinned so they do
 // not depend on the editorial decision: the switched-on page has its own file,
 // historical-groups-section.test.tsx.
+vi.mock("@/lib/data/scrutin-departements", () => ({
+  getScrutinVotesParDepartement: vi.fn(async () => []),
+}));
 vi.mock("@/config/historical-positions", () => ({
   HISTORICAL_GROUP_POSITIONS_PUBLIC: false,
   HISTORICAL_POSITIONS_LEGISLATURES: [15, 16, 17],

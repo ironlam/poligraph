@@ -5,7 +5,6 @@ const meta: Meta<typeof CompositionConseil> = {
   title: "Territoires/CompositionConseil",
   component: CompositionConseil,
   args: {
-    source: { label: "Ministère de l'Intérieur, résultats des élections municipales 2026" },
     // Fictitious lists.
     composition: {
       total: 61,

@@ -61,6 +61,7 @@
     "scdl:report": "tsx scripts/scdl-report.ts",
     "sync:surfaces": "tsx scripts/sync-surfaces.ts",
     "sync:conseils": "tsx scripts/sync-conseils.ts",
+    "sync:executifs": "tsx scripts/sync-executifs.ts",
     "sync:hatvp": "tsx scripts/sync-hatvp.ts",
     "sync:photos": "tsx scripts/sync-photos.ts",
     "sync:deceased": "tsx scripts/sync-deceased.ts",

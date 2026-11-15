@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: vi.fn(async () => []) }));
+vi.mock("@/lib/data/territoire-votes", () => ({
+  getVotesDeputesDepartement: vi.fn(async () => ({ scrutins: [], deputeSlugs: [] })),
+}));
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
   notFound: mocks.notFound,
@@ -118,7 +121,7 @@ describe("/territoires/communes/[code]", () => {
       source: { label: "Répertoire national des élus", url: null },
     };
     const titre = (document: Document) =>
-      [...document.querySelectorAll("#qui-decide h3")].find(
+      [...document.querySelectorAll("#vos-elus h3")].find(
         (h) => h.textContent === "Adjointes et adjoints au maire"
       );
 
@@ -226,7 +229,7 @@ describe("/territoires/communes/[code]", () => {
     expect(document.querySelector(`${BANDEAU} a[href^='/politiques/']`)).toBeNull();
     expect(text).toContain("Le maire en fonction n'est pas établi dans Poligraph.");
     // The head of list may still be named in the results, never as mayor.
-    expect(document.querySelector("#qui-decide a[href^='/politiques/']")).toBeNull();
+    expect(document.querySelector("#vos-elus a[href^='/politiques/']")).toBeNull();
   });
 
   it("dit l'absence de maire en mots, sans zéro ni tiret", async () => {
@@ -299,7 +302,7 @@ describe("/territoires/communes/[code]", () => {
 
     expect(text).toContain("Ville de Paris");
     expect(text).toContain("Loi n° 2017-257 du 28 février 2017 relative au statut de Paris");
-    const details = document.querySelector("#qui-decide details");
+    const details = document.querySelector("#vos-elus details");
     expect(details?.hasAttribute("open")).toBe(false);
     expect(details?.textContent).toContain("Alex Secteur");
   });
@@ -355,25 +358,27 @@ describe("/territoires/communes/[code]", () => {
 
     const anchors = [...document.querySelectorAll('nav[aria-label="Sections de la page"] a')];
     expect(anchors.map((a) => a.getAttribute("href"))).toEqual([
-      "#qui-decide",
+      "#vos-elus",
       "#parlement",
       "#elections",
       "#agir",
     ]);
     expect(anchors.map((a) => a.textContent)).toEqual(["Élus", "Parlement", "Élections", "Agir"]);
-    for (const id of ["qui-decide", "parlement", "elections", "agir", "sources"]) {
+    for (const id of ["vos-elus", "parlement", "elections", "agir", "sources"]) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
     // The sub-page left the tabs: it stays one click away, from its own section.
     expect(
       document.querySelector('#elections a[href="/territoires/communes/35238/elections"]')
     ).not.toBeNull();
-    expect(document.getElementById("qui-decide-titre")?.textContent).toBe("Élus et institutions");
+    expect(document.getElementById("vos-elus-titre")?.textContent).toBe("Vos élus");
+    // The former anchor still lands inside the section.
+    expect(document.querySelector("#vos-elus #qui-decide")).not.toBeNull();
     expect(text).not.toContain("Qui décide");
     expect(text).not.toMatch(/Décisions|Socle officiel|Dossier curé|superficie/i);
     // No intercommunality block without an import. The word itself belongs to the fixed text of
     // the territories ladder, which is why the check is scoped to the elected-officials section.
-    expect(document.querySelector("#qui-decide")?.textContent).not.toMatch(/intercommunalit/i);
+    expect(document.querySelector("#vos-elus")?.textContent).not.toMatch(/intercommunalit/i);
     expect(
       document.querySelectorAll('section[aria-labelledby="echelle-titre"] ol > li')
     ).toHaveLength(3);
@@ -625,16 +630,23 @@ describe("intercommunalité", () => {
 
   /** Text of the intercommunality card, located by its label. */
   function card(document: Document, label: string): Element | null {
-    const p = [...document.querySelectorAll("#qui-decide p")].find(
-      (el) => el.textContent === label
-    );
+    const p = [...document.querySelectorAll("#vos-elus p")].find((el) => el.textContent === label);
     return p?.parentElement ?? null;
   }
 
   it("nomme la MGP et l'EPT, nature en toutes lettres, situation et source, sans lien ni compétence", async () => {
-    const { document } = await render(
-      dossier({ intercommunalite: interco("DISPONIBLE", [MGP, PLAINE]) })
-    );
+    const intercommunalite = interco("DISPONIBLE", [MGP, PLAINE]);
+    // The reader adds the coverage entry with the block: the fixture does it here.
+    const coverage = [
+      ...dossier().coverage,
+      {
+        bloc: "intercommunalite" as const,
+        state: "DISPONIBLE" as const,
+        source: intercommunalite.source,
+        date: intercommunalite.situationDate,
+      },
+    ];
+    const { document } = await render(dossier({ intercommunalite, coverage }));
     const el = card(document, "Intercommunalité");
     const text = el?.textContent?.replace(/\s+/g, " ") ?? "";
 
@@ -642,14 +654,23 @@ describe("intercommunalité", () => {
     expect(text).toContain("Métropole, situation au 1er janvier 2026");
     expect(text).toContain("Plaine Commune");
     expect(text).toContain("Établissement public territorial, situation au 1er janvier 2026");
-    expect(text).toContain("INSEE, EPCI à fiscalité propre au 1er janvier 2026");
-    expect(text).toContain("INSEE, établissements publics territoriaux au 1er janvier 2026");
-    expect(text).toContain("dernière vérification le 12 octobre 2026");
     expect(text).not.toMatch(/compétence/i);
-    // Only the external source links: Poligraph has no intercommunality page to link to.
-    const hrefs = [...(el?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href"));
-    expect(hrefs.length).toBe(2);
-    expect(new Set(hrefs)).toEqual(new Set(["https://www.insee.fr/fr/information/2510634"]));
+    // No link in the card: Poligraph has no intercommunality page, and the sources are named
+    // once on the line of the block, then dated in « Sources de cette page ».
+    expect(el?.querySelector("a")).toBeNull();
+    expect(text).not.toContain("Source");
+    const bloc = [...document.querySelectorAll("#vos-elus > p")].at(-1)?.textContent ?? "";
+    expect(bloc).toContain("INSEE, EPCI à fiscalité propre au 1er janvier 2026");
+    expect(bloc).toContain("INSEE, établissements publics territoriaux au 1er janvier 2026");
+    const volet = [...document.querySelectorAll("#sources details li")].map((li) =>
+      li.textContent?.replace(/\s+/g, " ")
+    );
+    expect(volet).toContain(
+      "Intercommunalité, Métropole du Grand Paris : situation au 1 janvier 2026, dernière vérification le 12 octobre 2026Source : INSEE, EPCI à fiscalité propre au 1er janvier 2026 (nouvel onglet)"
+    );
+    expect(volet.find((l) => l?.startsWith("Intercommunalité, Plaine Commune"))).toContain(
+      "Source : INSEE, établissements publics territoriaux au 1er janvier 2026"
+    );
   });
 
   it("garde le maire avant l'intercommunalité dans l'ordre de lecture", async () => {

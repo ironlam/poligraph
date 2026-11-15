@@ -94,4 +94,34 @@ describe("assignPublicationStatus et les fiches précalculées", () => {
     ]);
     expect(h.findMany.mock.calls[0]?.[0].where).toEqual({ id: { in: ["p-archive", "p-publie"] } });
   });
+
+  // Régression : une lecture unique des 50 000 fiches dépassait la limite de paramètres de
+  // PostgreSQL (P2029) et l'étape quotidienne n'écrivait plus rien.
+  it("lit les fiches par lots bornés, en reprenant après la dernière fiche lue", async () => {
+    const lot = Array.from({ length: 5000 }, (_, i) =>
+      politician(`p-${String(i).padStart(5, "0")}`, "PUBLISHED", true)
+    );
+    h.findMany
+      .mockResolvedValueOnce(lot)
+      .mockResolvedValueOnce([politician("p-dernier", "ARCHIVED", true)]);
+
+    const stats = await assignPublicationStatus({ dryRun: true });
+
+    expect(h.findMany).toHaveBeenCalledTimes(2);
+    const [premier, second] = h.findMany.mock.calls.map((c) => c[0]);
+    expect(premier.take).toBe(5000);
+    expect(premier.cursor).toBeUndefined();
+    expect(second).toMatchObject({ take: 5000, skip: 1, cursor: { id: "p-04999" } });
+    expect(stats.totalPoliticians).toBe(5001);
+    expect(stats.changes).toEqual({ PUBLISHED: 1 });
+  });
+});
+
+describe("script assign-publication-status", () => {
+  it("sort en erreur quand l'attribution échoue", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("scripts/assign-publication-status.ts", "utf8");
+    expect(source).not.toMatch(/\.catch\(console\.error\)/);
+    expect(source).toMatch(/process\.exitCode = 1/);
+  });
 });
