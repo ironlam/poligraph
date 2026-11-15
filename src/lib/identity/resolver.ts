@@ -373,8 +373,9 @@ export async function resolveBatch(batchInput: BatchResolveInput): Promise<Batch
 
   // ── Phase C: Persist (batch writes in chunks of 100) ──
   const CHUNK_SIZE = 100;
-  for (let i = 0; i < decisionsToCreate.length; i += CHUNK_SIZE) {
-    const chunk = decisionsToCreate.slice(i, i + CHUNK_SIZE);
+  const toPersist = batchInput.persist === false ? [] : decisionsToCreate;
+  for (let i = 0; i < toPersist.length; i += CHUNK_SIZE) {
+    const chunk = toPersist.slice(i, i + CHUNK_SIZE);
     try {
       await db.identityDecision.createMany({ data: chunk });
     } catch {
