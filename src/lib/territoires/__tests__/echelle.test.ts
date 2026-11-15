@@ -5,7 +5,12 @@ import {
   papeete,
   paris,
 } from "@/app/territoires/communes/[code]/__tests__/fixtures";
-import { COMPETENCES_SOURCE, COMPETENCES_TERRITOIRES } from "@/config/territoires-competences";
+import {
+  COMPETENCES_GRAND_PARIS,
+  COMPETENCES_MENTION,
+  COMPETENCES_SOURCE,
+  COMPETENCES_TERRITOIRES,
+} from "@/config/territoires-competences";
 import { echelleCommune } from "../echelle";
 
 const resume = (d: Parameters<typeof echelleCommune>[0]) =>
@@ -39,8 +44,39 @@ describe("échelle des territoires d'une commune", () => {
       ["Métropole du Grand Paris", undefined],
       ["Plaine Commune", undefined],
     ]);
-    expect(intercos[0]?.competences).toBe(COMPETENCES_TERRITOIRES.intercommunalite);
-    expect(COMPETENCES_TERRITOIRES.intercommunalite).not.toMatch(/eau|déchets|transport/i);
+    // Grand Paris: the métropole and its EPT share the competences, none is named on either.
+    expect(intercos.map((b) => b.competences)).toEqual([
+      COMPETENCES_GRAND_PARIS,
+      COMPETENCES_GRAND_PARIS,
+    ]);
+    expect(COMPETENCES_GRAND_PARIS).not.toMatch(/déchets|économique/i);
+  });
+
+  it("nomme les compétences obligatoires d'une intercommunalité ordinaire, pas l'eau", () => {
+    const rennes = {
+      siren: "243500139",
+      name: "Rennes Métropole",
+      nature: "METRO" as const,
+      natureLabel: "métropole",
+    };
+    const [, barreau] = echelleCommune(
+      dossier({ intercommunalite: interco("DISPONIBLE", [rennes]) })
+    );
+    expect(barreau?.competences).toBe(COMPETENCES_TERRITOIRES.intercommunalite);
+    expect(COMPETENCES_TERRITOIRES.intercommunalite).toMatch(/déchets.*développement économique/);
+    // Water and sanitation are no longer a compulsory transfer everywhere: not asserted.
+    expect(COMPETENCES_TERRITOIRES.intercommunalite).not.toMatch(/\beau\b|assainissement/i);
+  });
+
+  it("ne nomme pas non plus ces compétences pour la Métropole du Grand Paris seule (Paris)", () => {
+    const mgp = {
+      siren: "200054781",
+      name: "Métropole du Grand Paris",
+      nature: "METRO" as const,
+      natureLabel: "métropole",
+    };
+    const barreaux = echelleCommune(dossier({ intercommunalite: interco("DISPONIBLE", [mgp]) }));
+    expect(barreaux[1]?.competences).toBe(COMPETENCES_GRAND_PARIS);
   });
 
   it("ne range pas la Métropole de Lyon parmi les intercommunalités", () => {
@@ -94,10 +130,11 @@ describe("échelle des territoires d'une commune", () => {
 describe("texte des compétences", () => {
   it("reste court, sans tiret long, avec une source et sa date de vérification", () => {
     for (const ligne of Object.values(COMPETENCES_TERRITOIRES)) {
-      expect(ligne.length).toBeLessThanOrEqual(110);
+      expect(ligne.length).toBeLessThanOrEqual(160);
       expect(ligne).not.toMatch(/[–—]/);
       expect(ligne.endsWith(".")).toBe(true);
     }
+    expect(COMPETENCES_MENTION).toContain("à titre indicatif et non exhaustif");
     expect(COMPETENCES_SOURCE.url).toMatch(/^https:\/\/www\.collectivites-locales\.gouv\.fr\//);
     expect(COMPETENCES_SOURCE.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
