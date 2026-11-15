@@ -300,6 +300,11 @@ export interface MunicipalesListe {
   electionAuPremierTour: PremierTourVerdict;
   /** Elected at the second round, as recorded by the results import. */
   elueAuSecondTour: boolean;
+  /**
+   * Seats won at the municipal council, as published by the ministry. Null when unknown; the
+   * import writes the seats of a commune whole or not at all, so known seats add up to the council.
+   */
+  sieges: number | null;
 }
 
 export type PremierTourVerdict = "ELUE" | "NON_ELUE" | "NON_ETABLI";
@@ -525,6 +530,7 @@ async function readMunicipales2026(inseeCode: string): Promise<MunicipalesBlock 
       round2Votes: true,
       round2Pct: true,
       isElected: true,
+      municipalSeats: true,
       politician: { select: { ...PERSON_SELECT, publicationStatus: true } },
     },
     orderBy: { round1Pct: { sort: "desc", nulls: "last" } },
@@ -571,6 +577,7 @@ async function readMunicipales2026(inseeCode: string): Promise<MunicipalesBlock 
       elueAuPremierTour,
       electionAuPremierTour,
       elueAuSecondTour: !elueAuPremierTour && round2Pct != null && h.isElected,
+      sieges: h.municipalSeats,
     };
   });
 

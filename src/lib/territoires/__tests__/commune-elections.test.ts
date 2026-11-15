@@ -328,6 +328,7 @@ describe("municipales 2026", () => {
     elueAuPremierTour: false,
     electionAuPremierTour: "NON_ELUE" as const,
     elueAuSecondTour: p2 != null && p2 > 50,
+    sieges: null,
   });
 
   it("ne relie pas le 2d tour au fichier du 1er tour", () => {
