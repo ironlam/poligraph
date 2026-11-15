@@ -94,7 +94,7 @@ function faits(dossier: CommuneDossier): BandeauFait[] {
 }
 
 export function CommuneBandeau({ dossier }: { dossier: CommuneDossier }) {
-  const { identity, maire } = dossier;
+  const { identity } = dossier;
   const departmentCode = identity.department.code;
   return (
     <TerritoireBandeau
@@ -104,9 +104,6 @@ export function CommuneBandeau({ dossier }: { dossier: CommuneDossier }) {
       code={identity.inseeCode}
       identite={identite(identity)}
       phrase={communePhraseReponse(dossier)}
-      source={
-        maire.state === "ETABLI" && maire.source ? `Source : ${maire.source.label}` : undefined
-      }
       faits={faits(dossier)}
       action={{ label: "Changer de commune", href: TERRITOIRES_PATH }}
       silhouette={

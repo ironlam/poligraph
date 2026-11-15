@@ -1,4 +1,4 @@
-import type { CommuneDossier, CoverageEntry } from "@/lib/data/territoires";
+import type { CommuneDossier } from "@/lib/data/territoires";
 
 /**
  * Pure wording of the Territoires commune page (#1052), shared by the page, its metadata and its
@@ -43,25 +43,6 @@ export function territoireLabel(identity: CommuneDossier["identity"]): string {
 /** Start of the mayor's current function, falling back to the mandate start. */
 export function maireSince(maire: CommuneDossier["maire"]): string | null {
   return maire.functionStart ?? maire.mandateStart;
-}
-
-const COVERAGE_LABELS: Partial<Record<CoverageEntry["bloc"], string>> = {
-  maire: "maire",
-  mairesSecteur: "maires d'arrondissement ou de secteur",
-  population: "population",
-  deputes: "circonscription législative",
-  senateurs: "sénateurs du département",
-  municipales2026: "résultats des municipales 2026",
-  intercommunalite: "intercommunalité",
-  presidentielle: "résultats de la présidentielle",
-};
-
-/** Blocks shown with a source, in the order of the coverage matrix. Identity is implied. */
-export function availableInformation(coverage: CoverageEntry[]): string[] {
-  return coverage
-    .filter((entry) => entry.state === "DISPONIBLE")
-    .map((entry) => COVERAGE_LABELS[entry.bloc])
-    .filter((label): label is string => label !== undefined);
 }
 
 /**
