@@ -1,8 +1,8 @@
 import { ChevronDown } from "lucide-react";
 
 /**
- * Secondary section of the department page: folded on mobile so the commune list comes first,
- * always unfolded from `lg` up. Pure CSS, no client component.
+ * Secondary section of the department page (the parliamentarians): folded on mobile, after the
+ * council and the communes, always unfolded from `lg` up. Pure CSS, no client component.
  *
  * From `lg`, in browsers that support `::details-content`, the content is forced visible and the
  * summary is removed (so no "collapsed" state is announced over visible content); a plain heading

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { DepartementTerritoire } from "@/lib/data/territoires";
-import { territoireCommunePath } from "@/lib/territoires/paths";
+import type { DepartementCommuneRow, DepartementTerritoire } from "@/lib/data/territoires";
+import { territoireCommunePath, territoireDepartementPath } from "@/lib/territoires/paths";
 import {
   COMMUNE_INDEX_LETTERS,
   COMMUNES_ANCHOR,
@@ -15,6 +15,8 @@ import { populationVintageLabel } from "@/lib/territoires/population-label";
 interface CommuneIndexProps {
   slug: string;
   territoire: DepartementTerritoire;
+  /** Most populated communes, on the bare page only. */
+  grandes?: DepartementCommuneRow[];
 }
 
 /** "Communes 51 à 100 sur 84 commençant par M": always the active filter, never the whole list. */
@@ -42,9 +44,14 @@ export function paginationWindow(page: number, totalPages: number): number[] {
 const CELL =
   "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 font-bold tabular-nums";
 
-export function CommuneIndex({ slug, territoire }: CommuneIndexProps) {
+export function CommuneIndex({ slug, territoire, grandes = [] }: CommuneIndexProps) {
   const { communes, letterCounts, communeCount, populationVintages } = territoire;
-  const { letter, page, totalPages, rows } = communes;
+  const { letter, page, totalPages } = communes;
+  const premiereLettre = COMMUNE_INDEX_LETTERS.find((l) => (letterCounts[l] ?? 0) > 0);
+  // Bare page of a department with more communes than the short list: the largest ones and one
+  // link to the A to Z list. Every other view is the alphabetical list, with its index.
+  const accueil = grandes.length > 0 && communeCount > grandes.length && !!premiereLettre;
+  const rows = accueil ? grandes : communes.rows;
   const href = (query: { letter: string | null; page: number }) =>
     departementCommunesHref(slug, query);
   const importDate = territoire.coverage.find((c) => c.bloc === "communes")?.date ?? null;
@@ -67,30 +74,23 @@ export function CommuneIndex({ slug, territoire }: CommuneIndexProps) {
               : "Communes"}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Ordre alphabétique, avec la population municipale et le maire en fonction.
+          {accueil ? `Les ${grandes.length} plus peuplées` : "Ordre alphabétique"}, avec la
+          population municipale et le maire en fonction.
         </p>
       </div>
 
-      {/* A list that fits on one page needs no index. */}
-      {communeCount > communes.pageSize && (
+      {/* A list that fits on one page needs no index, unless a letter is already chosen. */}
+      {!accueil && (communeCount > communes.pageSize || letter !== null) && (
         <nav aria-label="Communes par initiale">
+          <Link
+            href={`${territoireDepartementPath(slug)}#${COMMUNES_ANCHOR}`}
+            prefetch={false}
+            className="mb-1 inline-flex min-h-11 items-center gap-1 text-sm underline underline-offset-2 hover:text-primary"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            Communes les plus peuplées
+          </Link>
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-1">
-            <li className="col-span-2">
-              <Link
-                href={href({ letter: null, page: 1 })}
-                prefetch={false}
-                aria-current={letter === null ? "page" : undefined}
-                className={cn(
-                  CELL,
-                  "w-full",
-                  letter === null
-                    ? "bg-[#14284a] text-white"
-                    : "bg-muted text-primary hover:bg-accent"
-                )}
-              >
-                Toutes
-              </Link>
-            </li>
             {COMMUNE_INDEX_LETTERS.map((l) => {
               const count = letterCounts[l] ?? 0;
               const active = l === letter;
@@ -163,65 +163,77 @@ export function CommuneIndex({ slug, territoire }: CommuneIndexProps) {
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{communeListCounter(communes)}</p>
-        {totalPages > 1 && (
-          <nav aria-label="Pages de la liste des communes">
-            <ul className="flex flex-wrap items-center gap-1">
-              {page > 1 && (
-                <li>
-                  <Link
-                    href={href({ letter, page: page - 1 })}
-                    prefetch={false}
-                    rel="prev"
-                    aria-label="Page précédente"
-                    title="Page précédente"
-                    className={cn(CELL, "border hover:bg-muted")}
-                  >
-                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                  </Link>
-                </li>
-              )}
-              {paginationWindow(page, totalPages).map((p, i) =>
-                p === 0 ? (
-                  <li key={`gap-${i}`} aria-hidden="true" className="px-1 text-muted-foreground">
-                    …
-                  </li>
-                ) : (
-                  <li key={p}>
+      {accueil && (
+        <Link
+          href={href({ letter: premiereLettre, page: 1 })}
+          prefetch={false}
+          className="flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold hover:bg-muted"
+        >
+          Toutes les communes, de A à Z
+        </Link>
+      )}
+
+      {!accueil && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">{communeListCounter(communes)}</p>
+          {totalPages > 1 && (
+            <nav aria-label="Pages de la liste des communes">
+              <ul className="flex flex-wrap items-center gap-1">
+                {page > 1 && (
+                  <li>
                     <Link
-                      href={href({ letter, page: p })}
+                      href={href({ letter, page: page - 1 })}
                       prefetch={false}
-                      aria-current={p === page ? "page" : undefined}
-                      aria-label={`Page ${p}`}
-                      className={cn(
-                        CELL,
-                        p === page ? "bg-[#14284a] text-white" : "border hover:bg-muted"
-                      )}
+                      rel="prev"
+                      aria-label="Page précédente"
+                      title="Page précédente"
+                      className={cn(CELL, "border hover:bg-muted")}
                     >
-                      {p}
+                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                     </Link>
                   </li>
-                )
-              )}
-              {page < totalPages && (
-                <li>
-                  <Link
-                    href={href({ letter, page: page + 1 })}
-                    prefetch={false}
-                    rel="next"
-                    aria-label="Page suivante"
-                    title="Page suivante"
-                    className={cn(CELL, "border hover:bg-muted")}
-                  >
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                  </Link>
-                </li>
-              )}
-            </ul>
-          </nav>
-        )}
-      </div>
+                )}
+                {paginationWindow(page, totalPages).map((p, i) =>
+                  p === 0 ? (
+                    <li key={`gap-${i}`} aria-hidden="true" className="px-1 text-muted-foreground">
+                      …
+                    </li>
+                  ) : (
+                    <li key={p}>
+                      <Link
+                        href={href({ letter, page: p })}
+                        prefetch={false}
+                        aria-current={p === page ? "page" : undefined}
+                        aria-label={`Page ${p}`}
+                        className={cn(
+                          CELL,
+                          p === page ? "bg-[#14284a] text-white" : "border hover:bg-muted"
+                        )}
+                      >
+                        {p}
+                      </Link>
+                    </li>
+                  )
+                )}
+                {page < totalPages && (
+                  <li>
+                    <Link
+                      href={href({ letter, page: page + 1 })}
+                      prefetch={false}
+                      rel="next"
+                      aria-label="Page suivante"
+                      title="Page suivante"
+                      className={cn(CELL, "border hover:bg-muted")}
+                    >
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </nav>
+          )}
+        </div>
+      )}
 
       <p className="border-t pt-3 text-xs text-muted-foreground">
         Liste des communes : code officiel géographique (INSEE)
