@@ -42,6 +42,20 @@ export function communeSources(dossier: CommuneDossier): SourceLigne[] {
     const verbe =
       entry.bloc === "population" && dossier.population.vintage ? "vérifiée le" : dateLabel;
     const etat = entry.date ? `${verbe} ${formatDate(entry.date)}` : "date non enregistrée";
+    // One row per structure the commune belongs to, each with its own file, and two dates: the
+    // situation described and the last check of the source.
+    const interco = entry.bloc === "intercommunalite" ? dossier.intercommunalite : null;
+    if (interco && interco.intercommunalites.length > 0) {
+      const verifiee = interco.lastCheckedAt
+        ? `, dernière vérification le ${formatDate(interco.lastCheckedAt)}`
+        : "";
+      return interco.intercommunalites.map((i) => ({
+        bloc: entry.bloc,
+        label: `${label}, ${i.name}`,
+        etat: etat + verifiee,
+        source: i.source,
+      }));
+    }
     return [{ bloc: entry.bloc, label, etat, source: entry.source }];
   });
 }

@@ -1,14 +1,13 @@
 import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import type { CommuneDossier, SourceRef } from "@/lib/data/territoires";
-import { formatDate, formatDateFrUTC } from "@/lib/utils";
+import type { IntercommunaliteBlock } from "@/lib/data/territoires-intercommunalites";
+import { formatDateFrUTC } from "@/lib/utils";
 
 /**
  * Intercommunality of a commune (#1052, lot 1.8): name, nature in words, situation date and
  * source. No link (Poligraph has no intercommunality page) and no competence: membership alone
  * says nothing about who exercises what.
  */
-
-const LINK = "underline underline-offset-2 hover:text-primary";
 
 /** "2026-01-01T00:00:00.000Z" -> "1er janvier 2026". The date is a calendar date: read in UTC. */
 export function formatSituation(iso: string): string {
@@ -19,27 +18,11 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function Sources({ sources, checkedAt }: { sources: SourceRef[]; checkedAt: string | null }) {
-  const unique = sources.filter((s, i) => sources.findIndex((o) => o.label === s.label) === i);
-  return (
-    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-      Source :{" "}
-      {unique.map((s, i) => (
-        <span key={s.label}>
-          {i > 0 && " ; "}
-          {s.url ? (
-            <a href={s.url} target="_blank" rel="noopener noreferrer" className={LINK}>
-              {s.label}
-              <span className="sr-only"> (nouvel onglet)</span>
-            </a>
-          ) : (
-            s.label
-          )}
-        </span>
-      ))}
-      {checkedAt && <> · dernière vérification le {formatDate(checkedAt)}</>}
-    </p>
-  );
+/** Sources of the block, for the source line of the section and for « Sources de cette page ». */
+export function intercommunaliteSources(block: IntercommunaliteBlock): SourceRef[] {
+  return block.intercommunalites.length > 0
+    ? block.intercommunalites.map((b) => b.source)
+    : [block.source];
 }
 
 export function IntercommunaliteCard({ dossier }: { dossier: CommuneDossier }) {
@@ -108,16 +91,10 @@ export function IntercommunaliteCard({ dossier }: { dossier: CommuneDossier }) {
     );
   }
 
-  const sources =
-    block.intercommunalites.length > 0
-      ? block.intercommunalites.map((b) => b.source)
-      : [block.source];
-
   return (
     <div className="rounded-xl border p-4">
       <p className="text-sm text-muted-foreground">{label}</p>
       {body}
-      <Sources sources={sources} checkedAt={block.lastCheckedAt} />
     </div>
   );
 }
