@@ -190,6 +190,10 @@ const PARTY_SURFACES = [
   "src/app/territoires/recherche/page.tsx",
   "src/app/territoires/regions/[slug]/opengraph-image.tsx",
   "src/app/territoires/regions/[slug]/page.tsx",
+  // Department image: flagged through `getDepartementTerritoire`, the reader of the page. It
+  // draws counts, the presidency sentence and the outline, and no party data (the party badges
+  // of the page come from the deputies and senators readers, which the image does not call).
+  "src/app/territoires/departements/[slug]/opengraph-image.tsx",
 ] as const;
 
 const FACTCHECK_SURFACES = [

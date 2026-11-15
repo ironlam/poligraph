@@ -3,7 +3,7 @@ import { TerritoireBandeau, type BandeauFait } from "@/components/territoires/Te
 import { TerritoryShape } from "@/components/territoires/TerritoryShape";
 import type { CommuneDossier } from "@/lib/data/territoires";
 import { communeFaitParlement, communePhraseReponse } from "@/lib/territoires/commune-bandeau";
-import { formatCount, territoireLabel } from "@/lib/territoires/commune-display";
+import { formatCount, natureLabel, territoireLabel } from "@/lib/territoires/commune-display";
 import {
   TERRITOIRES_PATH,
   territoireCommunePath,
@@ -37,10 +37,7 @@ function filAriane(identity: CommuneDossier["identity"]) {
 function identite(identity: CommuneDossier["identity"]): string {
   const postal = identity.postalCodes;
   const horsRegion = identity.territoireHorsRegion;
-  // TAAF districts and Clipperton carry a commune code in the COG without being communes.
-  const nature =
-    horsRegion?.code === "984" ? "District" : horsRegion?.code === "989" ? "Territoire" : "Commune";
-  const parts = [`${nature} · Code INSEE ${identity.inseeCode}`];
+  const parts = [`${natureLabel(identity)} · Code INSEE ${identity.inseeCode}`];
   if (postal.length > 0) {
     const list =
       postal.length > 4

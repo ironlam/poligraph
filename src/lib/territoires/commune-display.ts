@@ -34,6 +34,12 @@ export function formatPopulation(value: number): string {
   return `${frNumber(value)} habitant${value > 1 ? "s" : ""}`;
 }
 
+/** TAAF districts and Clipperton carry a commune code in the COG without being communes. */
+export function natureLabel(identity: CommuneDossier["identity"]): string {
+  const code = identity.territoireHorsRegion?.code;
+  return code === "984" ? "District" : code === "989" ? "Territoire" : "Commune";
+}
+
 /** Department label for the pastille and the breadcrumb: "Ille-et-Vilaine (35)". */
 export function territoireLabel(identity: CommuneDossier["identity"]): string {
   const name = identity.department.name ?? identity.territoireHorsRegion?.name ?? null;
