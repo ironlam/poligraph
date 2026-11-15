@@ -1,4 +1,3 @@
-import { LigneSource, type LigneSourceItem } from "@/components/territoires/LigneSource";
 import {
   siegesEnMots,
   type Composition,
@@ -16,14 +15,9 @@ const TONS: Record<PartConseil["ton"], string> = {
 /**
  * Seats per list at the 2026 municipal election. The bar is decoration: the legend carries every
  * figure in words, and the reservation says what the picture is not (the council of today).
+ * Its source is named once, on the source line of the block it sits in.
  */
-export function CompositionConseil({
-  composition,
-  source,
-}: {
-  composition: Composition;
-  source: LigneSourceItem;
-}) {
+export function CompositionConseil({ composition }: { composition: Composition }) {
   return (
     <section aria-labelledby="composition-conseil-titre">
       <h3 id="composition-conseil-titre" className="font-semibold">
@@ -51,7 +45,6 @@ export function CompositionConseil({
         démissions ni des remplacements survenus depuis, et ne dit rien de l{"'"}appartenance
         politique des élus.
       </p>
-      <LigneSource className="mt-2" periode="Élection de mars 2026" sources={[source]} />
     </section>
   );
 }
