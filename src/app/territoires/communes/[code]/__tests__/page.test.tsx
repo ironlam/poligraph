@@ -136,6 +136,26 @@ describe("/territoires/communes/[code]", () => {
     expect(petite.text).toContain("Voir les 3 membres");
   });
 
+  it("situe la commune sur l'échelle des territoires, avec la source des compétences", async () => {
+    const { document } = await render(dossier());
+    const echelle = document.querySelector('section[aria-labelledby="echelle-titre"]')!;
+    const barreaux = [...echelle.querySelectorAll("ol > li")];
+
+    expect(barreaux).toHaveLength(3);
+    expect(barreaux[0]?.getAttribute("aria-current")).toBe("true");
+    expect(barreaux[0]?.textContent).toContain("Commune · cette page");
+    expect(barreaux[0]?.querySelector("a")).toBeNull();
+    expect([...echelle.querySelectorAll("ol a")].map((a) => a.getAttribute("href"))).toEqual([
+      "/territoires/departements/ille-et-vilaine",
+      "/territoires/regions/bretagne",
+    ]);
+    expect(echelle.textContent).toContain("Collèges, aide sociale");
+    expect(echelle.textContent).toContain("Vérifié le 15 novembre 2026");
+    expect(
+      echelle.querySelector('a[href^="https://www.collectivites-locales.gouv.fr/"]')
+    ).not.toBeNull();
+  });
+
   it("donne la date de dernière confirmation quand elle existe", async () => {
     const base = dossier();
     const date = "2026-10-01T00:00:00.000Z";
@@ -654,6 +674,7 @@ describe("absence de composant client cartographique", () => {
     "src/components/territoires/TerritoireBandeau.tsx",
     "src/components/territoires/TerritoireOnglets.tsx",
     "src/components/territoires/LigneSource.tsx",
+    "src/components/territoires/EchelleTerritoires.tsx",
     "src/components/territoires/CommuneSections.tsx",
     "src/components/territoires/IntercommunaliteCard.tsx",
     "src/components/territoires/TerritoryShape.tsx",

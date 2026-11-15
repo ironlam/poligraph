@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { SITE_URL } from "@/config/site";
 import { AdministrativeAreaJsonLd } from "@/components/seo/JsonLd";
 import { CommuneBandeau } from "@/components/territoires/CommuneBandeau";
+import { EchelleTerritoires } from "@/components/territoires/EchelleTerritoires";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
+import { echelleCommune } from "@/lib/territoires/echelle";
 import {
   CommuneSidebar,
   ElectionsSection,
@@ -106,7 +108,10 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}
             <ElectionsSection dossier={dossier} scrutins={scrutins} />
           </div>
-          <CommuneSidebar dossier={dossier} />
+          <div className="space-y-4">
+            <EchelleTerritoires barreaux={echelleCommune(dossier)} />
+            <CommuneSidebar dossier={dossier} />
+          </div>
         </div>
       </div>
     </>
