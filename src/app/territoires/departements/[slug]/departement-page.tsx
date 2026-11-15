@@ -3,9 +3,14 @@ import { getDepartmentBySlug } from "@/config/departments";
 import { getDeputesByDepartment, getSenateursByDepartment } from "@/lib/data/departments";
 import { getDepartementTerritoire } from "@/lib/data/territoires";
 import type { CommuneListQuery } from "@/lib/territoires/departement-communes";
-import { DepartementHero } from "@/components/territoires/DepartementHero";
+import { DepartementBandeau } from "@/components/territoires/DepartementBandeau";
+import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
+import { COMMUNES_ANCHOR } from "@/lib/territoires/departement-communes";
 import { CommuneIndex } from "@/components/territoires/CommuneIndex";
-import { DepartementConseil } from "@/components/territoires/DepartementConseil";
+import {
+  DepartementConseil,
+  remplaceLeDepartement,
+} from "@/components/territoires/DepartementConseil";
 import { DepartementParlement } from "@/components/territoires/DepartementParlement";
 
 /**
@@ -46,9 +51,16 @@ export async function DepartementPageBody({
     return 0;
   });
 
+  // The first tab names the block `DepartementConseil` renders for this territory.
+  const premier = territoire.territoireHorsRegion
+    ? { href: "#statut", label: "Statut" }
+    : remplaceLeDepartement(territoire.collectivitesParticulieres)
+      ? { href: "#collectivite-competente", label: "Collectivité" }
+      : { href: "#conseil", label: "Conseil" };
+
   return (
     <div className="pb-10">
-      <DepartementHero
+      <DepartementBandeau
         slug={slug}
         name={dept.name}
         code={dept.code}
@@ -56,10 +68,17 @@ export async function DepartementPageBody({
         deputeCount={deputies.length}
         senateurCount={senators.length}
       />
-      <div className="container mx-auto grid items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
+      <TerritoireOnglets
+        onglets={[
+          premier,
+          { href: `#${COMMUNES_ANCHOR}`, label: "Communes" },
+          { href: "#parlement", label: "Parlement" },
+        ]}
+      />
+      <div className="container mx-auto grid max-w-6xl items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
         <div className="flex min-w-0 flex-col gap-5">
-          <CommuneIndex slug={slug} territoire={territoire} />
           <DepartementConseil territoire={territoire} />
+          <CommuneIndex slug={slug} territoire={territoire} />
         </div>
         <DepartementParlement deputies={deputies} senators={senators} />
       </div>

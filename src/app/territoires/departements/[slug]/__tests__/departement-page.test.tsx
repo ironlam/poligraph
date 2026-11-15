@@ -142,15 +142,27 @@ describe("page département : département ordinaire", () => {
   it("affiche le bandeau, le fil d'Ariane vers la région et les faits clés", async () => {
     const doc = await render("eure", territoire("27"));
 
-    expect(doc.querySelector("h1")?.textContent).toBe("Eure (27)");
+    const bandeau = doc.querySelector('section[aria-labelledby="departement-titre"]')!;
+    expect(doc.querySelector("h1")?.textContent).toBe("Eure");
+    expect(bandeau.textContent).toContain("Département · code 27 · Normandie");
     const crumbs = [...doc.querySelectorAll('nav[aria-label="Fil d\'Ariane"] a')];
     expect(crumbs.map((a) => a.getAttribute("href"))).toEqual([
+      "/",
       "/territoires",
       "/territoires/regions/normandie",
     ]);
-    expect(text(doc)).toContain("158");
-    expect(text(doc)).toContain("2 députés · 1 sénateur");
-    expect(text(doc)).toContain("Non établie");
+    expect(bandeau.textContent).toContain(
+      "La présidence du conseil départemental n'est pas établie dans nos données."
+    );
+    const faits = [...bandeau.querySelectorAll("dl > div")].map((d) => [
+      d.querySelector("dt")?.textContent,
+      d.querySelector("dd span")?.textContent,
+    ]);
+    expect(faits).toEqual([
+      ["Communes", "158"],
+      ["Députés", "2"],
+      ["Sénateurs", "1"],
+    ]);
     // Silhouette présente pour un département métropolitain, décorative.
     expect(doc.querySelector('section[aria-labelledby="departement-titre"] svg')).not.toBeNull();
     expect(
@@ -158,6 +170,21 @@ describe("page département : département ordinaire", () => {
         .querySelector('section[aria-labelledby="departement-titre"] svg')
         ?.closest('[aria-hidden="true"]')
     ).not.toBeNull();
+  });
+
+  it("navigue par onglets, le conseil avant l'index des communes", async () => {
+    const doc = await render("eure", territoire("27"));
+    const onglets = [...doc.querySelectorAll('nav[aria-label="Sections de la page"] a')];
+    expect(onglets.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+      ["Conseil", "#conseil"],
+      ["Communes", "#communes"],
+      ["Parlement", "#parlement"],
+    ]);
+    const conseil = doc.querySelector("#conseil")!;
+    const communes = doc.querySelector("#communes")!;
+    expect(
+      conseil.compareDocumentPosition(communes) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("garde le bloc Parlement existant, députés triés par circonscription", async () => {
@@ -333,8 +360,11 @@ describe("page département : collectivités à statut particulier", () => {
     expect(text(doc)).toContain("Collectivité compétente : Ville de Paris");
     expect(doc.querySelector("#collectivite-competente")?.textContent).toContain("Loi n° 2017-257");
     expect(doc.querySelector("#conseil")).toBeNull();
-    expect(text(doc)).not.toContain("Présidence du département");
+    expect(text(doc)).not.toMatch(/présidence du conseil départemental|préside le conseil/i);
     expect(text(doc)).not.toContain("Compétences fixées par la loi");
+    expect(doc.querySelector('nav[aria-label="Sections de la page"] a')?.getAttribute("href")).toBe(
+      "#collectivite-competente"
+    );
   });
 
   it("Rhône : note sur la Métropole de Lyon, conseil départemental conservé", async () => {
@@ -342,7 +372,7 @@ describe("page département : collectivités à statut particulier", () => {
     const conseil = doc.querySelector("#conseil")!;
     expect(conseil.textContent).toContain("Métropole de Lyon");
     expect(conseil.textContent).toContain("distincte du département");
-    expect(text(doc)).toContain("Présidence du département");
+    expect(text(doc)).toContain("La présidence du conseil départemental n'est pas établie");
   });
 
   it("Corse-du-Sud : la Collectivité de Corse, région Corse dans le fil d'Ariane", async () => {
@@ -389,6 +419,9 @@ describe("page département : collectivités à statut particulier", () => {
     const doc = await render("saint-pierre-et-miquelon", territoire("975"));
     expect(text(doc)).toContain("Collectivité d'outre-mer");
     expect(doc.querySelector("#statut")?.textContent).toContain("aucune région");
+    expect(doc.querySelector('nav[aria-label="Sections de la page"] a')?.getAttribute("href")).toBe(
+      "#statut"
+    );
     expect(doc.querySelector('a[href^="/territoires/regions/"]')).toBeNull();
     expect(doc.querySelector("#conseil")).toBeNull();
   });

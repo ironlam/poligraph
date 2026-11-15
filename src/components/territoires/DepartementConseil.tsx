@@ -57,7 +57,7 @@ function SourceLink({ source }: { source: { label: string; url: string | null } 
 
 function CollectiviteNotes({ notes }: { notes: readonly CollectiviteParticuliere[] }) {
   return (
-    <div id="collectivite" className="flex scroll-mt-20 flex-col gap-3">
+    <div id="collectivite" className="flex scroll-mt-32 flex-col gap-3">
       {notes.map((c) => (
         <div key={c.id} className="rounded-xl border bg-muted/40 p-4">
           <p className="font-bold">{c.collectivite}</p>
