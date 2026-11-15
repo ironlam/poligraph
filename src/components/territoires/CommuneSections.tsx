@@ -5,6 +5,7 @@ import { DATA_SOURCE_URLS } from "@/config/labels";
 import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { IntercommunaliteCard } from "@/components/territoires/IntercommunaliteCard";
+import { CompositionConseil } from "@/components/territoires/CompositionConseil";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
 import { Executif } from "@/components/territoires/Executif";
 import { LigneSource } from "@/components/territoires/LigneSource";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/territoires/commune-elections";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { communeSources } from "@/lib/territoires/commune-sources";
+import { compositionConseil } from "@/lib/territoires/composition-conseil";
 import { rangsExecutif } from "@/lib/territoires/executif";
 import { isIndexableTerritoireCommune } from "@/lib/seo/territoire-robots";
 import { formatDate } from "@/lib/utils";
@@ -168,6 +170,8 @@ function MaireBlock({
 export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
   const { maire, mairesSecteur, identity } = dossier;
   const sansCommune = TERRITOIRES_SANS_COMMUNE.has(identity.territoireHorsRegion?.code ?? "");
+  const municipales = dossier.elections.municipales2026;
+  const composition = municipales ? compositionConseil(municipales.listes) : null;
   return (
     <SectionCard
       id="qui-decide"
@@ -228,6 +232,11 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
       ) : (
         <div className="mt-4 rounded-xl border p-4">
           <p className="text-sm text-muted-foreground">Conseil municipal</p>
+          {composition && municipales && (
+            <div className="mb-4 mt-1 border-b pb-4">
+              <CompositionConseil composition={composition} source={municipales.source} />
+            </div>
+          )}
           {dossier.conseilMunicipal.state === "DISPONIBLE" ? (
             <div className="mt-1 flex flex-col gap-4">
               {/* Detailed executive on indexable communes only (D25): elsewhere the register
