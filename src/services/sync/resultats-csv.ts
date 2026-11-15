@@ -194,7 +194,7 @@ const SEAT_BATCH = 1000;
 async function syncSeats(electionId: string, communes: CommuneResult2026[], dryRun: boolean) {
   const heads = await db.candidacy.findMany({
     where: { electionId, listPosition: 1, communeId: { not: null } },
-    select: { id: true, listName: true, communeId: true },
+    select: { id: true, listName: true, communeId: true, candidateName: true },
   });
   const plan = planSeatWrites(
     communes,
