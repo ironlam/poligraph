@@ -21,7 +21,7 @@ export function DepartementSection({
   return (
     <details
       id={id}
-      className="group scroll-mt-20 rounded-2xl border bg-card lg:supports-[selector(::details-content)]:[&::details-content]:[content-visibility:visible]"
+      className="group scroll-mt-32 rounded-2xl border bg-card lg:supports-[selector(::details-content)]:[&::details-content]:[content-visibility:visible]"
     >
       <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-5 py-3 marker:hidden lg:supports-[selector(::details-content)]:hidden [&::-webkit-details-marker]:hidden">
         <h2 className="font-display text-lg font-extrabold text-primary">{title}</h2>

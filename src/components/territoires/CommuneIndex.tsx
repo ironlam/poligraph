@@ -53,7 +53,7 @@ export function CommuneIndex({ slug, territoire }: CommuneIndexProps) {
     <section
       id={COMMUNES_ANCHOR}
       aria-labelledby="communes-titre"
-      className="flex scroll-mt-20 flex-col gap-4 rounded-2xl border bg-card p-4 sm:p-6"
+      className="flex scroll-mt-32 flex-col gap-4 rounded-2xl border bg-card p-4 sm:p-6"
     >
       <div className="flex flex-col gap-1">
         <h2
