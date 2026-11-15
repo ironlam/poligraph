@@ -188,7 +188,8 @@ const SEAT_BATCH = 1000;
 
 /**
  * Seats of each list, written on its head of list and nowhere else: no vote, percentage or
- * elected flag is touched. Batched, and a row already holding the value is not rewritten.
+ * elected flag is touched. Batched, and a row already holding the value is not rewritten. A
+ * commune with a list that cannot be matched keeps no seats: partial seats would read as a council.
  */
 async function syncSeats(electionId: string, communes: CommuneResult2026[], dryRun: boolean) {
   const heads = await db.candidacy.findMany({
@@ -202,7 +203,15 @@ async function syncSeats(electionId: string, communes: CommuneResult2026[], dryR
   for (const reason of plan.skipped) console.warn(`  [WARN] Seats, ${reason}`);
 
   let written = 0;
+  let cleared = 0;
   if (!dryRun) {
+    for (let i = 0; i < plan.clear.length; i += SEAT_BATCH) {
+      const { count } = await db.candidacy.updateMany({
+        where: { id: { in: plan.clear.slice(i, i + SEAT_BATCH) }, municipalSeats: { not: null } },
+        data: { municipalSeats: null },
+      });
+      cleared += count;
+    }
     for (let i = 0; i < plan.rows.length; i += SEAT_BATCH) {
       const values = plan.rows
         .slice(i, i + SEAT_BATCH)
@@ -216,8 +225,9 @@ async function syncSeats(electionId: string, communes: CommuneResult2026[], dryR
   console.log(`Communes with seats: ${plan.communes}`);
   console.log(`Lists with seats: ${plan.lists} (${plan.seats} seats)`);
   console.log(`Heads of list matched: ${plan.rows.length}`);
-  console.log(`Lists left out: ${plan.skipped.length}`);
-  console.log(`Rows written: ${written}`);
+  console.log(`Lists not matched: ${plan.skipped.length}`);
+  console.log(`Communes left without seats (a list not matched): ${plan.incompleteCommunes}`);
+  console.log(`Rows written: ${written}, rows cleared: ${cleared}`);
 }
 
 async function updateResultsSnapshot(stats: Record<string, number>) {

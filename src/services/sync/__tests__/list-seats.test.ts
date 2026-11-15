@@ -67,7 +67,7 @@ describe("planSeatWrites", () => {
       { id: "h1", seats: 44 },
       { id: "h2", seats: 0 },
     ]);
-    expect(plan).toMatchObject({ communes: 1, lists: 2, seats: 44, skipped: [] });
+    expect(plan).toMatchObject({ communes: 1, lists: 2, seats: 44, skipped: [], clear: [] });
   });
 
   it("n'écrit rien pour une liste sans sièges publiés ni pour une commune absente de la base", () => {
@@ -79,16 +79,27 @@ describe("planSeatWrites", () => {
     expect(plan.communes).toBe(0);
   });
 
-  it("laisse de côté une liste sans tête de liste, ou dont la tête est déjà prise", () => {
+  it("ne garde aucun siège d'une commune dont une liste n'a pas de tête de liste", () => {
     const plan = planSeatWrites(
-      [commune("35238", [list("Liste A", 10), list("Union", 5), list("LISTE A", 7)])],
+      [
+        commune("35238", [list("Liste A", 10), list("Union", 5)]),
+        commune("01160", [list("Liste A", 3)]),
+      ],
       heads
     );
-    expect(plan.rows).toEqual([{ id: "h1", seats: 10 }]);
-    expect(plan.skipped).toEqual([
-      'no match: "Union" in 35238',
-      'head already taken: "LISTE A" in 35238',
-    ]);
+    expect(plan.rows).toEqual([{ id: "h3", seats: 3 }]);
+    expect(plan.clear).toEqual(["h1", "h2"]);
+    expect(plan.skipped).toEqual(['no match: "Union" in 35238']);
+    expect(plan).toMatchObject({ communes: 2, incompleteCommunes: 1 });
+  });
+
+  it("tient pour incomplète une commune où deux listes visent la même tête", () => {
+    const plan = planSeatWrites(
+      [commune("35238", [list("Liste A", 10), list("LISTE A", 7)])],
+      heads
+    );
+    expect(plan.rows).toEqual([]);
+    expect(plan.skipped).toEqual(['head already taken: "LISTE A" in 35238']);
   });
 
   // Second round: a merged list carries a new name sharing its words with a first-round list.
@@ -102,16 +113,18 @@ describe("planSeatWrites", () => {
       ],
       [head("h1", "35238", "ENSEMBLE POUR NOTRE VILLE")]
     );
-    expect(plan.rows).toEqual([{ id: "h1", seats: 5 }]);
+    expect(plan.rows).toEqual([]);
+    expect(plan.clear).toEqual(["h1"]);
     expect(plan.skipped).toEqual(['no match: "Ensemble pour notre ville demain" in 35238']);
   });
 
-  it("laisse de côté une liste que plusieurs têtes de liste rapprochent", () => {
+  it("tient pour incomplète une commune dont une liste rapproche plusieurs têtes", () => {
     const plan = planSeatWrites(
       [commune("75056", [list("Paris", 9)])],
       [head("p1", "75056", "Paris"), head("p2", "75056", "PARIS")]
     );
     expect(plan.rows).toEqual([]);
+    expect(plan.clear).toEqual(["p1", "p2"]);
     expect(plan.skipped).toEqual(['2 heads match: "Paris" in 75056']);
   });
 });

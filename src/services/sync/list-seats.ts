@@ -43,17 +43,21 @@ export interface ListHead extends NamedCandidacy {
 
 export interface SeatWritePlan {
   rows: { id: string; seats: number }[];
+  /** Heads of list of the incomplete communes: their seats are erased, not left partial. */
+  clear: string[];
   communes: number;
+  incompleteCommunes: number;
   lists: number;
   seats: number;
-  /** Lists left out, each with its reason: nothing is written on a doubtful match. */
+  /** Lists that could not be matched, each with its reason. */
   skipped: string[];
 }
 
 /**
  * One write per list with published seats, on its head of list, matched by exact name or short
- * label only. A list matching no head, several heads, or a head already taken by another list is
- * left out and reported.
+ * label only. All or nothing per commune: when one list matches no head, several heads, or a head
+ * already taken by another list, the commune gets no seats at all and loses those it had, so that
+ * seats in base always add up to the whole council.
  */
 export function planSeatWrites(communes: CommuneResult2026[], heads: ListHead[]): SeatWritePlan {
   const headsByCommune = new Map<string, ListHead[]>();
@@ -63,13 +67,23 @@ export function planSeatWrites(communes: CommuneResult2026[], heads: ListHead[])
     else headsByCommune.set(head.communeId, [head]);
   }
 
-  const plan: SeatWritePlan = { rows: [], communes: 0, lists: 0, seats: 0, skipped: [] };
-  const taken = new Set<string>();
+  const plan: SeatWritePlan = {
+    rows: [],
+    clear: [],
+    communes: 0,
+    incompleteCommunes: 0,
+    lists: 0,
+    seats: 0,
+    skipped: [],
+  };
   for (const commune of communes) {
     const communeHeads = headsByCommune.get(commune.inseeCode);
     const withSeats = commune.lists.filter((list) => list.seatsCM != null);
     if (!communeHeads || withSeats.length === 0) continue;
     plan.communes++;
+    const rows: SeatWritePlan["rows"] = [];
+    const taken = new Set<string>();
+    let complete = true;
     for (const list of withSeats) {
       plan.lists++;
       plan.seats += list.seatsCM!;
@@ -77,13 +91,22 @@ export function planSeatWrites(communes: CommuneResult2026[], heads: ListHead[])
       const label = `"${list.listName}" in ${commune.inseeCode}`;
       // A keyword match is a guess: a list merged between the rounds shares words with one of
       // the lists it replaces, and its seats would land on that other list.
-      if (ids.length === 0 || partial) plan.skipped.push(`no match: ${label}`);
-      else if (ids.length > 1) plan.skipped.push(`${ids.length} heads match: ${label}`);
-      else if (taken.has(ids[0]!)) plan.skipped.push(`head already taken: ${label}`);
-      else {
-        taken.add(ids[0]!);
-        plan.rows.push({ id: ids[0]!, seats: list.seatsCM! });
+      let reason: string | null = null;
+      if (ids.length === 0 || partial) reason = "no match";
+      else if (ids.length > 1) reason = `${ids.length} heads match`;
+      else if (taken.has(ids[0]!)) reason = "head already taken";
+      if (reason) {
+        plan.skipped.push(`${reason}: ${label}`);
+        complete = false;
+        continue;
       }
+      taken.add(ids[0]!);
+      rows.push({ id: ids[0]!, seats: list.seatsCM! });
+    }
+    if (complete) plan.rows.push(...rows);
+    else {
+      plan.incompleteCommunes++;
+      plan.clear.push(...communeHeads.map((head) => head.id));
     }
   }
   return plan;
