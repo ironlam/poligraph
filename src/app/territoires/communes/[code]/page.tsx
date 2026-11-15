@@ -109,10 +109,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
             <ParlementSection dossier={dossier} />
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}
             <ElectionsSection dossier={dossier} scrutins={scrutins} />
-            <Agir
-              departmentCode={identity.department.code}
-              horsRegion={identity.territoireHorsRegion !== null}
-            />
+            <Agir departmentCode={identity.department.code} />
           </div>
           <div className="space-y-4">
             <EchelleTerritoires barreaux={echelleCommune(dossier)} />

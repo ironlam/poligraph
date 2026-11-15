@@ -35,21 +35,14 @@ function Liens({ liens }: { liens: readonly AgirLien[] }) {
  * only fact proper to the territory is the seat of its administrative court. The block informs;
  * it gives no advice on a particular case and says so.
  */
-export function Agir({
-  departmentCode,
-  horsRegion = false,
-}: {
-  departmentCode: string;
-  /** Overseas collectivité outside any region: its communes follow their own statute. */
-  horsRegion?: boolean;
-}) {
+export function Agir({ departmentCode }: { departmentCode: string }) {
   // Without a commune there is neither a municipal council nor a town hall to write to.
   if (!aUneMairie(departmentCode)) return null;
   const siege = siegeTribunalAdministratif(departmentCode);
   return (
     <SectionCard id="agir" title="Agir">
       <ul className="divide-y divide-border">
-        {voiesAgir(departmentCode, horsRegion).map((voie) => (
+        {voiesAgir(departmentCode).map((voie) => (
           <li key={voie.id} className="py-3 first:pt-0">
             <h3 className="font-semibold">{voie.titre}</h3>
             <p className="mt-1 text-sm">{voie.texte}</p>
