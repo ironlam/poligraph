@@ -10,6 +10,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+import { Prisma, MandateType } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { searchPoliticians } from "./search";
 
@@ -94,5 +95,52 @@ describe("public search publication contract", () => {
     expect(db.politician.count).toHaveBeenCalledWith({
       where: { AND: [{ publicationStatus: "PUBLISHED" }] },
     });
+  });
+  it("searches by name and preserves public filters when the FTS column is absent", async () => {
+    const driverAdapterError = new Error("ColumnNotFound", {
+      cause: { kind: "ColumnNotFound", column: "p.searchVector" },
+    });
+    vi.mocked(db.$queryRaw).mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("FTS column missing", {
+        code: "P2010",
+        clientVersion: "7.10.1",
+        meta: { driverAdapterError },
+      })
+    );
+    vi.mocked(db.politician.findMany).mockResolvedValue([HYDRATED_ROW] as never);
+    vi.mocked(db.politician.count).mockResolvedValue(3);
+
+    const result = await searchPoliticians(
+      { query: "publiée", mandateType: MandateType.DEPUTE, hasAffairs: false },
+      2,
+      1
+    );
+
+    const where = {
+      AND: [
+        { publicationStatus: "PUBLISHED" },
+        {
+          OR: [
+            { fullName: { contains: "publiée", mode: "insensitive" } },
+            { lastName: { contains: "publiée", mode: "insensitive" } },
+          ],
+        },
+        { mandates: { some: { type: MandateType.DEPUTE, isCurrent: true } } },
+        { affairs: { none: { publicationStatus: "PUBLISHED" } } },
+      ],
+    };
+    expect(db.politician.count).toHaveBeenCalledWith({ where });
+    expect(db.politician.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where, skip: 1, take: 1 })
+    );
+    expect(result).toMatchObject({ total: 3, page: 2, totalPages: 3 });
+    expect(result.results[0].slug).toBe(HYDRATED_ROW.slug);
+  });
+
+  it("propagates other FTS errors", async () => {
+    const error = new Error("Failed database connection");
+    vi.mocked(db.$queryRaw).mockRejectedValue(error);
+    await expect(searchPoliticians({ query: "publiée" })).rejects.toBe(error);
+    expect(db.politician.findMany).not.toHaveBeenCalled();
   });
 });

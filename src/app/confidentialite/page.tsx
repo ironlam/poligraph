@@ -68,18 +68,19 @@ export default function ConfidentialitePage() {
             <p>
               Les requêtes et les paramètres nécessaires sont traités transitoirement afin
               d&apos;interroger l&apos;API publique et de répondre au client. Le serveur MCP ne
-              prévoit aucune conservation applicative dédiée du contenu de ces requêtes. Son handler
-              ne copie pas les arguments des tools dans les logs applicatifs.
+              prévoit aucune conservation applicative dédiée du contenu de ces requêtes.
             </p>
-            <p>Les métadonnées applicatives journalisées sont limitées à :</p>
-            <ul className="list-disc space-y-1 pl-6">
-              <li>le timestamp ;</li>
-              <li>la méthode HTTP ;</li>
-              <li>la méthode JSON-RPC ;</li>
-              <li>l&apos;identifiant JSON-RPC ;</li>
-              <li>le User-Agent ;</li>
-              <li>l&apos;en-tête Accept.</li>
-            </ul>
+            <p>
+              Les journaux applicatifs du serveur MCP signalent les erreurs de transport, les
+              erreurs de configuration et les origines refusées. Ils contiennent l&apos;heure et le
+              type d&apos;événement. Lors d&apos;un refus, ils peuvent aussi indiquer le motif et
+              l&apos;origine HTTP normalisée. Le serveur ne journalise pas les arguments, les
+              identifiants JSON-RPC, le User-Agent ni l&apos;en-tête Accept.
+            </p>
+            <p>
+              En cas d&apos;erreur de l&apos;API publique, ses journaux techniques peuvent contenir
+              l&apos;URL appelée et les paramètres de recherche transmis par le serveur MCP.
+            </p>
             <p>
               L&apos;hébergeur peut traiter les données techniques nécessaires à l&apos;acheminement
               et à la sécurité de la requête, notamment une adresse IP. Ces données relèvent aussi

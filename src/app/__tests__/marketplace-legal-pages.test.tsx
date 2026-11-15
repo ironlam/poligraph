@@ -65,31 +65,18 @@ describe("marketplace legal pages", () => {
     );
   });
 
-  it("documents the MCP flow and the exact application log metadata", () => {
-    const { document, text } = renderPage(ConfidentialitePage);
+  it("documents the MCP flow and the diagnostic events in the application logs", () => {
+    const { text } = renderPage(ConfidentialitePage);
 
     expect(text).toContain(
       "Client Claude, ChatGPT ou autre client MCP → mcp.poligraph.fr → API publique poligraph.fr"
     );
     expect(text).toContain(
-      "Son handler ne copie pas les arguments des tools dans les logs applicatifs."
+      "les erreurs de transport, les erreurs de configuration et les origines refusées"
     );
-
-    const introduction = [...document.querySelectorAll("p")].find((paragraph) =>
-      paragraph.textContent?.includes("métadonnées applicatives journalisées")
+    expect(text).toContain(
+      "Le serveur ne journalise pas les arguments, les identifiants JSON-RPC, le User-Agent ni l'en-tête Accept."
     );
-    const loggedFields = [...(introduction?.nextElementSibling?.querySelectorAll("li") ?? [])].map(
-      (item) => item.textContent?.trim()
-    );
-
-    expect(loggedFields).toEqual([
-      "le timestamp ;",
-      "la méthode HTTP ;",
-      "la méthode JSON-RPC ;",
-      "l'identifiant JSON-RPC ;",
-      "le User-Agent ;",
-      "l'en-tête Accept.",
-    ]);
   });
 
   it("contains every required structural section", () => {
