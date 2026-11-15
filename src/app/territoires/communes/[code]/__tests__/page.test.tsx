@@ -185,11 +185,14 @@ describe("/territoires/communes/[code]", () => {
     const agir = document.querySelector("#agir")!;
     expect(agir.textContent).toContain("celui qui siège à Papeete.");
     // The CGCT applies to the communes of Polynésie française (article L. 2573-5).
-    // Five ways: the consultation of the voters is not asserted for an overseas collectivité.
-    expect([...agir.querySelectorAll("h3")].map((h) => h.textContent)).not.toContain(
-      "Demander une consultation"
-    );
-    expect(agir.querySelectorAll("h3")).toHaveLength(5);
+    // Neither the consultation nor the registration to vote is asserted for an overseas
+    // collectivité: their application there was not verified.
+    expect([...agir.querySelectorAll("h3")].map((h) => h.textContent)).toEqual([
+      "Assister au conseil municipal",
+      "Obtenir un document",
+      "Contacter la mairie",
+      "Contester une décision",
+    ]);
     expect(agir.textContent).toContain(
       "Code général des collectivités territoriales, article L. 2121-18"
     );

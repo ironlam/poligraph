@@ -245,8 +245,8 @@ const NOUVELLE_CALEDONIE: Record<string, Pick<AgirVoie, "texte" | "liens">> = {
  * - Polynésie française: both articles apply (CGCT, art. L. 2573-5). The Service Public page on
  *   requesting a document is left out there: its application was not verified;
  * - Nouvelle-Calédonie: its own code of communes, above.
- * Registering to vote is shown everywhere there is a commune. The consultation of the voters is
- * kept to the common regime: its application to the three collectivités above was not verified.
+ * Registering to vote and the consultation of the voters are kept to the common regime: their
+ * application to the three collectivités above was not verified.
  */
 export function voiesAgir(departmentCode: string): readonly AgirVoie[] {
   const [assister, documents, contacter, contester] = AGIR_VOIES as [
@@ -255,22 +255,22 @@ export function voiesAgir(departmentCode: string): readonly AgirVoie[] {
     AgirVoie,
     AgirVoie,
   ];
+  // Outside the common regime, neither the consultation of the voters nor the registration to
+  // vote is shown: the application of the first part of the CGCT was not verified, and the
+  // online registration service is not open to the voters of New Caledonia.
   if (departmentCode === "988") {
     return [
       { ...assister, ...NOUVELLE_CALEDONIE.assister },
       { ...documents, ...NOUVELLE_CALEDONIE.documents },
       contacter,
-      VOIE_VOTER,
       contester,
     ];
   }
   if (departmentCode === "987") {
     const sansFiche = { ...documents, liens: documents.liens.slice(0, 1) };
-    return [assister, sansFiche, contacter, VOIE_VOTER, contester];
+    return [assister, sansFiche, contacter, contester];
   }
-  // Saint-Pierre-et-Miquelon: whether the first part of the CGCT, which carries the consultation
-  // of the voters, applies there was not verified.
-  if (departmentCode === "975") return [assister, documents, contacter, VOIE_VOTER, contester];
+  if (departmentCode === "975") return [assister, documents, contacter, contester];
   return [assister, documents, contacter, VOIE_PARTICIPER, VOIE_VOTER, contester];
 }
 

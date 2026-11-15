@@ -51,8 +51,9 @@ describe("texte du bloc Agir", () => {
 describe("voies affichées selon le régime de la commune", () => {
   const ids = (code: string) => voiesAgir(code).map((v) => v.id);
   const TOUTES = ["assister", "documents", "contacter", "participer", "voter", "contester"];
-  // The consultation of the voters is not asserted where its application was not verified.
-  const SANS_CONSULTATION = TOUTES.filter((id) => id !== "participer");
+  // Neither the consultation of the voters nor the registration to vote is asserted where its
+  // application was not verified: the online service is closed to the voters of New Caledonia.
+  const SANS_CONSULTATION = ["assister", "documents", "contacter", "contester"];
   const labels = (code: string, id: string) =>
     voiesAgir(code)
       .find((v) => v.id === id)!
