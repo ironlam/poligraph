@@ -18,7 +18,9 @@ import { Prisma } from "@/generated/prisma";
 import { normalizeListName } from "./resultats-t1";
 import {
   splitCsvLine,
+  municipalSeatsUpdate,
   parseWideResultRow2026,
+  withDecidedSeats,
   type CommuneResult2026,
   type ListResult2026,
 } from "./parse-wide-results-2026";
@@ -39,6 +41,8 @@ interface SyncOptions {
   dryRun?: boolean;
   dept?: string;
   round?: 1 | 2;
+  /** Write the seats of each list and nothing else: no votes, participation or snapshot. */
+  seatsOnly?: boolean;
 }
 
 interface SyncStats {
@@ -75,7 +79,7 @@ function parseCsvLines(text: string): CommuneResult2026[] {
   for (const line of dataLines) {
     const cols = splitCsvLine(line);
     if (cols.length < 18) continue;
-    results.push(parseWideResultRow2026(cols));
+    results.push(withDecidedSeats(parseWideResultRow2026(cols)));
   }
   return results;
 }
@@ -187,6 +191,7 @@ async function updateCandidacyResultsT1(
       round1Pct: new Prisma.Decimal(list.pctExpressed),
       round1Qualified,
       isElected: list.isElected,
+      ...municipalSeatsUpdate(list),
     },
   });
 
@@ -208,10 +213,50 @@ async function updateCandidacyResultsT2(
       round2Votes: list.votes,
       round2Pct: new Prisma.Decimal(list.pctExpressed),
       isElected: isWinner,
+      ...municipalSeatsUpdate(list),
     },
   });
 
   return matchingIds.length;
+}
+
+/**
+ * Seats only, for a base already holding the results: touches no other column, so a run cannot
+ * change a vote, a percentage or the elected flag.
+ */
+async function syncSeatsOnly(
+  electionId: string,
+  communes: CommuneResult2026[],
+  communeSet: Set<string>,
+  dryRun: boolean
+) {
+  const stats = { communes: 0, lists: 0, seats: 0, candidaciesUpdated: 0, listsNotMatched: 0 };
+  for (const commune of communes) {
+    if (!communeSet.has(commune.inseeCode)) continue;
+    const withSeats = commune.lists.filter((list) => list.seatsCM != null);
+    if (withSeats.length === 0) continue;
+    stats.communes++;
+    for (const list of withSeats) {
+      stats.lists++;
+      stats.seats += list.seatsCM ?? 0;
+      if (dryRun) continue;
+      const ids = await findMatchingCandidacyIds(electionId, commune.inseeCode, list);
+      if (ids.length === 0) {
+        stats.listsNotMatched++;
+        console.warn(`  [WARN] No match: "${list.listName}" in ${commune.inseeCode}`);
+        continue;
+      }
+      await db.candidacy.updateMany({
+        where: { id: { in: ids } },
+        data: municipalSeatsUpdate(list),
+      });
+      stats.candidaciesUpdated += ids.length;
+    }
+  }
+  console.log(`Communes with seats: ${stats.communes}`);
+  console.log(`Lists with seats: ${stats.lists} (${stats.seats} seats)`);
+  console.log(`Candidacies updated: ${stats.candidaciesUpdated}`);
+  console.log(`Lists not matched: ${stats.listsNotMatched}`);
 }
 
 async function updateResultsSnapshot(stats: Record<string, number>) {
@@ -233,7 +278,12 @@ async function updateResultsSnapshot(stats: Record<string, number>) {
 
 // --- Main sync function ---
 
-export async function syncResultatsCsv({ dryRun = false, dept, round = 1 }: SyncOptions = {}) {
+export async function syncResultatsCsv({
+  dryRun = false,
+  dept,
+  round = 1,
+  seatsOnly = false,
+}: SyncOptions = {}) {
   const roundLabel = round === 1 ? "T1" : "T2";
   console.log(`\n=== Sync Resultats CSV 2026 ${roundLabel} ${dryRun ? "(DRY RUN)" : ""} ===\n`);
 
@@ -270,6 +320,12 @@ export async function syncResultatsCsv({ dryRun = false, dept, round = 1 }: Sync
   if (dept) {
     allResults = allResults.filter((r) => r.deptCode === dept);
     console.log(`Filtered to ${allResults.length} communes for dept ${dept}\n`);
+  }
+
+  if (seatsOnly) {
+    await syncSeatsOnly(election.id, allResults, communeSet, dryRun);
+    await db.$disconnect();
+    return;
   }
 
   const stats: SyncStats = {
