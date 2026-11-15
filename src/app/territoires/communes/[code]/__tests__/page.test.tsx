@@ -97,6 +97,45 @@ describe("/territoires/communes/[code]", () => {
     expect(text).toContain("Composition actuelle non établie");
   });
 
+  it("détaille les adjoints par rang dans une commune indexable, et pas en dessous du seuil", async () => {
+    const base = dossier();
+    const membre = (lastName: string, functionLabel: string | null) => ({
+      lastName,
+      firstName: "A",
+      subdivisionLabel: null,
+      functionLabel,
+    });
+    const conseilMunicipal = {
+      state: "DISPONIBLE" as const,
+      recordedCount: 3,
+      membres: [
+        membre("Maire", "Maire"),
+        membre("Un", "1er adjoint au Maire"),
+        membre("Deux", "2ème adjoint au Maire"),
+      ],
+      registerDate: "2026-08-11T00:00:00.000Z",
+      source: { label: "Répertoire national des élus", url: null },
+    };
+    const titre = (document: Document) =>
+      [...document.querySelectorAll("#qui-decide h3")].find(
+        (h) => h.textContent === "Adjointes et adjoints au maire"
+      );
+
+    const grande = await render({ ...base, conseilMunicipal });
+    const rangs = [...(titre(grande.document)?.parentElement?.querySelectorAll("ol li") ?? [])];
+    expect(rangs.map((li) => li.textContent)).toEqual(["Rang 1A Un", "Rang 2A Deux"]);
+    // The register wording is masculine for everyone: it is not repeated beside a name.
+    expect(titre(grande.document)?.parentElement?.textContent).not.toContain("adjoint au Maire");
+
+    const petite = await render({
+      ...base,
+      conseilMunicipal,
+      population: { ...base.population, value: 150 },
+    });
+    expect(titre(petite.document)).toBeUndefined();
+    expect(petite.text).toContain("Voir les 3 membres");
+  });
+
   it("donne la date de dernière confirmation quand elle existe", async () => {
     const base = dossier();
     const date = "2026-10-01T00:00:00.000Z";

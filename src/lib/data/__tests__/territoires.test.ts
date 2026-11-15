@@ -648,6 +648,37 @@ describe("getDepartementTerritoire", () => {
   });
 });
 
+describe("getDepartementTerritoire, présidence d'après le registre", () => {
+  // Morbihan and Vendée, 2026-11-15: a "Président de commission" sorted before the president
+  // and the page named the wrong person as president of the departmental council.
+  it("ne prend pas un président de commission pour le président du conseil", async () => {
+    mocks.mandateCount.mockResolvedValue(0);
+    mocks.mandateGroupBy.mockResolvedValue([]);
+    mocks.mandateFindMany.mockResolvedValue([]);
+    mocks.queryRaw
+      .mockResolvedValueOnce([{ letter: "A", count: 1 }])
+      .mockResolvedValueOnce([{ id: "56001", name: "Allaire", population: 4000 }]);
+    const row = (lastName: string, functionLabel: string) => ({
+      lastName,
+      firstName: "A",
+      subdivisionLabel: "Vannes-1",
+      functionLabel,
+      registerDate: new Date("2026-08-11T12:00:00Z"),
+    });
+    mocks.conseilFindMany.mockResolvedValue([
+      row("Abel", "Président de commission du conseil départemental"),
+      row("Zola", "Président du conseil départemental"),
+    ]);
+
+    const result = await getDepartementTerritoire("56");
+
+    expect(result?.presidence.registre).toEqual({
+      fullName: "A Zola",
+      title: "Président du conseil départemental",
+    });
+  });
+});
+
 describe("getRegionTerritoire, conseil régional", () => {
   it("range la présidence puis les vice-présidences par rang, puis l'ordre alphabétique", async () => {
     mocks.communeGroupBy.mockResolvedValue([]);
