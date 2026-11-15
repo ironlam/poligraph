@@ -28,6 +28,15 @@ function runWithTimeout<T>(name: string, fn: () => Promise<T>, ms: number): Prom
   });
 }
 
+// Steps the GitHub Actions daily sync (scripts/sync-daily.ts) already runs on the same schedule
+// are deliberately absent: legislation and its content, dossier and scrutin summaries, affair
+// reconciliation, fact-checks, theme classification, fact-check and press embeddings,
+// prominence, publication status and IndexNow. Running them here as well paid twice for the same
+// work, model calls included, inside a lambda that also serves page requests. What they write
+// reaches the pages through the purge at the end of that script, not through this function.
+// The two vote syncs stay: this function purges "votes" itself, and the steps below read the
+// scrutins they import. The press RSS import stays too, see its step.
+// src/inngest/functions/__tests__/sync-daily.test.ts fails if one of the others comes back.
 const DAILY_STEPS: DailyStep[] = [
   {
     name: "scrutins-an",
@@ -58,29 +67,6 @@ const DAILY_STEPS: DailyStep[] = [
       return runVoteSyncWithCacheInvalidation(() =>
         syncScrutinsSenat(currentSenateSession(), false, false)
       );
-    },
-  },
-  {
-    name: "legislation",
-    run: async () => {
-      const { syncLegislation } = await import("@/services/sync/legislation");
-      return syncLegislation({ activeOnly: true });
-    },
-  },
-  {
-    name: "legislation-content",
-    run: async () => {
-      const { syncLegislationContent } = await import("@/services/sync/legislation-content");
-      return syncLegislationContent({ limit: 20 });
-    },
-  },
-  {
-    name: "summaries-dossiers",
-    run: async () => {
-      if (!process.env.MISTRAL_API_KEY) return { skipped: "no MISTRAL_API_KEY" };
-      const { generateDossierSummaries } =
-        await import("@/services/sync/generate-dossier-summaries");
-      return generateDossierSummaries({ limit: 10 });
     },
   },
   {
@@ -256,6 +242,8 @@ const DAILY_STEPS: DailyStep[] = [
     },
   },
   {
+    // Kept here although the workflow imports the press too: this function starts on time, while
+    // the workflow has been starting 4 to 7 hours late, and the morning import feeds the affair watch.
     name: "press-rss",
     run: async () => {
       const { syncPress } = await import("@/services/sync/press");
@@ -274,27 +262,6 @@ const DAILY_STEPS: DailyStep[] = [
   // name produced 0 affairs over 156 decisions, because it is pseudonymised. The
   // replacement starts from a known reference and writes onto a CourtDecision, never
   // onto an Affair, and it is triggered by hand rather than scheduled.
-  {
-    name: "reconcile-affairs",
-    run: async () => {
-      const { reconcileAffairs } = await import("@/services/sync/reconcile-affairs");
-      return reconcileAffairs({ autoMerge: true });
-    },
-  },
-  {
-    name: "factchecks",
-    run: async () => {
-      const { syncFactchecks } = await import("@/services/sync/factchecks");
-      return syncFactchecks({ limit: 50 });
-    },
-  },
-  {
-    name: "classify-themes",
-    run: async () => {
-      const { classifyThemes } = await import("@/services/sync/classify-themes");
-      return classifyThemes({ limit: 30 });
-    },
-  },
   {
     name: "compute-importance-scores",
     run: async () => {
@@ -321,15 +288,6 @@ const DAILY_STEPS: DailyStep[] = [
       // those analyses only reach the scrutin page, so the purge stays on that narrow tag.
       if (result.refreshed) revalidateTags(["scrutin-analysis"], "max");
       return result;
-    },
-  },
-  {
-    name: "generate-scrutin-summaries",
-    run: async () => {
-      if (!process.env.MISTRAL_API_KEY) return { skipped: "no MISTRAL_API_KEY" };
-      const { generateScrutinSummaries } =
-        await import("@/services/sync/generate-scrutin-summaries");
-      return generateScrutinSummaries({ limit: 30 });
     },
   },
   {
@@ -360,24 +318,10 @@ const DAILY_STEPS: DailyStep[] = [
     },
   },
   {
-    name: "embeddings-factchecks",
-    run: async () => {
-      const { indexAllOfType } = await import("@/services/embeddings");
-      return indexAllOfType("FACTCHECK", { deltaOnly: true });
-    },
-  },
-  {
     name: "embeddings-affairs",
     run: async () => {
       const { indexAllOfType } = await import("@/services/embeddings");
       return indexAllOfType("AFFAIR", { deltaOnly: true });
-    },
-  },
-  {
-    name: "embeddings-press",
-    run: async () => {
-      const { indexAllOfType } = await import("@/services/embeddings");
-      return indexAllOfType("PRESS_ARTICLE", { deltaOnly: true });
     },
   },
   {
@@ -386,20 +330,6 @@ const DAILY_STEPS: DailyStep[] = [
       if (!process.env.OPENSANCTIONS_API_KEY) return { skipped: "no API key" };
       const { syncOpenSanctionsIncremental } = await import("@/services/sync/opensanctions");
       return syncOpenSanctionsIncremental({ limit: 100 });
-    },
-  },
-  {
-    name: "prominence",
-    run: async () => {
-      const { recalculateProminence } = await import("@/services/sync/prominence");
-      return recalculateProminence();
-    },
-  },
-  {
-    name: "publication-status",
-    run: async () => {
-      const { assignPublicationStatus } = await import("@/services/sync/publication-status");
-      return assignPublicationStatus();
     },
   },
   // computeStats() is deliberately absent. The GitHub Actions daily sync runs it on the same
@@ -414,13 +344,6 @@ const DAILY_STEPS: DailyStep[] = [
       const { computeMunicipalesSnapshots } =
         await import("@/services/sync/compute-municipales-snapshots");
       return computeMunicipalesSnapshots();
-    },
-  },
-  {
-    name: "indexnow",
-    run: async () => {
-      const { submitRecentToIndexNow } = await import("@/lib/indexnow");
-      return submitRecentToIndexNow();
     },
   },
 ];
@@ -456,8 +379,8 @@ export const syncDaily = inngest.createFunction(
       results.push({ name: s.name, ...result });
     }
 
-    // The steps above write profile data (affairs, fact-checks, publication status, votes)
-    // without targeting a politician: one reconcile pass catches up every profile.
+    // The steps above write profile data (votes) without targeting a politician: one reconcile
+    // pass catches up every profile.
     await step.sendEvent("profile-reconcile", {
       name: PROFILE_RECONCILE_EVENT,
       data: { reason: "sync-daily" },
