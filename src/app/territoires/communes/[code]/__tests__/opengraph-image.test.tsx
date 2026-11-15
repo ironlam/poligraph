@@ -74,8 +74,10 @@ describe("Open Graph d'une commune Territoires", () => {
 
     expect(text).toContain("Commune · Ille-et-Vilaine (35)");
     expect(text).toContain("Rennes");
-    expect(text).toContain("Maire : Camille Exemple, depuis mars 2026");
-    expect(text).toMatch(/Population : 230\s890 habitants/);
+    // The same sentence as the page banner, and the code written as the large figure.
+    expect(text).toContain("Camille Exemple est maire depuis le 22 mars 2026.");
+    expect(text).toMatch(/230\s890 habitants/);
+    expect(text).toContain("35238");
     const shapes = imgSources(element);
     expect(shapes).toHaveLength(1);
     expect(shapes[0]).toMatch(/^data:image\/svg\+xml;base64,/);
@@ -84,7 +86,7 @@ describe("Open Graph d'une commune Territoires", () => {
 
   it("ne nomme personne quand le maire n'est pas établi", async () => {
     const text = textContent(await render(withMaire("NON_ETABLI")));
-    expect(text).toContain("Maire : titulaire non établi");
+    expect(text).toContain("Titulaire non établi : les données enregistrées");
     expect(text).not.toContain("Camille");
   });
 
@@ -120,17 +122,26 @@ describe("Open Graph d'une commune Territoires", () => {
           name: "Terres australes et antarctiques françaises",
           slug: null,
         },
+        territoireHorsRegion: {
+          code: "984",
+          name: "Terres australes et antarctiques françaises",
+          statut: "Territoire d'outre-mer",
+        },
         coordinates: { lat: -37.8, lon: 77.5 },
       },
     });
     expect(imgSources(element)).toEqual([]);
+    // A district is not presented as a commune, on the image as on the page.
+    expect(textContent(element)).toContain("District · Terres australes");
+    expect(textContent(element)).not.toContain("Commune ·");
   });
 
   it("rend une COM sans maire, avec son statut", async () => {
     const element = await render(papeete());
     const text = textContent(element);
     expect(text).toContain("Collectivité d'outre-mer hors région");
-    expect(text).not.toContain("Maire");
+    expect(text).toContain("Aucun maire en fonction n'est enregistré.");
+    expect(text).not.toMatch(/est maire/);
   });
 
   it("répond 404 pour une commune inconnue", async () => {
