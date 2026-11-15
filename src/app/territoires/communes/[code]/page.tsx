@@ -78,7 +78,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
   // One word each, five at most: the tabs share one line on a phone. Sub-pages are linked from
   // their own section.
   const onglets = [
-    { href: "#qui-decide", label: "Élus" },
+    { href: "#vos-elus", label: "Élus" },
     { href: "#parlement", label: "Parlement" },
     ...(hasChiffres(chiffres) ? [{ href: "#chiffres", label: "Chiffres" }] : []),
     { href: "#elections", label: "Élections" },

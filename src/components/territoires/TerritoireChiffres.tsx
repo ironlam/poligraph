@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { SectionCard } from "@/components/territoires/CommuneSections";
 import { LigneSource, type LigneSourceItem } from "@/components/territoires/LigneSource";
 import {
@@ -288,14 +289,30 @@ export function TerritoireChiffres({ chiffres }: { chiffres: CommuneChiffres }) 
         les sources sont détaillées dans « Sources de cette page ».
       </p>
       <div className="space-y-5">
-        {themes.map(({ theme, cards }) => (
-          <section key={theme} aria-labelledby={`chiffres-${theme}`}>
-            <h3 id={`chiffres-${theme}`} className="mb-2 font-display text-lg font-bold">
-              {REPERE_THEME_LABELS[theme]}
-            </h3>
-            <div className="grid gap-3 md:grid-cols-2">{cards}</div>
-          </section>
-        ))}
+        {themes.map(({ theme, cards }) =>
+          theme === "DEMOGRAPHIE" ? (
+            <section key={theme} aria-labelledby={`chiffres-${theme}`}>
+              <h3 id={`chiffres-${theme}`} className="mb-2 font-display text-lg font-bold">
+                {REPERE_THEME_LABELS[theme]}
+              </h3>
+              <div className="grid gap-3 md:grid-cols-2">{cards}</div>
+            </section>
+          ) : (
+            // Demography answers first; the other themes are long and stay one tap away.
+            <details key={theme} className="group rounded-xl border">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+                <h3 id={`chiffres-${theme}`} className="font-display text-lg font-bold">
+                  {REPERE_THEME_LABELS[theme]}
+                </h3>
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                  aria-hidden="true"
+                />
+              </summary>
+              <div className="grid gap-3 border-t p-3 md:grid-cols-2">{cards}</div>
+            </details>
+          )
+        )}
       </div>
       <LigneSource className="mt-4" sources={sources} />
     </SectionCard>

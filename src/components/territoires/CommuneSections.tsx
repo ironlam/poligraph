@@ -104,7 +104,7 @@ function Collapsible({ summary, children }: { summary: string; children: React.R
   );
 }
 
-// ─── Élus et institutions ─────────────────────────────────────────────
+// ─── Vos élus ────────────────────────────────────────────────────
 
 function MaireBlock({
   maire,
@@ -177,8 +177,8 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
   const composition = municipales ? compositionConseil(municipales.listes) : null;
   return (
     <SectionCard
-      id="qui-decide"
-      title="Élus et institutions"
+      id="vos-elus"
+      title="Vos élus"
       action={
         // No link to the sub-page while it has nothing to show.
         dossier.decisionsPubliees > 0 && (
@@ -192,6 +192,8 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
         )
       }
     >
+      {/* Former id of the section: links already shared keep landing on its title. */}
+      <span id="qui-decide" className="block scroll-mt-52" />
       <MaireBlock maire={maire} communeName={identity.name} />
 
       {mairesSecteur.length > 0 && (

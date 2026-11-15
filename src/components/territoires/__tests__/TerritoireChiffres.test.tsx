@@ -155,6 +155,18 @@ describe("Le territoire en chiffres", () => {
     ]);
   });
 
+  it("garde la démographie visible et replie l'environnement", () => {
+    const climat = row("climat_temp_moyenne", 11.8, { unit: "°C", scopeKind: "STATION" });
+    const { doc } = render(base({ reperes: [row("age_tranche_0_14", 17), climat] }));
+    const volets = [...doc.querySelectorAll("details")];
+    expect(volets).toHaveLength(1);
+    expect(volets[0]!.hasAttribute("open")).toBe(false);
+    expect(volets[0]!.querySelector("summary")?.textContent).toBe("Environnement");
+    expect(volets[0]!.textContent).toContain("11,8 °C");
+    expect(doc.getElementById("chiffres-DEMOGRAPHIE")?.closest("details")).toBeNull();
+    expect(doc.querySelector("table")?.closest("details")).toBeNull();
+  });
+
   it("affiche la période propre à la station, pas 1991-2020 par défaut", () => {
     const climat = row("climat_temp_moyenne", 9.1, {
       unit: "°C",
