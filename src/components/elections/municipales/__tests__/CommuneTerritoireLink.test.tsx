@@ -8,7 +8,7 @@ describe("CommuneTerritoireLink", () => {
     expect(screen.getByRole("heading", { name: "Le dossier de la commune" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Voir Ajaccio dans Territoires" })).toHaveAttribute(
       "href",
-      "/territoires/communes/2A004"
+      "/territoires/communes/ajaccio-2A004"
     );
   });
 

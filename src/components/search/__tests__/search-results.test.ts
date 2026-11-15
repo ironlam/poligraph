@@ -70,7 +70,7 @@ describe("groupe Territoires de la recherche", () => {
     const categories = categorizeResults({ ...EMPTY, communes: [commune("86194", "Poitiers")] });
     expect(categories.map((c) => c.label)).toEqual(["Territoires"]);
     expect(categories[0]?.results[0]).toMatchObject({
-      href: "/territoires/communes/86194",
+      href: "/territoires/communes/poitiers-86194",
       primary: "Poitiers",
       secondary: "Commune, Vienne",
     });

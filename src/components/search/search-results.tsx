@@ -215,7 +215,7 @@ export function categorizeResults(data: GlobalSearchResponse, query = ""): Searc
           secondary: `Département (${d.code})`,
         })),
         ...data.communes.map((c) => ({
-          href: territoireCommunePath(c.id),
+          href: territoireCommunePath(c.id, c.name),
           primary: c.name,
           secondary: `Commune, ${c.departmentName}`,
         })),

@@ -60,14 +60,16 @@ describe("/territoires/communes/[code]", () => {
 
   it("ne lie aucune page de décisions tant qu'aucune n'est publiée", async () => {
     const { document, text } = await render(dossier());
-    expect(document.querySelector('a[href="/territoires/communes/35238/decisions"]')).toBeNull();
+    expect(
+      document.querySelector('a[href="/territoires/communes/rennes-35238/decisions"]')
+    ).toBeNull();
     expect(text).not.toContain("Décisions");
   });
 
   it("lie la page des décisions dès qu'une décision est publiée", async () => {
     const { document } = await render({ ...dossier(), decisionsPubliees: 2 });
     expect(
-      document.querySelector('a[href="/territoires/communes/35238/decisions"]')?.textContent
+      document.querySelector('a[href="/territoires/communes/rennes-35238/decisions"]')?.textContent
     ).toBe("Décisions");
   });
 
@@ -369,7 +371,7 @@ describe("/territoires/communes/[code]", () => {
     }
     // The sub-page left the tabs: it stays one click away, from its own section.
     expect(
-      document.querySelector('#elections a[href="/territoires/communes/35238/elections"]')
+      document.querySelector('#elections a[href="/territoires/communes/rennes-35238/elections"]')
     ).not.toBeNull();
     expect(document.getElementById("vos-elus-titre")?.textContent).toBe("Vos élus");
     // The former anchor still lands inside the section.

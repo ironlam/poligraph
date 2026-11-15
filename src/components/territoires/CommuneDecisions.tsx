@@ -72,7 +72,7 @@ export function CommuneDecisionsBandeau({ inseeCode, name }: { inseeCode: string
             <li aria-hidden="true">›</li>
             <li>
               <Link
-                href={territoireCommunePath(inseeCode)}
+                href={territoireCommunePath(inseeCode, name)}
                 prefetch={false}
                 className="inline-flex min-h-11 items-center underline underline-offset-2 md:min-h-0"
               >

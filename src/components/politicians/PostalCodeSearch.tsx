@@ -451,7 +451,7 @@ export function PostalCodeSearch() {
             )}
             {result.inseeCode && (
               <Link
-                href={territoireCommunePath(result.inseeCode)}
+                href={territoireCommunePath(result.inseeCode, result.commune)}
                 prefetch={false}
                 className="mt-1 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >

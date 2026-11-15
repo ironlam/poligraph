@@ -166,7 +166,7 @@ export function communeRow(
     maire_confirme_le: isoDay(holder?.lastConfirmedAt),
     circonscription_enregistree: circo,
     circonscription_couverture: plm ? "PLUSIEURS" : circo != null ? "NON_VERIFIEE" : "",
-    url_page: `${SITE_URL}${territoireCommunePath(commune.id)}`,
+    url_page: `${SITE_URL}${territoireCommunePath(commune.id, commune.name)}`,
     communes_importees_le: isoDay(importedAt),
   };
 }

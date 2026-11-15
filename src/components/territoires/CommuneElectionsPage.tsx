@@ -49,7 +49,7 @@ export function CommuneElectionsBandeau({ inseeCode, name }: { inseeCode: string
             <li aria-hidden="true">›</li>
             <li>
               <Link
-                href={territoireCommunePath(inseeCode)}
+                href={territoireCommunePath(inseeCode, name)}
                 prefetch={false}
                 className="inline-flex min-h-11 items-center underline underline-offset-2 md:min-h-0"
               >
@@ -84,14 +84,16 @@ function years(scrutins: CommuneScrutin[]): string {
 
 function Filters({
   inseeCode,
+  name,
   scrutins,
   active,
 }: {
   inseeCode: string;
+  name: string;
   scrutins: CommuneScrutin[];
   active: ScrutinType | null;
 }) {
-  const base = territoireCommuneElectionsPath(inseeCode);
+  const base = territoireCommuneElectionsPath(inseeCode, name);
   const types = (Object.keys(SCRUTIN_TYPE_LABELS) as ScrutinType[]).filter((t) =>
     scrutins.some((s) => s.type === t)
   );
@@ -212,7 +214,12 @@ export function CommuneElectionsSections({
         data.gouv.fr, avec la source de chaque scrutin indiquée dans son détail, sans étiquette ni
         lecture politique.
       </p>
-      <Filters inseeCode={commune.inseeCode} scrutins={scrutins} active={active} />
+      <Filters
+        inseeCode={commune.inseeCode}
+        name={commune.name}
+        scrutins={scrutins}
+        active={active}
+      />
 
       <div className="mt-6 space-y-8">
         {types.map((type) => {
