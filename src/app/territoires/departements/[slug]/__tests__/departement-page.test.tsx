@@ -179,7 +179,15 @@ describe("page département : département ordinaire", () => {
       ["Conseil", "#conseil"],
       ["Communes", "#communes"],
       ["Parlement", "#parlement"],
+      ["Agir", "#agir"],
     ]);
+    const agir = doc.querySelector("#agir")!;
+    expect(agir.textContent).toContain("Les séances du conseil départemental sont publiques.");
+    // Eure is in the jurisdiction of Rouen (code de justice administrative, art. R. 221-3).
+    expect(agir.textContent).toContain(
+      "Pour une décision du département, le tribunal administratif compétent est en principe celui qui siège à Rouen."
+    );
+    expect(agir.textContent).not.toMatch(/mairie|conseil municipal/);
     const conseil = doc.querySelector("#conseil")!;
     const communes = doc.querySelector("#communes")!;
     expect(
@@ -365,6 +373,9 @@ describe("page département : collectivités à statut particulier", () => {
     expect(doc.querySelector('nav[aria-label="Sections de la page"] a')?.getAttribute("href")).toBe(
       "#collectivite-competente"
     );
+    // No conseil départemental: the block that speaks of it is not shown, nor its tab.
+    expect(doc.querySelector("#agir")).toBeNull();
+    expect(doc.querySelector('nav[aria-label="Sections de la page"] a[href="#agir"]')).toBeNull();
   });
 
   it("Rhône : note sur la Métropole de Lyon, conseil départemental conservé", async () => {

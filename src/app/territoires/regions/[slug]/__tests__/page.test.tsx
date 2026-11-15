@@ -130,7 +130,12 @@ describe("page région", () => {
       ["Départements", "#departements"],
       ["Élections", "#elections"],
       ["Parlement", "#parlement"],
+      ["Agir", "#agir"],
     ]);
+    const agir = container.querySelector("#agir")!;
+    expect(agir.textContent).toContain("Les séances du conseil régional sont publiques.");
+    // The seat of a regional council is not recorded: no court is named for a region.
+    expect(agir.textContent).not.toContain("celui qui siège à");
     for (const a of onglets) {
       expect(container.querySelector(a.getAttribute("href")!), a.textContent ?? "").not.toBeNull();
     }
@@ -256,6 +261,8 @@ describe("page région", () => {
       "#collectivite"
     );
     expect(container.querySelector("#collectivite")).not.toBeNull();
+    // A single collectivité replaces the region: the block on the conseil régional is not shown.
+    expect(container.querySelector("#agir")).toBeNull();
   });
 });
 

@@ -166,6 +166,8 @@ describe("/territoires/communes/[code]", () => {
       "Assister au conseil municipal",
       "Obtenir un document",
       "Contacter la mairie",
+      "Demander une consultation",
+      "S'inscrire pour voter",
       "Contester une décision",
     ]);
     // The one fact proper to the territory: Ille-et-Vilaine is in the jurisdiction of Rennes.
@@ -175,7 +177,7 @@ describe("/territoires/communes/[code]", () => {
     expect(agir.textContent).toContain("ne remplace pas un conseil juridique");
     expect(agir.textContent).toContain("Vérifié le 15 novembre 2026.");
     // Hosts and wording of the links are checked on the configuration itself.
-    expect(agir.querySelectorAll('a[target="_blank"][rel="noopener noreferrer"]')).toHaveLength(9);
+    expect(agir.querySelectorAll('a[target="_blank"][rel="noopener noreferrer"]')).toHaveLength(13);
   });
 
   it("donne le tribunal d'une collectivité d'outre-mer selon son propre ressort", async () => {
@@ -183,7 +185,11 @@ describe("/territoires/communes/[code]", () => {
     const agir = document.querySelector("#agir")!;
     expect(agir.textContent).toContain("celui qui siège à Papeete.");
     // The CGCT applies to the communes of Polynésie française (article L. 2573-5).
-    expect(agir.querySelectorAll("h3")).toHaveLength(4);
+    // Five ways: the consultation of the voters is not asserted for an overseas collectivité.
+    expect([...agir.querySelectorAll("h3")].map((h) => h.textContent)).not.toContain(
+      "Demander une consultation"
+    );
+    expect(agir.querySelectorAll("h3")).toHaveLength(5);
     expect(agir.textContent).toContain(
       "Code général des collectivités territoriales, article L. 2121-18"
     );
