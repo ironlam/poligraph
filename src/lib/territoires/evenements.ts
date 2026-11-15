@@ -59,3 +59,27 @@ export function isEvenementSourceUrl(url: string): boolean {
     return false;
   }
 }
+
+const CONSEIL_LABEL = { DEPARTEMENTAL: "conseil départemental", REGIONAL: "conseil régional" };
+
+/**
+ * The sentence of an event, from its fields alone. Fixed templates, the same for every
+ * territory and every person: no adjective, no party, and a wording that depends neither on
+ * the gender of the person named nor on the first letter of a name (no elision to get wrong).
+ */
+export function phraseEvenement(evenement: TerritoireEvenementPayload): string {
+  switch (evenement.type) {
+    case "CHANGEMENT_MAIRE":
+      return evenement.predecesseur
+        ? `${evenement.nom} succède à ${evenement.predecesseur} comme maire.`
+        : `${evenement.nom} devient maire.`;
+    case "CHANGEMENT_PRESIDENT": {
+      const conseil = CONSEIL_LABEL[evenement.conseil];
+      return evenement.predecesseur
+        ? `${evenement.nom} succède à ${evenement.predecesseur} à la présidence du ${conseil}.`
+        : `${evenement.nom} prend la présidence du ${conseil}.`;
+    }
+    case "RESULTAT_ELECTION":
+      return `${evenement.electionLabel} : résultats du ${evenement.tour === 1 ? "1er" : "2d"} tour.`;
+  }
+}
