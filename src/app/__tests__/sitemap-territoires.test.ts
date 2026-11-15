@@ -34,28 +34,30 @@ beforeEach(() => {
 describe("sitemap : rubrique Territoires", () => {
   it("annonce l'entrée, la page des données, les 18 régions et les communes retenues", async () => {
     h.queryRaw.mockResolvedValueOnce([
-      { id: "75056", lastmod: new Date("2026-10-01T00:00:00Z") },
-      { id: "2A004", lastmod: new Date("2026-09-01T00:00:00Z") },
+      { id: "75056", name: "Paris", lastmod: new Date("2026-10-01T00:00:00Z") },
+      { id: "2A004", name: "Ajaccio", lastmod: new Date("2026-09-01T00:00:00Z") },
     ]);
     const urls = (await shard5()).map((e) => path(e.url));
 
     expect(urls[0]).toBe("/territoires");
     expect(REGIONS).toHaveLength(18);
     for (const region of REGIONS) expect(urls).toContain(`/territoires/regions/${region.slug}`);
-    expect(urls).toContain("/territoires/communes/75056");
-    expect(urls).toContain("/territoires/communes/2A004");
+    expect(urls).toContain("/territoires/communes/paris-75056");
+    expect(urls).toContain("/territoires/communes/ajaccio-2A004");
     expect(urls).toContain("/territoires/donnees");
     expect(urls).toHaveLength(2 + 4 + 18 + 2);
   });
 
   it("date chaque commune du dernier changement du mandat de son maire", async () => {
     h.queryRaw.mockResolvedValueOnce([
-      { id: "75056", lastmod: new Date("2026-10-01T00:00:00Z") },
-      { id: "13055", lastmod: new Date("2026-08-01T00:00:00Z") },
+      { id: "75056", name: "Paris", lastmod: new Date("2026-10-01T00:00:00Z") },
+      { id: "13055", name: "Marseille", lastmod: new Date("2026-08-01T00:00:00Z") },
     ]);
     const entries = await shard5();
     const lastmod = (suffix: string) => entries.find((e) => e.url.endsWith(suffix))?.lastModified;
-    expect(lastmod("/territoires/communes/13055")).toEqual(new Date("2026-08-01T00:00:00Z"));
+    expect(lastmod("/territoires/communes/marseille-13055")).toEqual(
+      new Date("2026-08-01T00:00:00Z")
+    );
     expect(lastmod("/territoires")).toEqual(new Date("2026-10-01T00:00:00Z"));
   });
 
@@ -63,18 +65,24 @@ describe("sitemap : rubrique Territoires", () => {
     h.queryRaw.mockResolvedValueOnce([
       {
         id: "35238",
+        name: "Rennes",
         lastmod: new Date("2026-10-01T00:00:00Z"),
         electionsLastmod: new Date("2026-10-12T00:00:00Z"),
       },
-      { id: "13055", lastmod: new Date("2026-08-01T00:00:00Z"), electionsLastmod: null },
+      {
+        id: "13055",
+        name: "Marseille",
+        lastmod: new Date("2026-08-01T00:00:00Z"),
+        electionsLastmod: null,
+      },
     ]);
     const entries = await shard5();
     const find = (suffix: string) => entries.find((e) => e.url.endsWith(suffix));
-    expect(find("/territoires/communes/35238/elections")?.lastModified).toEqual(
+    expect(find("/territoires/communes/rennes-35238/elections")?.lastModified).toEqual(
       new Date("2026-10-12T00:00:00Z")
     );
-    expect(find("/territoires/communes/13055/elections")).toBeUndefined();
-    expect(find("/territoires/communes/13055")).toBeDefined();
+    expect(find("/territoires/communes/marseille-13055/elections")).toBeUndefined();
+    expect(find("/territoires/communes/marseille-13055")).toBeDefined();
   });
 
   it("garde l'entrée, la page des données et les régions sans aucune commune indexable", async () => {

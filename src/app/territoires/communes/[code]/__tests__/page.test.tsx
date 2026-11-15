@@ -577,7 +577,7 @@ describe("/territoires/communes/[code]", () => {
 
     expect(area).toMatchObject({
       name: "Rennes",
-      url: "https://poligraph.fr/territoires/communes/35238",
+      url: "https://poligraph.fr/territoires/communes/rennes-35238",
       identifier: { "@type": "PropertyValue", propertyID: "Code INSEE", value: "35238" },
       containedInPlace: { name: "Ille-et-Vilaine" },
     });
@@ -591,7 +591,7 @@ describe("metadata /territoires/communes/[code]", () => {
 
     expect(m.title).toBe("Rennes (35) : maire, élus et résultats");
     expect(m.description).toContain("Maire : Camille Exemple.");
-    expect(m.alternates?.canonical).toBe("/territoires/communes/35238");
+    expect(m.alternates?.canonical).toBe("/territoires/communes/rennes-35238");
     expect(m.robots).toBeUndefined();
   });
 

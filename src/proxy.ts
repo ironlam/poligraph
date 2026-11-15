@@ -15,7 +15,7 @@ import { buildVotesListingRedirect } from "@/lib/parlement-votes-redirect";
 import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/auth-token";
 import { getLegacyMeasureId } from "@/lib/presidentielle/measure-route";
 import { departementCommunesRewritePath } from "@/lib/territoires/departement-communes";
-import { TERRITOIRES_SEARCH_PATH } from "@/lib/territoires/paths";
+import { legacyCommunePath, TERRITOIRES_SEARCH_PATH } from "@/lib/territoires/paths";
 
 // ─── Rate limit tiers ────────────────────────────────────────────
 
@@ -447,6 +447,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     if (!hasValidAdminSession(request)) {
       return NextResponse.redirect(new URL("/admin/login", request.url));
     }
+  }
+
+  // Commune addresses written with the bare INSEE code: a real 308 to the readable address,
+  // answered by a Route Handler (a page cannot). No query here, the handler does the lookup.
+  const legacyCommune = legacyCommunePath(pathname);
+  if (legacyCommune) {
+    const target = new URL("/api/territoires/commune-redirect", request.url);
+    target.searchParams.set("code", legacyCommune.code);
+    target.searchParams.set("suite", legacyCommune.suite);
+    return NextResponse.rewrite(target);
   }
 
   // Per-IP rate limiting for /api routes.

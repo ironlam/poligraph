@@ -9,7 +9,7 @@ import {
 import { getCommuneElections } from "@/lib/data/territoire-elections";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
-import { territoireCommuneElectionsPath } from "@/lib/territoires/paths";
+import { communeCodeFromSegment, territoireCommuneElectionsPath } from "@/lib/territoires/paths";
 
 // ISR: 24 h backstop; results import refreshes `territoire:<code>` and `elections`.
 // No generateStaticParams: the `type` filter reads searchParams (see AGENTS.md, ISR gotchas).
@@ -20,7 +20,11 @@ interface PageProps {
   searchParams: Promise<{ type?: string }>;
 }
 
-const loadElections = cache((code: string) => getCommuneElections(code));
+/** The segment is `brest-29019` or the bare code: only the code finds the commune. */
+const loadElections = cache((segment: string) => {
+  const code = communeCodeFromSegment(segment);
+  return code ? getCommuneElections(code) : null;
+});
 
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const [{ code }, { type }] = await Promise.all([params, searchParams]);
@@ -38,7 +42,9 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
     // subset of the same content: it never competes with the unfiltered page.
     robots: verdict.robots ?? (type ? { index: false, follow: true } : undefined),
     openGraph: { title, description },
-    alternates: { canonical: territoireCommuneElectionsPath(data.commune.inseeCode) },
+    alternates: {
+      canonical: territoireCommuneElectionsPath(data.commune.inseeCode, data.commune.name),
+    },
   };
 }
 
