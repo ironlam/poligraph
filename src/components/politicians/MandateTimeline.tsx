@@ -7,7 +7,11 @@ import type { SerializedMandate, MandateType } from "@/types";
 import type { ProfileMandateGovernment } from "@/lib/data/politician-profile-reads";
 import { mandateGovernmentLink } from "@/components/governments/profile-link";
 import { formatDay } from "@/components/governments/format";
-import { mandateDecisionsHref, mandateTerritoireHref } from "@/lib/territoires/mandate-link";
+import {
+  mandateCommuneLink,
+  mandateDecisionsHref,
+  mandateDepartementHref,
+} from "@/lib/territoires/mandate-link";
 
 const MAIRE_TYPES: MandateType[] = ["MAIRE", "ADJOINT_MAIRE", "CONSEILLER_MUNICIPAL"];
 
@@ -41,6 +45,32 @@ interface MandateTimelineProps {
   civility?: string | null;
   /** « gouvernements » feature flag, resolved by the server page. */
   governmentsEnabled?: boolean;
+}
+
+const TERRITOIRE_LINK =
+  "inline-flex min-h-11 items-center text-xs text-primary underline-offset-2 hover:underline";
+
+/**
+ * Links from a mandate to the Territoires pages: the commune of a local mandate (flagged
+ * « historique » once the mandate ended), the department of a sitting deputy or senator.
+ */
+function TerritoireLinks({ mandate }: { mandate: MandateWithGroup }) {
+  const commune = mandateCommuneLink(mandate);
+  const departement = mandateDepartementHref(mandate);
+  return (
+    <>
+      {commune && (
+        <Link href={commune.href} className={TERRITOIRE_LINK} prefetch={false}>
+          {commune.historique ? "Dossier de la commune (historique) →" : "Dossier de la commune →"}
+        </Link>
+      )}
+      {departement && (
+        <Link href={departement} className={TERRITOIRE_LINK} prefetch={false}>
+          Page du département →
+        </Link>
+      )}
+    </>
+  );
 }
 
 /** Collective decisions of the council during a municipal mandate, once one is published. */
@@ -277,18 +307,7 @@ export function MandateTimeline({
                           </Link>
                         ) : null;
                       })()}
-                      {(() => {
-                        const href = mandateTerritoireHref(mandate);
-                        return href ? (
-                          <Link
-                            href={href}
-                            className="text-xs text-primary hover:underline inline-block"
-                            prefetch={false}
-                          >
-                            Dossier de la commune →
-                          </Link>
-                        ) : null;
-                      })()}
+                      <TerritoireLinks mandate={mandate} />
                     </div>
                     <GovernmentLinks mandate={mandate} enabled={governmentsEnabled} />
                     <DecisionsLink mandate={mandate} />
@@ -366,6 +385,7 @@ export function MandateTimeline({
                                     </span>
                                   </div>
                                   <GovernmentLinks mandate={mandate} enabled={governmentsEnabled} />
+                                  <TerritoireLinks mandate={mandate} />
                                   <DecisionsLink mandate={mandate} />
                                 </div>
                               );

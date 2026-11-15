@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mandateDecisionsHref, mandateTerritoireHref } from "../mandate-link";
+import { mandateCommuneLink, mandateDecisionsHref, mandateDepartementHref } from "../mandate-link";
+
+const mandateTerritoireHref = (m: Parameters<typeof mandateCommuneLink>[0]) =>
+  mandateCommuneLink(m)?.href ?? null;
 
 const LINKED = { commune: { population: 46_000 } };
 
@@ -20,14 +23,13 @@ describe("mandateTerritoireHref", () => {
     ).toBe("/territoires/communes/2A004");
   });
 
-  it("ne relie pas un mandat terminé", () => {
-    expect(
-      mandateTerritoireHref({
-        isCurrent: false,
-        constituency: "Carcassonne (11069)",
-        localData: LINKED,
-      })
-    ).toBeNull();
+  it("relie un mandat terminé en le marquant historique", () => {
+    const past = { isCurrent: false, constituency: "Carcassonne (11069)", localData: LINKED };
+    expect(mandateCommuneLink(past)).toEqual({
+      href: "/territoires/communes/11069",
+      historique: true,
+    });
+    expect(mandateCommuneLink({ ...past, isCurrent: true })?.historique).toBe(false);
   });
 
   it("ne relie pas un mandat sans commune en base", () => {
@@ -77,5 +79,27 @@ describe("mandateDecisionsHref", () => {
     expect(
       mandateDecisionsHref({ type: "MAIRE_ARRONDISSEMENT", localData: withDecisions })
     ).toBeNull();
+  });
+});
+
+describe("mandateDepartementHref", () => {
+  const depute = { type: "DEPUTE", isCurrent: true, departmentCode: "29" };
+
+  it("relie le mandat en cours d'un député ou d'un sénateur à son département", () => {
+    expect(mandateDepartementHref(depute)).toBe("/territoires/departements/finistere");
+    expect(mandateDepartementHref({ ...depute, type: "SENATEUR", departmentCode: "2A" })).toBe(
+      "/territoires/departements/corse-du-sud"
+    );
+  });
+
+  it("ne relie ni un mandat terminé, ni un autre type de mandat", () => {
+    expect(mandateDepartementHref({ ...depute, isCurrent: false })).toBeNull();
+    expect(mandateDepartementHref({ ...depute, type: "MAIRE" })).toBeNull();
+    expect(mandateDepartementHref({ ...depute, type: "DEPUTE_EUROPEEN" })).toBeNull();
+  });
+
+  it("ne devine pas de page pour un siège sans département", () => {
+    expect(mandateDepartementHref({ ...depute, departmentCode: null })).toBeNull();
+    expect(mandateDepartementHref({ ...depute, departmentCode: "ZZ" })).toBeNull();
   });
 });
