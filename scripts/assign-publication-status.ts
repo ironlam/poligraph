@@ -54,7 +54,11 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
+  .catch((error) => {
+    // A swallowed error let the daily sync report this step as done while it wrote nothing.
+    console.error(error);
+    process.exitCode = 1;
+  })
   .finally(() => {
     db.$disconnect();
   });
