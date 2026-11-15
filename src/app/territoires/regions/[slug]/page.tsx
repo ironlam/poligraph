@@ -6,7 +6,8 @@ import { getElections } from "@/lib/data/elections";
 import { REGIONS } from "@/config/regions";
 import { territoireRegionPath } from "@/lib/territoires/paths";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
-import { RegionHero } from "@/components/territoires/RegionHero";
+import { RegionBandeau } from "@/components/territoires/RegionBandeau";
+import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import {
   RegionCollectivites,
   RegionConseil,
@@ -73,16 +74,29 @@ export default async function RegionPage({ params }: PageProps) {
   const data = await loadRegion(slug);
   if (!data) notFound();
 
-  const elections = await loadRegionElections(data.collectivitesParticulieres.length > 0);
+  const particuliere = data.collectivitesParticulieres.length > 0;
+  const elections = await loadRegionElections(particuliere);
+
+  // One word each. The first tab names the block shown for this region; the elections tab
+  // exists only with its section.
+  const onglets = [
+    particuliere
+      ? { href: "#collectivite", label: "Collectivité" }
+      : { href: "#conseil", label: "Conseil" },
+    { href: "#departements", label: "Départements" },
+    ...(elections.length > 0 ? [{ href: "#elections", label: "Élections" }] : []),
+    { href: "#parlement", label: "Parlement" },
+  ];
 
   return (
     <>
-      <RegionHero data={data} />
-      <div className="container mx-auto grid gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <RegionBandeau data={data} />
+      <TerritoireOnglets onglets={onglets} />
+      <div className="container mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
-          <RegionDepartements data={data} />
           <RegionCollectivites data={data} />
           <RegionConseil data={data} />
+          <RegionDepartements data={data} />
           <RegionElections elections={elections} />
         </div>
         <aside className="space-y-6" aria-label="Compléments">

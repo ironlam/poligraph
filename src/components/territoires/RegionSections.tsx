@@ -6,7 +6,7 @@ import { formatCompte } from "@/lib/territoires/format";
 import { TERRITOIRES_DONNEES_PATH, territoireDepartementPath } from "@/lib/territoires/paths";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
 
-const CARD = "rounded-xl border border-border bg-card p-4 sm:p-6";
+const CARD = "scroll-mt-32 rounded-xl border border-border bg-card p-4 sm:p-6";
 
 function SourceLink({ source }: { source: SourceRef }) {
   if (!source.url) return <>{source.label}</>;
@@ -29,7 +29,7 @@ export function RegionConseil({ data }: { data: RegionTerritoire }) {
   // is no body named "conseil régional". Its note is shown by RegionCollectivites.
   if (data.collectivitesParticulieres.length > 0) return null;
   return (
-    <section aria-labelledby="conseil-regional-titre" className={CARD}>
+    <section id="conseil" aria-labelledby="conseil-regional-titre" className={CARD}>
       <h2 id="conseil-regional-titre" className="font-display text-xl font-extrabold text-primary">
         Conseil régional
       </h2>
@@ -49,7 +49,7 @@ export function RegionConseil({ data }: { data: RegionTerritoire }) {
 /** Departments of the region, in alphabetical order (never ranked by a figure). */
 export function RegionDepartements({ data }: { data: RegionTerritoire }) {
   return (
-    <section aria-labelledby="departements-titre" className={CARD}>
+    <section id="departements" aria-labelledby="departements-titre" className={CARD}>
       <h2 id="departements-titre" className="font-display text-xl font-extrabold text-primary">
         Départements
       </h2>
@@ -93,7 +93,7 @@ export function RegionDepartements({ data }: { data: RegionTerritoire }) {
 export function RegionCollectivites({ data }: { data: RegionTerritoire }) {
   if (data.collectivitesParticulieres.length === 0) return null;
   return (
-    <section aria-labelledby="collectivite-titre" className={CARD}>
+    <section id="collectivite" aria-labelledby="collectivite-titre" className={CARD}>
       <h2 id="collectivite-titre" className="font-display text-xl font-extrabold text-primary">
         Collectivité compétente
       </h2>
@@ -121,7 +121,7 @@ export interface RegionElection {
 export function RegionElections({ elections }: { elections: RegionElection[] }) {
   if (elections.length === 0) return null;
   return (
-    <section aria-labelledby="elections-titre" className={CARD}>
+    <section id="elections" aria-labelledby="elections-titre" className={CARD}>
       <h2 id="elections-titre" className="font-display text-xl font-extrabold text-primary">
         Élections
       </h2>
@@ -152,7 +152,7 @@ export function RegionElections({ elections }: { elections: RegionElection[] }) 
 
 export function RegionParlement({ data }: { data: RegionTerritoire }) {
   return (
-    <section aria-labelledby="parlement-titre" className={CARD}>
+    <section id="parlement" aria-labelledby="parlement-titre" className={CARD}>
       <h2 id="parlement-titre" className="font-display text-lg font-extrabold text-primary">
         Au Parlement
       </h2>
