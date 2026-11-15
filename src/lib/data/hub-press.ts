@@ -101,9 +101,9 @@ export async function getHubPress(electionSlug: string): Promise<HubPressArticle
 }
 
 /**
- * `politicians` is the tag both refresh paths already bust: the daily sync after press ingestion
- * and analysis, and the admin unlink of a wrong mention (`/api/admin/presse/mentions/[id]`), so a
- * moderated link leaves the hub on the next request.
+ * `press` is purged by the daily sync after press ingestion and analysis. `politicians` is the tag
+ * the admin unlink of a wrong mention busts (`/api/admin/presse/mentions/[id]`), so a moderated
+ * link leaves the hub on the next request.
  */
 async function getHubPressCached(electionId: string): Promise<HubPressArticle[]> {
   "use cache";

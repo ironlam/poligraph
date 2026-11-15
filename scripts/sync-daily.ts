@@ -16,6 +16,7 @@ import "dotenv/config";
 import { execSync } from "child_process";
 import { revalidateRemoteCache } from "./lib/revalidate-cache";
 import { createScrutinWriteGate } from "./lib/scrutin-write-gate";
+import { createPoliticiansPurgeGate } from "./lib/politicians-purge-gate";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const dryRunFlag = DRY_RUN ? " --dry-run" : "";
@@ -48,6 +49,7 @@ interface SyncStep {
 const AN_RECENT_DAYS = 7;
 
 const scrutinWriteGate = createScrutinWriteGate();
+const politiciansPurgeGate = createPoliticiansPurgeGate();
 
 const steps: SyncStep[] = [
   ...(!DRY_RUN
@@ -194,17 +196,34 @@ const steps: SyncStep[] = [
     ? [
         {
           // Scoped tags only — never use { all: true }.
-          // The four tags below match the remaining data domains touched by
-          // the daily sync. Votes are invalidated immediately after both vote
-          // syncs, before the longer steps below can time out the workflow.
-          // Adding "elections" here would purge caches that the daily sync did
-          // NOT update. "factchecks" is not one of those: the Google API step
-          // above imports fact-checks on every run, and the listing that shows
-          // them holds its cache for 24h, so leaving the tag out kept a new
-          // fact-check off the site for a day after it was stored.
+          // Votes are invalidated immediately after both vote syncs, before the longer steps
+          // below can time out the workflow. Adding "elections" here would purge caches that the
+          // daily sync did NOT update.
+          // "dossiers", "stats", "factchecks" and "press" are purged on every run: the steps
+          // above write to each of them, and few readers carry them. "factchecks" is there because
+          // the Google API step imports fact-checks on every run and the listing holds its cache
+          // for 24h. "press" keeps the press listing and the press block of the presidential hub
+          // in step with the RSS import.
+          // "politicians" is carried by every commune, department and region page, the listings
+          // and the homepage: it is purged only when politicians or mandates changed since the
+          // last purge, and once a day whatever happened (scripts/lib/politicians-purge-gate.ts).
           name: "Cache revalidation",
-          command: "POST /api/cron/revalidate (dossiers, stats, politicians, factchecks)",
-          run: () => revalidateRemoteCache(["dossiers", "stats", "politicians", "factchecks"]),
+          command:
+            "POST /api/cron/revalidate (dossiers, stats, factchecks, press, et politicians au besoin)",
+          run: async () => {
+            const politicians = await politiciansPurgeGate.decide();
+            console.log(
+              `Purge de politicians : ${politicians.purge ? "oui" : "non"} (${politicians.reason}).`
+            );
+            await revalidateRemoteCache([
+              "dossiers",
+              "stats",
+              "factchecks",
+              "press",
+              ...(politicians.purge ? ["politicians"] : []),
+            ]);
+            if (politicians.purge) await politiciansPurgeGate.recordPurge();
+          },
         },
       ]
     : []),
