@@ -8,7 +8,7 @@ const meta: Meta<typeof TerritoireOnglets> = {
   parameters: { layout: "fullscreen" },
   args: {
     onglets: [
-      { label: "Élus", href: "#qui-decide" },
+      { label: "Élus", href: "#vos-elus" },
       { label: "Parlement", href: "#parlement" },
       { label: "Chiffres", href: "#chiffres" },
       { label: "Élections", href: "#elections" },
