@@ -216,6 +216,26 @@ export interface MaireChange {
 }
 
 /**
+ * The change to note when a register row replaces the mayor we held, or null. Nothing without
+ * a function start: the start of the councillor mandate, or a default date, is not the day the
+ * person became mayor, and an event is dated by its fact. Nothing without a known commune
+ * either: there is no page to show it on.
+ */
+export function maireChange(
+  row: { communeId: string | null; fullName: string; functionStart: Date | null },
+  previous: { firstName: string | null; lastName: string | null }
+): MaireChange | null {
+  if (!row.communeId || !row.functionStart) return null;
+  const predecesseur = `${previous.firstName ?? ""} ${previous.lastName ?? ""}`.trim();
+  return {
+    communeId: row.communeId,
+    nom: row.fullName,
+    predecesseur: predecesseur || null,
+    functionStart: row.functionStart,
+  };
+}
+
+/**
  * Drafts for the mayors a register import replaced. Read after the import has settled: a change
  * is published only when the commune now has exactly one current mayor and that profile is
  * public, which is the condition under which the commune page names a mayor.

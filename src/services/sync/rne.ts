@@ -1,6 +1,11 @@
 import { db, type DbTransactionClient } from "@/lib/db";
 import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
-import { maireChangeDrafts, recordEvenements, type MaireChange } from "./territoire-evenements";
+import {
+  maireChange,
+  maireChangeDrafts,
+  recordEvenements,
+  type MaireChange,
+} from "./territoire-evenements";
 import { nextAliases } from "@/lib/mandates/aliases";
 import { confirmedFromResourceUrl } from "@/lib/mandates/confirmation";
 import { writeFileSync } from "node:fs";
@@ -521,14 +526,8 @@ async function upsertMaires(
           return createMaire(row, verbose, confirmedAt, tx);
         };
         const noteSuccession = (previous: HolderFacts): void => {
-          if (!row.communeId) return;
-          const predecesseur = `${previous.firstName ?? ""} ${previous.lastName ?? ""}`.trim();
-          counts.mayorChanges.push({
-            communeId: row.communeId,
-            nom: row.fullName,
-            predecesseur: predecesseur || null,
-            functionStart: endDate,
-          });
+          const change = maireChange(row, previous);
+          if (change) counts.mayorChanges.push(change);
         };
         const countPublication = (): void => {
           if (knownPersonId) {

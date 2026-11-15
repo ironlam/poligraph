@@ -10,6 +10,7 @@ vi.mock("@/lib/db", () => ({
 
 import { parseEvenementPayload, phraseEvenement } from "@/lib/territoires/evenements";
 import {
+  maireChange,
   maireChangeDrafts,
   maireChangeEvenement,
   presidentChangeDrafts,
@@ -219,5 +220,33 @@ describe("maireChangeDrafts", () => {
   it("ne lit rien sans changement", async () => {
     expect(await maireChangeDrafts([])).toEqual([]);
     expect(h.mandates).not.toHaveBeenCalled();
+  });
+});
+
+describe("maireChange", () => {
+  const row = { communeId: "29019", fullName: "Claire Martin", functionStart: date };
+  const previous = { firstName: "Paul", lastName: "Durand" };
+
+  it("note le changement à la date de début de fonction", () => {
+    expect(maireChange(row, previous)).toEqual({
+      communeId: "29019",
+      nom: "Claire Martin",
+      predecesseur: "Paul Durand",
+      functionStart: date,
+    });
+  });
+
+  // Régression : la date retombait sur le début du mandat de conseiller, ou sur une date par
+  // défaut, quand le registre ne donnait pas le début de la fonction.
+  it("ne note rien sans date de début de fonction", () => {
+    expect(maireChange({ ...row, functionStart: null }, previous)).toBeNull();
+  });
+
+  it("ne note rien pour une commune absente de la base", () => {
+    expect(maireChange({ ...row, communeId: null }, previous)).toBeNull();
+  });
+
+  it("laisse le prédécesseur vide quand son nom n'est pas connu", () => {
+    expect(maireChange(row, { firstName: null, lastName: null })?.predecesseur).toBeNull();
   });
 });
