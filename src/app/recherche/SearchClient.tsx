@@ -651,7 +651,7 @@ function DossierRow({ result }: { result: DossierResult }) {
 function CommuneRow({ result }: { result: CommuneResult }) {
   return (
     <Link
-      href={territoireCommunePath(result.id)}
+      href={territoireCommunePath(result.id, result.name)}
       className="flex items-center gap-3 py-3 hover:bg-accent/40 rounded-lg transition-colors px-3 -mx-3"
       prefetch={false}
     >

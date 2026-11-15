@@ -29,7 +29,7 @@ function filAriane(identity: CommuneDossier["identity"]) {
       label: territoireLabel(identity),
       href: department.slug ? territoireDepartementPath(department.slug) : undefined,
     },
-    { label: identity.name, href: territoireCommunePath(inseeCode) },
+    { label: identity.name, href: territoireCommunePath(inseeCode, identity.name) },
   ];
 }
 

@@ -128,7 +128,7 @@ export function CommuneIndex({ slug, territoire, grandes = [] }: CommuneIndexPro
           {rows.map((c) => (
             <li key={c.inseeCode} className="border-b last:border-b-0">
               <Link
-                href={territoireCommunePath(c.inseeCode)}
+                href={territoireCommunePath(c.inseeCode, c.name)}
                 prefetch={false}
                 className="flex min-h-13 items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted"
               >

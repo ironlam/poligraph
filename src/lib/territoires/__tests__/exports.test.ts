@@ -70,7 +70,7 @@ describe("communeRow", () => {
       maire_confirme_le: "2026-09-01",
       region: "Bretagne",
       communes_importees_le: "2026-08-10",
-      url_page: "https://poligraph.fr/territoires/communes/35238",
+      url_page: "https://poligraph.fr/territoires/communes/rennes-35238",
     });
   });
 

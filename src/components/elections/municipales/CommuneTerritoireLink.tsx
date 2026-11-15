@@ -21,7 +21,7 @@ export function CommuneTerritoireLink({ inseeCode, name }: { inseeCode: string; 
         chacun avec sa source.
       </p>
       <Link
-        href={territoireCommunePath(inseeCode)}
+        href={territoireCommunePath(inseeCode, name)}
         prefetch={false}
         className="mt-2 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >

@@ -245,7 +245,7 @@ describe("page département : département ordinaire", () => {
     const doc = await render("eure", territoire("27"));
     const links = [...doc.querySelectorAll("#communes ul.overflow-hidden a")];
     expect(links).toHaveLength(8);
-    expect(links[0]?.getAttribute("href")).toBe("/territoires/communes/27000");
+    expect(links[0]?.getAttribute("href")).toBe("/territoires/communes/grande-0-27000");
     expect(links[0]?.textContent).toMatch(/1\s000 hab\./u);
     expect(links[0]?.textContent).toContain("Maire : Maire 0");
     expect(links[1]?.textContent).toContain("Maire non établi");

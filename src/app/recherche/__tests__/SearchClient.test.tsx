@@ -34,7 +34,7 @@ describe("recherche globale, résultats de communes", () => {
   it("mène à la page Territoires de la commune, comme la palette", async () => {
     render(<SearchClient />);
     const link = await screen.findByRole("link", { name: /Belley/ }, { timeout: 3000 });
-    expect(link.getAttribute("href")).toBe("/territoires/communes/01034");
+    expect(link.getAttribute("href")).toBe("/territoires/communes/belley-01034");
   });
 });
 

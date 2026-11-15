@@ -183,7 +183,7 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
         // No link to the sub-page while it has nothing to show.
         dossier.decisionsPubliees > 0 && (
           <Link
-            href={territoireCommuneDecisionsPath(identity.inseeCode)}
+            href={territoireCommuneDecisionsPath(identity.inseeCode, identity.name)}
             prefetch={false}
             className={`${TAP} ${LINK} text-sm`}
           >
@@ -439,7 +439,7 @@ export function ElectionsSection({
       action={
         all.length > 0 && (
           <Link
-            href={territoireCommuneElectionsPath(code)}
+            href={territoireCommuneElectionsPath(code, dossier.identity.name)}
             prefetch={false}
             className={`${TAP} ${LINK} text-sm`}
           >
