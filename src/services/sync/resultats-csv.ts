@@ -15,10 +15,9 @@
 
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
-import { normalizeListName } from "./resultats-t1";
+import { matchListCandidacies, planSeatWrites } from "./list-seats";
 import {
   splitCsvLine,
-  municipalSeatsUpdate,
   parseWideResultRow2026,
   withDecidedSeats,
   type CommuneResult2026,
@@ -128,50 +127,17 @@ async function findMatchingCandidacyIds(
   communeId: string,
   list: ListResult2026
 ): Promise<string[]> {
-  const normalizedName = normalizeListName(list.listName);
-
   const candidacies = await db.candidacy.findMany({
     where: { electionId, communeId },
     select: { id: true, listName: true },
   });
-
-  // Try exact normalized match first
-  let matchingIds = candidacies
-    .filter((c) => c.listName && normalizeListName(c.listName) === normalizedName)
-    .map((c) => c.id);
-
-  // Fallback: try short name match
-  if (matchingIds.length === 0 && list.listShortName) {
-    const normalizedShort = normalizeListName(list.listShortName);
-    matchingIds = candidacies
-      .filter((c) => c.listName && normalizeListName(c.listName) === normalizedShort)
-      .map((c) => c.id);
+  const { ids, partial } = matchListCandidacies(candidacies, list);
+  if (partial) {
+    console.warn(
+      `  [FALLBACK] "${list.listName}" matched ${ids.length} via partial in ${communeId}`
+    );
   }
-
-  // Fallback: partial keyword match
-  if (matchingIds.length === 0) {
-    const words = normalizedName
-      .split(" ")
-      .filter((w) => w.length > 3)
-      .slice(0, 3);
-    if (words.length > 0) {
-      matchingIds = candidacies
-        .filter((c) => {
-          if (!c.listName) return false;
-          const norm = normalizeListName(c.listName);
-          return words.every((w) => norm.includes(w));
-        })
-        .map((c) => c.id);
-
-      if (matchingIds.length > 0) {
-        console.warn(
-          `  [FALLBACK] "${list.listName}" matched ${matchingIds.length} via partial in ${communeId}`
-        );
-      }
-    }
-  }
-
-  return matchingIds;
+  return ids;
 }
 
 async function updateCandidacyResultsT1(
@@ -191,7 +157,6 @@ async function updateCandidacyResultsT1(
       round1Pct: new Prisma.Decimal(list.pctExpressed),
       round1Qualified,
       isElected: list.isElected,
-      ...municipalSeatsUpdate(list),
     },
   });
 
@@ -213,50 +178,46 @@ async function updateCandidacyResultsT2(
       round2Votes: list.votes,
       round2Pct: new Prisma.Decimal(list.pctExpressed),
       isElected: isWinner,
-      ...municipalSeatsUpdate(list),
     },
   });
 
   return matchingIds.length;
 }
 
+const SEAT_BATCH = 1000;
+
 /**
- * Seats only, for a base already holding the results: touches no other column, so a run cannot
- * change a vote, a percentage or the elected flag.
+ * Seats of each list, written on its head of list and nowhere else: no vote, percentage or
+ * elected flag is touched. Batched, and a row already holding the value is not rewritten.
  */
-async function syncSeatsOnly(
-  electionId: string,
-  communes: CommuneResult2026[],
-  communeSet: Set<string>,
-  dryRun: boolean
-) {
-  const stats = { communes: 0, lists: 0, seats: 0, candidaciesUpdated: 0, listsNotMatched: 0 };
-  for (const commune of communes) {
-    if (!communeSet.has(commune.inseeCode)) continue;
-    const withSeats = commune.lists.filter((list) => list.seatsCM != null);
-    if (withSeats.length === 0) continue;
-    stats.communes++;
-    for (const list of withSeats) {
-      stats.lists++;
-      stats.seats += list.seatsCM ?? 0;
-      if (dryRun) continue;
-      const ids = await findMatchingCandidacyIds(electionId, commune.inseeCode, list);
-      if (ids.length === 0) {
-        stats.listsNotMatched++;
-        console.warn(`  [WARN] No match: "${list.listName}" in ${commune.inseeCode}`);
-        continue;
-      }
-      await db.candidacy.updateMany({
-        where: { id: { in: ids } },
-        data: municipalSeatsUpdate(list),
-      });
-      stats.candidaciesUpdated += ids.length;
+async function syncSeats(electionId: string, communes: CommuneResult2026[], dryRun: boolean) {
+  const heads = await db.candidacy.findMany({
+    where: { electionId, listPosition: 1, communeId: { not: null } },
+    select: { id: true, listName: true, communeId: true },
+  });
+  const plan = planSeatWrites(
+    communes,
+    heads.flatMap((h) => (h.communeId ? [{ ...h, communeId: h.communeId }] : []))
+  );
+  for (const reason of plan.skipped) console.warn(`  [WARN] Seats, ${reason}`);
+
+  let written = 0;
+  if (!dryRun) {
+    for (let i = 0; i < plan.rows.length; i += SEAT_BATCH) {
+      const values = plan.rows
+        .slice(i, i + SEAT_BATCH)
+        .map((row) => Prisma.sql`(${row.id}::text, ${row.seats}::int)`);
+      written += await db.$executeRaw`
+        UPDATE "Candidacy" AS c SET "municipalSeats" = v.seats
+        FROM (VALUES ${Prisma.join(values)}) AS v(id, seats)
+        WHERE c.id = v.id AND c."municipalSeats" IS DISTINCT FROM v.seats`;
     }
   }
-  console.log(`Communes with seats: ${stats.communes}`);
-  console.log(`Lists with seats: ${stats.lists} (${stats.seats} seats)`);
-  console.log(`Candidacies updated: ${stats.candidaciesUpdated}`);
-  console.log(`Lists not matched: ${stats.listsNotMatched}`);
+  console.log(`Communes with seats: ${plan.communes}`);
+  console.log(`Lists with seats: ${plan.lists} (${plan.seats} seats)`);
+  console.log(`Heads of list matched: ${plan.rows.length}`);
+  console.log(`Lists left out: ${plan.skipped.length}`);
+  console.log(`Rows written: ${written}`);
 }
 
 async function updateResultsSnapshot(stats: Record<string, number>) {
@@ -323,7 +284,7 @@ export async function syncResultatsCsv({
   }
 
   if (seatsOnly) {
-    await syncSeatsOnly(election.id, allResults, communeSet, dryRun);
+    await syncSeats(election.id, allResults, dryRun);
     await db.$disconnect();
     return;
   }
@@ -442,6 +403,8 @@ export async function syncResultatsCsv({
     }
     console.log("\nStatsSnapshot updated");
   }
+
+  await syncSeats(election.id, allResults, dryRun);
 
   // National participation (weighted by registered voters)
   let totalRegistered = 0;

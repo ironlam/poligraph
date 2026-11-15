@@ -46,16 +46,6 @@ export function withDecidedSeats(commune: CommuneResult2026): CommuneResult2026 
   return { ...commune, lists: commune.lists.map((list) => ({ ...list, seatsCM: null })) };
 }
 
-/**
- * Seats to write for a list, or nothing when the file gives none for it: writing null or an
- * undecided zero would erase the seats set from the other round's file.
- */
-export function municipalSeatsUpdate(list: Pick<ListResult2026, "seatsCM">): {
-  municipalSeats?: number;
-} {
-  return list.seatsCM == null ? {} : { municipalSeats: list.seatsCM };
-}
-
 export interface CommuneResult2026 {
   inseeCode: string;
   communeName: string;

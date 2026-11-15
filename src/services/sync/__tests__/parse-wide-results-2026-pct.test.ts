@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  municipalSeatsUpdate,
   parseFrenchPct,
   parseWideResultRow2026,
   withDecidedSeats,
@@ -94,14 +93,12 @@ describe("parseWideResultRow2026 : sièges au conseil municipal", () => {
 
   it("lit le nombre de sièges de la liste", () => {
     expect(rowWithSeats("28").lists[0]?.seatsCM).toBe(28);
-    expect(municipalSeatsUpdate(rowWithSeats("28").lists[0]!)).toEqual({ municipalSeats: 28 });
   });
 
   // First-round file of a commune decided at the second round: the cell is empty. Writing null
   // would erase the seats set from the second-round file.
-  it("n'écrit rien quand le fichier ne donne pas de sièges, au lieu d'effacer", () => {
+  it("rend null quand le fichier ne donne pas de sièges, pour ne rien effacer", () => {
     expect(rowWithSeats("").lists[0]?.seatsCM).toBeNull();
-    expect(municipalSeatsUpdate(rowWithSeats("").lists[0]!)).toEqual({});
   });
 
   // Rennes, first-round file of 2026: eleven lists, "0" seat on each, then 6, 44 and 11 seats
@@ -128,7 +125,6 @@ describe("parseWideResultRow2026 : sièges au conseil municipal", () => {
       parseWideResultRow2026([...fixed, ...block("0"), ...block("0")])
     );
     expect(undecided.lists.map((l) => l.seatsCM)).toEqual([null, null]);
-    expect(undecided.lists.map(municipalSeatsUpdate)).toEqual([{}, {}]);
 
     const decided = withDecidedSeats(
       parseWideResultRow2026([...fixed, ...block("44"), ...block("0")])
@@ -137,6 +133,6 @@ describe("parseWideResultRow2026 : sièges au conseil municipal", () => {
   });
 
   it("garde un zéro publié : une liste sans siège n'est pas une liste sans donnée", () => {
-    expect(municipalSeatsUpdate(rowWithSeats("0").lists[0]!)).toEqual({ municipalSeats: 0 });
+    expect(rowWithSeats("0").lists[0]?.seatsCM).toBe(0);
   });
 });
