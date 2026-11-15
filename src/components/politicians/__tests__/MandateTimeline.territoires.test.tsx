@@ -39,8 +39,27 @@ describe("MandateTimeline : lien vers le dossier de la commune", () => {
     );
   });
 
-  it("ne relie pas un mandat terminé", () => {
+  it("relie un mandat terminé avec le libellé « historique »", () => {
     renderTimeline([mandate({ isCurrent: false, endDate: new Date("2020-06-30") })]);
+    expect(
+      screen.getByRole("link", { name: /Dossier de la commune \(historique\)/ })
+    ).toHaveAttribute("href", "/territoires/communes/11069");
+  });
+
+  it("relie le mandat en cours d'un député à la page de son département", () => {
+    renderTimeline([
+      mandate({
+        type: "DEPUTE",
+        title: "Député du Finistère",
+        constituency: "Finistère (2)",
+        departmentCode: "29",
+        localData: null,
+      }),
+    ]);
+    expect(screen.getByRole("link", { name: /Page du département/ })).toHaveAttribute(
+      "href",
+      "/territoires/departements/finistere"
+    );
     expect(screen.queryByRole("link", { name: /Dossier de la commune/ })).toBeNull();
   });
 
