@@ -156,6 +156,46 @@ describe("/territoires/communes/[code]", () => {
     ).not.toBeNull();
   });
 
+  it("dit comment agir, avec le tribunal du territoire, les sources officielles et l'avertissement", async () => {
+    const { document } = await render(dossier());
+    const agir = document.querySelector("#agir")!;
+
+    expect(agir.querySelector("h2")?.textContent).toBe("Agir");
+    expect([...agir.querySelectorAll("h3")].map((h) => h.textContent)).toEqual([
+      "Assister au conseil municipal",
+      "Obtenir un document",
+      "Contacter la mairie",
+      "Contester une décision",
+    ]);
+    // The one fact proper to the territory: Ille-et-Vilaine is in the jurisdiction of Rennes.
+    expect(agir.textContent).toContain(
+      "le tribunal administratif compétent est en principe celui qui siège à Rennes."
+    );
+    expect(agir.textContent).toContain("ne remplace pas un conseil juridique");
+    expect(agir.textContent).toContain("Vérifié le 15 novembre 2026.");
+    const liens = [...agir.querySelectorAll("a")];
+    expect(liens.length).toBeGreaterThanOrEqual(8);
+    for (const a of liens) {
+      expect(a.getAttribute("href")).toMatch(
+        /^https:\/\/(www\.legifrance\.gouv\.fr|www\.service-public\.gouv\.fr|lannuaire\.service-public\.gouv\.fr)\//
+      );
+      expect(a.getAttribute("target")).toBe("_blank");
+      expect(a.getAttribute("rel")).toBe("noopener noreferrer");
+    }
+  });
+
+  it("donne le tribunal d'une collectivité d'outre-mer selon son propre ressort", async () => {
+    const { document } = await render(papeete());
+    const agir = document.querySelector("#agir")!;
+    expect(agir.textContent).toContain("celui qui siège à Papeete.");
+    // Its communes follow their own statute: the articles of the common regime are not cited.
+    expect([...agir.querySelectorAll("h3")].map((h) => h.textContent)).toEqual([
+      "Contacter la mairie",
+      "Contester une décision",
+    ]);
+    expect(agir.textContent).not.toContain("Code général des collectivités territoriales");
+  });
+
   it("donne la date de dernière confirmation quand elle existe", async () => {
     const base = dossier();
     const date = "2026-10-01T00:00:00.000Z";
@@ -315,15 +355,10 @@ describe("/territoires/communes/[code]", () => {
       "#qui-decide",
       "#parlement",
       "#elections",
-      "#sources",
+      "#agir",
     ]);
-    expect(anchors.map((a) => a.textContent)).toEqual([
-      "Élus",
-      "Parlement",
-      "Élections",
-      "Sources",
-    ]);
-    for (const id of ["qui-decide", "parlement", "elections", "sources"]) {
+    expect(anchors.map((a) => a.textContent)).toEqual(["Élus", "Parlement", "Élections", "Agir"]);
+    for (const id of ["qui-decide", "parlement", "elections", "agir", "sources"]) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
     // The sub-page left the tabs: it stays one click away, from its own section.
@@ -497,6 +532,9 @@ describe("/territoires/communes/[code]", () => {
     });
 
     expect(text).toContain("District · ");
+    // No town hall and no municipal council: no « Agir » block, and no tab leading to it.
+    expect(text).not.toContain("Contacter la mairie");
+    expect(text).not.toContain("Agir");
     expect(text).toContain("Pas de conseil municipal");
     expect(text).not.toContain("Composition actuelle non établie");
     expect(text).not.toContain("Présidentielle 2027");
@@ -675,6 +713,7 @@ describe("absence de composant client cartographique", () => {
     "src/components/territoires/TerritoireOnglets.tsx",
     "src/components/territoires/LigneSource.tsx",
     "src/components/territoires/EchelleTerritoires.tsx",
+    "src/components/territoires/Agir.tsx",
     "src/components/territoires/CommuneSections.tsx",
     "src/components/territoires/IntercommunaliteCard.tsx",
     "src/components/territoires/TerritoryShape.tsx",
