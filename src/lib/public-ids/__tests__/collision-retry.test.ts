@@ -32,6 +32,24 @@ function collisionAdaptateur(champ: string) {
   });
 }
 
+/** Forme de @prisma/adapter-pg 7.10 : le nom de l'index remplace la liste de colonnes. */
+function collisionIndex(champ: string) {
+  return new Prisma.PrismaClientKnownRequestError("dup", {
+    code: "P2002",
+    clientVersion: "7",
+    meta: {
+      modelName: "Politician",
+      driverAdapterError: {
+        cause: {
+          originalCode: "23505",
+          kind: "UniqueConstraintViolation",
+          constraint: { index: `Politician_${champ}_key` },
+        },
+      },
+    },
+  });
+}
+
 /** Alloue en suivant la séquence, comme le fait `nextval`. */
 function allocateur(depart: number) {
   let n = depart;
@@ -59,6 +77,15 @@ describe("isPublicIdCollision", () => {
 
   it("ignore un autre champ dans la forme de l'adaptateur", () => {
     expect(isPublicIdCollision(collisionAdaptateur("slug"))).toBe(false);
+  });
+
+  it("reconnaît la forme par nom d'index de l'adaptateur 7.10", () => {
+    expect(isPublicIdCollision(collisionIndex("publicId"))).toBe(true);
+  });
+
+  it("ignore un autre index, y compris composite, dans cette forme", () => {
+    expect(isPublicIdCollision(collisionIndex("slug"))).toBe(false);
+    expect(isPublicIdCollision(collisionIndex("slug_publicId"))).toBe(false);
   });
 });
 
