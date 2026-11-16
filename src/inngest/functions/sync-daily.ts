@@ -6,7 +6,7 @@ import { scrutinAnalysisTag } from "@/lib/cache-tags";
 import { isIngestionAnomaly } from "@/lib/monitoring/amendment-link-freshness";
 import { linkableUnlinkedVoteWhere } from "@/lib/monitoring/amendment-link-query";
 import { runVoteSyncWithCacheInvalidation } from "../vote-cache";
-import { PROFILE_RECONCILE_EVENT } from "@/lib/politicians/profile-snapshot/events";
+import { PROFILE_RECONCILE_ACTIVE_EVENT } from "@/lib/politicians/profile-snapshot/events";
 
 interface DailyStep {
   name: string;
@@ -380,9 +380,9 @@ export const syncDaily = inngest.createFunction(
     }
 
     // The steps above write profile data (votes) without targeting a politician: one reconcile
-    // pass catches up every profile.
+    // pass catches up the profiles a vote can change.
     await step.sendEvent("profile-reconcile", {
-      name: PROFILE_RECONCILE_EVENT,
+      name: PROFILE_RECONCILE_ACTIVE_EVENT,
       data: { reason: "sync-daily" },
     });
 
