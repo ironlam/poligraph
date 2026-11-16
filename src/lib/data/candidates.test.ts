@@ -11,6 +11,9 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+const getElectionIdBySlug = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/elections/election-id", () => ({ getElectionIdBySlug }));
+
 import { db } from "@/lib/db";
 import {
   getCandidates2027ForModeration,
@@ -18,7 +21,10 @@ import {
   getCandidateRound1Pct,
 } from "@/lib/data/candidates";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  getElectionIdBySlug.mockResolvedValue("election-2027");
+});
 
 describe("CandidacyPresidential schema", () => {
   it("declares CandidacyPresidential in the Prisma ModelName enum", () => {
@@ -30,11 +36,18 @@ describe("getCandidates2027ForModeration", () => {
   it("queries presidentielle-2027 candidacies sorted by rank then lastName", async () => {
     vi.mocked(db.candidacy.findMany).mockResolvedValueOnce([] as never);
     await getCandidates2027ForModeration();
+    expect(getElectionIdBySlug).toHaveBeenCalledExactlyOnceWith("presidentielle-2027");
     expect(db.candidacy.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { election: { slug: "presidentielle-2027" } },
+        where: { electionId: "election-2027" },
       })
     );
+  });
+
+  it("returns nothing, without reading Candidacy, when the election does not exist", async () => {
+    getElectionIdBySlug.mockResolvedValue(null);
+    expect(await getCandidates2027ForModeration()).toEqual([]);
+    expect(db.candidacy.findMany).not.toHaveBeenCalled();
   });
 });
 

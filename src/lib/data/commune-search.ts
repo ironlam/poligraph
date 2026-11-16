@@ -58,10 +58,8 @@ type CandidacyStatsRow = {
   candidateCount: number;
 };
 
-export async function getElectionIdBySlug(slug: string): Promise<string | null> {
-  const election = await db.election.findUnique({ where: { slug }, select: { id: true } });
-  return election?.id ?? null;
-}
+// Lives in @/lib/elections now, where the readers of every election share it.
+export { getElectionIdBySlug } from "@/lib/elections/election-id";
 
 /** "01", "2A", "974". Rejects anything else before it reaches a query. */
 export function isValidDepartmentCode(code: string): boolean {

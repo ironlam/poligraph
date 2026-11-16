@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import { confirmedNow } from "@/lib/mandates/confirmation";
 import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource, Chamber } from "@/generated/prisma";
@@ -387,7 +388,7 @@ async function upsertExternalIds(
  * Attach each matricule unknown to the base to its person elected in 2026, by creating the
  * SENAT external id, and return those that could not be attached.
  */
-async function mapUnknownSenators(
+export async function mapUnknownSenators(
   senators: SenateurAPI[]
 ): Promise<Array<{ matricule: string; name: string }>> {
   const known = new Set(
@@ -406,27 +407,34 @@ async function mapUnknownSenators(
   );
   if (unknown.size === 0) return [];
 
-  const candidacies = await db.candidacy.findMany({
-    where: { election: { slug: "senatoriales-2026" }, isElected: true },
-    take: 200,
-    select: {
-      politicianId: true,
-      candidateName: true,
-      constituencyCode: true,
-      politician: {
-        select: {
-          mandates: {
-            where: {
-              type: MandateType.SENATEUR,
-              isCurrent: true,
-              startDate: { gte: SENATE_TERM_2026_START },
+  // Without the election there is nobody to attach to: every unknown matricule must come back
+  // unresolved, never an empty list, which the caller reads as "all attached" before it creates
+  // politicians and closes outgoing mandates.
+  const electionId = await getElectionIdBySlug("senatoriales-2026");
+  const candidacies =
+    electionId === null
+      ? []
+      : await db.candidacy.findMany({
+          where: { electionId, isElected: true },
+          take: 200,
+          select: {
+            politicianId: true,
+            candidateName: true,
+            constituencyCode: true,
+            politician: {
+              select: {
+                mandates: {
+                  where: {
+                    type: MandateType.SENATEUR,
+                    isCurrent: true,
+                    startDate: { gte: SENATE_TERM_2026_START },
+                  },
+                  select: { id: true },
+                },
+              },
             },
-            select: { id: true },
           },
-        },
-      },
-    },
-  });
+        });
   const elected2026: Elected2026[] = candidacies.map((c) => ({
     politicianId: c.politicianId,
     name: c.candidateName,

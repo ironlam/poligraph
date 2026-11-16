@@ -11,6 +11,10 @@ const h = vi.hoisted(() => ({
   findMeasures: vi.fn(),
 }));
 
+vi.mock("@/lib/elections/election-id", () => ({
+  getElectionIdBySlug: vi.fn(async () => "election-2027"),
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     candidacy: { findFirst: h.findCandidacy },

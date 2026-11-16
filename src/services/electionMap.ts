@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import { DEPARTMENTS } from "@/config/departments";
 import type { MapDepartmentData } from "@/app/api/carte/route";
 
@@ -6,11 +7,10 @@ export async function getElectionMapData(electionSlug = "legislatives-2024"): Pr
   departments: MapDepartmentData[];
   totalSeats: number;
 }> {
+  const electionId = await getElectionIdBySlug(electionSlug);
+  if (electionId === null) return { departments: [], totalSeats: 0 };
   const candidacies = await db.candidacy.findMany({
-    where: {
-      election: { slug: electionSlug },
-      isElected: true,
-    },
+    where: { electionId, isElected: true },
     select: {
       constituencyCode: true,
       partyId: true,
