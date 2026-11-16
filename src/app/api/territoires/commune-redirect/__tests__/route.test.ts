@@ -6,6 +6,7 @@ vi.mock("@/lib/db", () => ({ db: { commune: { findUnique: h.findUnique } } }));
 
 import { GET } from "../route";
 import { proxy } from "@/proxy";
+import { communeCodeFromSegment, legacyCommunePath } from "@/lib/territoires/paths";
 
 const get = (query: string) =>
   GET(new NextRequest(`https://poligraph.fr/api/territoires/commune-redirect?${query}`), {
@@ -52,6 +53,58 @@ describe("redirection des anciennes adresses de commune", () => {
     );
   });
 
+  // Régression (prod, 2026-11-15) : Vercel livre l'adresse d'origine AVEC les paramètres ajoutés
+  // par la réécriture du proxy. Ils partaient dans la destination : `brest-29019?code=29019&suite=`.
+  describe("requête telle que la prod la livre : chemin d'origine, chaîne fusionnée", () => {
+    const viaProd = (pathAndQuery: string) =>
+      GET(new NextRequest(`https://poligraph.fr${pathAndQuery}`), { params: Promise.resolve({}) });
+
+    it("ne recopie ni `code` ni `suite` dans la destination", async () => {
+      const res = await viaProd("/territoires/communes/29019?code=29019&suite=");
+      expect(res.status).toBe(308);
+      expect(res.headers.get("location")).toBe(
+        "https://poligraph.fr/territoires/communes/brest-29019"
+      );
+    });
+
+    it("garde `?type=` et rien d'autre sur la page des élections", async () => {
+      const res = await viaProd(
+        "/territoires/communes/29019/elections?type=presidentielle&code=29019&suite=%2Felections"
+      );
+      expect(res.headers.get("location")).toBe(
+        "https://poligraph.fr/territoires/communes/brest-29019/elections?type=presidentielle"
+      );
+    });
+
+    it("garde la sous-page des décisions", async () => {
+      const res = await viaProd(
+        "/territoires/communes/29019/decisions?code=29019&suite=%2Fdecisions"
+      );
+      expect(res.headers.get("location")).toBe(
+        "https://poligraph.fr/territoires/communes/brest-29019/decisions"
+      );
+    });
+
+    it("redirige un code corse", async () => {
+      h.findUnique.mockResolvedValueOnce({ name: "Ajaccio" });
+      const res = await viaProd(
+        "/territoires/communes/2A004/elections?code=2A004&suite=%2Felections"
+      );
+      expect(res.headers.get("location")).toBe(
+        "https://poligraph.fr/territoires/communes/ajaccio-2A004/elections"
+      );
+      expect(h.findUnique).toHaveBeenCalledWith({ where: { id: "2A004" }, select: { name: true } });
+    });
+
+    it("ne suit que le code du chemin quand un visiteur passe son propre `?code=`", async () => {
+      const res = await viaProd("/territoires/communes/29019?code=75056&suite=%2Fdecisions&x=1");
+      expect(h.findUnique).toHaveBeenCalledWith({ where: { id: "29019" }, select: { name: true } });
+      expect(res.headers.get("location")).toBe(
+        "https://poligraph.fr/territoires/communes/brest-29019?x=1"
+      );
+    });
+  });
+
   it("garde la sous-page et se laisse mettre en cache", async () => {
     const res = await get("code=29019&suite=%2Felections");
     expect(res.headers.get("location")).toBe(
@@ -60,11 +113,36 @@ describe("redirection des anciennes adresses de commune", () => {
     expect(res.headers.get("cache-control")).toContain("s-maxage=86400");
   });
 
-  it("répond 404 pour une commune inconnue, sans redirection", async () => {
-    h.findUnique.mockResolvedValueOnce(null);
-    const res = await get("code=99999&suite=");
-    expect(res.status).toBe(404);
-    expect(res.headers.get("location")).toBeNull();
+  // Régression (prod, 2026-11-15) : la route répondait elle-même, en JSON. Un visiteur voyait
+  // `{"error":"Commune introuvable"}`. Une route ne sait pas rendre la page 404 du site : elle
+  // renvoie donc vers une adresse de forme lisible, où la page rend son not-found.
+  describe("commune inconnue", () => {
+    beforeEach(() => h.findUnique.mockResolvedValue(null));
+    const unknown = (pathAndQuery: string) =>
+      GET(new NextRequest(`https://poligraph.fr${pathAndQuery}`), { params: Promise.resolve({}) });
+
+    it("renvoie vers la page, qui rend le 404 du site, au lieu de répondre en JSON", async () => {
+      const res = await unknown("/territoires/communes/99999?code=99999&suite=");
+      expect(res.status).toBe(307);
+      expect(res.headers.get("content-type")).toBeNull();
+      expect(res.headers.get("location")).toBe(
+        "https://poligraph.fr/territoires/communes/commune-99999"
+      );
+    });
+
+    it("garde la sous-page", async () => {
+      const res = await unknown("/territoires/communes/99999/elections?suite=%2Felections");
+      expect(res.headers.get("location")).toBe(
+        "https://poligraph.fr/territoires/communes/commune-99999/elections"
+      );
+    });
+
+    it("ne boucle pas : le proxy ne réécrit pas l'adresse de destination", async () => {
+      const res = await unknown("/territoires/communes/99999");
+      const { pathname } = new URL(res.headers.get("location")!);
+      expect(legacyCommunePath(pathname)).toBeNull();
+      expect(communeCodeFromSegment(pathname.split("/").pop()!)).toBe("99999");
+    });
   });
 
   it("refuse un code ou une suite hors forme sans lire la base", async () => {

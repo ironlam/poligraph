@@ -9,13 +9,16 @@ import { legacyCommunePath, territoireCommunePath } from "@/lib/territoires/path
  * 308 (AGENTS.md §8), a Route Handler can.
  *
  * The destination is built from the commune name read by primary key, never from the request.
+ * A code no commune carries gets a 307 to the page, which answers the 404 of the site.
  * The answer is cacheable: an old address costs one query, then the CDN answers.
  */
 export const GET = withPublicRoute(async (request: NextRequest) => {
-  // Behind the proxy rewrite the request keeps its original address (measured on a real
-  // request: the rewritten query string never reaches the handler), so the path is read first.
-  // The query string is the fallback for a runtime that would hand over the rewritten URL.
-  // Both go through the parser the proxy uses: only a known shape reaches the database.
+  // Behind the proxy rewrite the request keeps its original path, so the path is read first.
+  // What happens to the query string depends on the runtime: `next dev` hands over the original
+  // one, Vercel merges the `code` and `suite` of the rewrite into it (seen in production on
+  // 2026-11-15). The query string is only the fallback for a runtime that would hand over the
+  // rewritten URL. Both go through the parser the proxy uses: only a known shape reaches the
+  // database.
   const { pathname, searchParams } = request.nextUrl;
   const viaProxy = legacyCommunePath(pathname);
   const legacy =
@@ -29,13 +32,22 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     where: { id: legacy.code },
     select: { name: true },
   });
-  if (!commune) return NextResponse.json({ error: "Commune introuvable" }, { status: 404 });
 
-  // The query string of the old address is kept (the elections page filters on `?type=`).
-  const query = viaProxy ? request.nextUrl.search : "";
-  const destination = `${territoireCommunePath(legacy.code, commune.name)}${legacy.suite}${query}`;
+  // Unknown code: a Route Handler cannot render the 404 page of the site (`notFound()` answers
+  // an empty body here), so the visitor is sent to a readable-shaped address, which the proxy
+  // does not rewrite and where the page renders its own not-found. Temporary: the code may
+  // exist one day.
+  const name = commune?.name ?? "commune";
+
+  // The query string of the old address is kept (the elections page filters on `?type=`),
+  // minus the two parameters of the rewrite: they are internal and never belong in an address.
+  const kept = new URLSearchParams(request.nextUrl.search);
+  kept.delete("code");
+  kept.delete("suite");
+  const query = kept.size > 0 ? `?${kept}` : "";
+  const destination = `${territoireCommunePath(legacy.code, name)}${legacy.suite}${query}`;
   return new NextResponse(null, {
-    status: 308,
+    status: commune ? 308 : 307,
     headers: {
       Location: new URL(destination, request.url).toString(),
       "Cache-Control": "public, max-age=3600, s-maxage=86400",
