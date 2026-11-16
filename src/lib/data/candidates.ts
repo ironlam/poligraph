@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import type { Prisma } from "@/generated/prisma";
 
 const PRESIDENTIAL_INCLUDE = {
@@ -25,8 +26,10 @@ export type CandidatePresidentialRow = Prisma.CandidacyGetPayload<{
 export async function getCandidates2027ForModeration(): Promise<CandidatePresidentialRow[]> {
   // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): the moderation
   // queue must show every candidate of that one election, and a take would silently drop some.
+  const electionId = await getElectionIdBySlug("presidentielle-2027");
+  if (electionId === null) return [];
   return db.candidacy.findMany({
-    where: { election: { slug: "presidentielle-2027" } },
+    where: { electionId },
     include: PRESIDENTIAL_INCLUDE,
     orderBy: [
       { presidentialData: { rank: { sort: "asc", nulls: "last" } } },
@@ -39,9 +42,11 @@ export async function getCandidatePresidentialBySlug(
   electionSlug: string,
   politicianSlug: string
 ): Promise<CandidatePresidentialRow | null> {
+  const electionId = await getElectionIdBySlug(electionSlug);
+  if (electionId === null) return null;
   return db.candidacy.findFirst({
     where: {
-      election: { slug: electionSlug },
+      electionId,
       politician: { slug: politicianSlug },
     },
     include: PRESIDENTIAL_INCLUDE,

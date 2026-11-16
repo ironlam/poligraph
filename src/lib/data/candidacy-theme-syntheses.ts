@@ -1,6 +1,7 @@
 import "server-only";
 import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import {
   computeThemeCorpusFingerprint,
   computeThemeSynthesisContentFingerprint,
@@ -45,10 +46,12 @@ export type AdminCandidacyThemeSyntheses = {
 export async function getAdminCandidacyThemeSyntheses(
   politicianSlug: string
 ): Promise<AdminCandidacyThemeSyntheses | null> {
+  const electionId = await getElectionIdBySlug(PRESIDENTIELLE_2027_SLUG);
+  if (electionId === null) return null;
   const candidacy = await db.candidacy.findFirst({
     where: {
       politician: { slug: politicianSlug },
-      election: { slug: PRESIDENTIELLE_2027_SLUG },
+      electionId,
     },
     select: {
       id: true,

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 
 /**
  * The candidacies a measure can be created from, in the 2027 hub.
@@ -30,9 +31,11 @@ export type CandidacyOption = {
 };
 
 export async function listPresidentialCandidacies(): Promise<CandidacyOption[]> {
+  const hubElectionId = await getElectionIdBySlug(HUB_ELECTION_SLUG);
+  if (hubElectionId === null) return [];
   const rows = await db.candidacy.findMany({
     where: {
-      election: { slug: HUB_ELECTION_SLUG },
+      electionId: hubElectionId,
       status: { in: ["DECLARE", "OFFICIAL"] },
       sourceUrl: { not: null },
       sourceLabel: { not: null },

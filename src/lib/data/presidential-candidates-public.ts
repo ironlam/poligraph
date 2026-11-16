@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import { resolveCandidateAccentColor } from "@/lib/presidentielle/candidate-accent";
 import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
 import type { CandidacyStatus, Prisma } from "@/generated/prisma";
@@ -49,8 +50,10 @@ export async function getPublicPresidentialCandidates(
 ): Promise<PublicPresidentialCandidate[]> {
   // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): this is the
   // whole public field of one presidential election, and a take would silently drop candidates.
+  const electionId = await getElectionIdBySlug(electionSlug);
+  if (electionId === null) return [];
   const rows = await db.candidacy.findMany({
-    where: { election: { slug: electionSlug }, ...PUBLIC_CANDIDACY_WHERE },
+    where: { electionId, ...PUBLIC_CANDIDACY_WHERE },
     include: {
       presidentialData: true,
       // `currentParty` is read for its colour only, and only ever used when the candidacy's own

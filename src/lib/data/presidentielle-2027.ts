@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import type { Candidacy, Politician, Party, CandidacyStatus } from "@/generated/prisma";
 
 export type PresidentielleCandidate = Candidacy & {
@@ -23,8 +24,10 @@ function rank(status: CandidacyStatus | null): number {
 export async function getPresidentielle2027Candidates(): Promise<PresidentielleCandidate[]> {
   // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): this is the
   // whole admin field of one presidential election, and a take would silently drop candidates.
+  const electionId = await getElectionIdBySlug("presidentielle-2027");
+  if (electionId === null) return [];
   const rows = await db.candidacy.findMany({
-    where: { election: { slug: "presidentielle-2027" } },
+    where: { electionId },
     include: {
       politician: true,
       party: true,

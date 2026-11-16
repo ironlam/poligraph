@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import { confirmedNow } from "@/lib/mandates/confirmation";
 import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource, Chamber } from "@/generated/prisma";
@@ -406,8 +407,10 @@ async function mapUnknownSenators(
   );
   if (unknown.size === 0) return [];
 
+  const electionId = await getElectionIdBySlug("senatoriales-2026");
+  if (electionId === null) return [];
   const candidacies = await db.candidacy.findMany({
-    where: { election: { slug: "senatoriales-2026" }, isElected: true },
+    where: { electionId, isElected: true },
     take: 200,
     select: {
       politicianId: true,

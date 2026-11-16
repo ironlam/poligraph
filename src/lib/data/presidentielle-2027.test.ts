@@ -7,18 +7,23 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+const getElectionIdBySlug = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/elections/election-id", () => ({ getElectionIdBySlug }));
+
 import { db } from "@/lib/db";
 
 describe("getPresidentielle2027Candidates", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getElectionIdBySlug.mockResolvedValue("election-2027");
   });
 
-  it("queries Candidacy joined to Election.slug = 'presidentielle-2027' with required relations", async () => {
+  it("queries the candidacies of presidentielle-2027 by election id, with required relations", async () => {
     (db.candidacy.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     await getPresidentielle2027Candidates();
     const arg = (db.candidacy.findMany as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
-    expect(arg?.where).toEqual({ election: { slug: "presidentielle-2027" } });
+    expect(getElectionIdBySlug).toHaveBeenCalledExactlyOnceWith("presidentielle-2027");
+    expect(arg?.where).toEqual({ electionId: "election-2027" });
     expect(arg?.include).toMatchObject({
       politician: expect.anything(),
       party: expect.anything(),
