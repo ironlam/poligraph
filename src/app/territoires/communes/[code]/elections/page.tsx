@@ -9,7 +9,11 @@ import {
 import { getCommuneElections } from "@/lib/data/territoire-elections";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
-import { communeCodeFromSegment, territoireCommuneElectionsPath } from "@/lib/territoires/paths";
+import {
+  communeCodeFromSegment,
+  isCommuneSegment,
+  territoireCommuneElectionsPath,
+} from "@/lib/territoires/paths";
 
 // ISR: 24 h backstop; results import refreshes `territoire:<code>` and `elections`.
 // No generateStaticParams: the `type` filter reads searchParams (see AGENTS.md, ISR gotchas).
@@ -20,10 +24,11 @@ interface PageProps {
   searchParams: Promise<{ type?: string }>;
 }
 
-/** The segment is `brest-29019` or the bare code: only the code finds the commune. */
-const loadElections = cache((segment: string) => {
+/** The segment is `brest-29019` or the bare code. The code finds the commune, a wrong name is a 404. */
+const loadElections = cache(async (segment: string) => {
   const code = communeCodeFromSegment(segment);
-  return code ? getCommuneElections(code) : null;
+  const data = code ? await getCommuneElections(code) : null;
+  return data && isCommuneSegment(segment, code!, data.commune.name) ? data : null;
 });
 
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {

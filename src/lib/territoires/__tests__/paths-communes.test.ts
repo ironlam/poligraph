@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   communeCodeFromSegment,
+  isCommuneSegment,
   legacyCommunePath,
   territoireCommuneDecisionsPath,
   territoireCommuneElectionsPath,
@@ -79,5 +80,22 @@ describe("legacyCommunePath", () => {
     expect(legacyCommunePath("/territoires/communes/29019/autre")).toBeNull();
     expect(legacyCommunePath("/api/v1/territoires/communes/29019")).toBeNull();
     expect(legacyCommunePath("/territoires/communes/2901")).toBeNull();
+  });
+});
+
+describe("isCommuneSegment", () => {
+  it("accepte l'adresse lisible exacte et le code seul", () => {
+    expect(isCommuneSegment("brest-29019", "29019", "Brest")).toBe(true);
+    expect(isCommuneSegment("29019", "29019", "Brest")).toBe(true);
+    expect(isCommuneSegment("saint-etienne-42218", "42218", "Saint-Étienne")).toBe(true);
+    expect(isCommuneSegment("ajaccio-2A004", "2A004", "Ajaccio")).toBe(true);
+  });
+
+  it("refuse un nom qui n'est pas celui de la commune", () => {
+    expect(isCommuneSegment("n-importe-quoi-29019", "29019", "Brest")).toBe(false);
+    expect(isCommuneSegment("Brest-29019", "29019", "Brest")).toBe(false);
+    expect(isCommuneSegment("brest--29019", "29019", "Brest")).toBe(false);
+    expect(isCommuneSegment("saint-étienne-42218", "42218", "Saint-Étienne")).toBe(false);
+    expect(isCommuneSegment("brest-29019", "35238", "Rennes")).toBe(false);
   });
 });
