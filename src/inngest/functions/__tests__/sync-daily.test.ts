@@ -22,7 +22,7 @@ vi.mock("../../vote-cache", () => ({ runVoteSyncWithCacheInvalidation: vi.fn() }
 const embeddings = vi.hoisted(() => ({ indexAllOfType: vi.fn(async () => ({})) }));
 vi.mock("@/services/embeddings", () => embeddings);
 
-import { PROFILE_RECONCILE_EVENT } from "@/lib/politicians/profile-snapshot/events";
+import { PROFILE_RECONCILE_ACTIVE_EVENT } from "@/lib/politicians/profile-snapshot/events";
 import "../sync-daily";
 
 async function runDaily() {
@@ -38,7 +38,7 @@ describe("sync-daily : rattrapage des fiches", () => {
   it("envoie le rattrapage après les étapes", async () => {
     const step = await runDaily();
     expect(step.sendEvent).toHaveBeenCalledExactlyOnceWith("profile-reconcile", {
-      name: PROFILE_RECONCILE_EVENT,
+      name: PROFILE_RECONCILE_ACTIVE_EVENT,
       data: { reason: "sync-daily" },
     });
     expect(step.sendEvent.mock.invocationCallOrder[0]).toBeGreaterThan(

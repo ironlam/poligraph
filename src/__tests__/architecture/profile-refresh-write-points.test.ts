@@ -19,7 +19,7 @@ const INVALIDATES_PROFILE_DATA = new RegExp(
   ].join("|")
 );
 const REQUESTS_REFRESH =
-  /requestProfileRefresh\(|refreshProfilesForModeration\(|requestProfileReconcile\(|PROFILE_RECONCILE_EVENT/;
+  /requestProfileRefresh\(|refreshProfilesForModeration\(|request(Active)?ProfileReconcile\(|PROFILE_RECONCILE_(ACTIVE_)?EVENT/;
 
 // Files that invalidate one of those tags but write nothing the profile document holds. The
 // document holds: identity, current party, party history, mandates, declarations, external ids,
@@ -321,7 +321,7 @@ describe("points d'écriture des fiches politicien", () => {
   it("le rattrapage suit le sync quotidien et la revalidation par cron", () => {
     const daily = withoutComments(read("src/inngest/functions/sync-daily.ts"));
     expect(daily).toMatch(
-      /step\.sendEvent\(\s*["']profile-reconcile["'],\s*\{\s*name:\s*PROFILE_RECONCILE_EVENT,\s*data:\s*\{\s*reason:\s*["']sync-daily["']\s*\}/
+      /step\.sendEvent\(\s*["']profile-reconcile["'],\s*\{\s*name:\s*PROFILE_RECONCILE_ACTIVE_EVENT,\s*data:\s*\{\s*reason:\s*["']sync-daily["']\s*\}/
     );
     expect(daily.indexOf('step.sendEvent("profile-reconcile"')).toBeGreaterThan(
       daily.indexOf("for (const s of DAILY_STEPS)")
@@ -329,6 +329,7 @@ describe("points d'écriture des fiches politicien", () => {
 
     const cron = withoutComments(read("src/app/api/cron/revalidate/route.ts"));
     expect(cron).toMatch(/requestProfileReconcile\(/);
+    expect(cron).toMatch(/requestActiveProfileReconcile\(/);
     expect(cron).toContain('from "@/lib/politicians/profile-snapshot/events"');
     expect(cron).not.toContain("profile-snapshot/request");
   });

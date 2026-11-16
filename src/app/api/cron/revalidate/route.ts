@@ -3,12 +3,18 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { revalidateAll, revalidateTags } from "@/lib/cache";
 import { SELECTABLE_TAGS, type SelectableCacheTag } from "@/lib/cache-tags";
 import { revalidatePathsSchema } from "@/lib/security/schemas/admin";
-import { requestProfileReconcile } from "@/lib/politicians/profile-snapshot/events";
+import {
+  requestActiveProfileReconcile,
+  requestProfileReconcile,
+} from "@/lib/politicians/profile-snapshot/events";
 
 const CRON_ALLOWED_TAGS = SELECTABLE_TAGS;
 
 // Tags whose sync may change a profile document: a reconcile pass follows their revalidation.
-const PROFILE_TAGS: readonly string[] = ["politicians", "votes", "factchecks"];
+// `politicians` can touch any profile, so it gets the full pass. A vote or fact-check sync only
+// changes the profiles of parliamentarians and of politicians a fact-check mentions.
+const FULL_RECONCILE_TAG = "politicians";
+const ACTIVE_RECONCILE_TAGS: readonly string[] = ["votes", "factchecks"];
 type CronAllowedTag = SelectableCacheTag;
 
 // Tags a caller may expire at once with `expireNow: true` (no stale entry served while the
@@ -89,8 +95,10 @@ export async function POST(request: NextRequest) {
         for (const tag of tags)
           if (EXPIRE_NOW_TAGS.includes(tag)) revalidateTag(tag, { expire: 0 });
       }
-      if (tags.some((tag: string) => PROFILE_TAGS.includes(tag))) {
+      if (tags.includes(FULL_RECONCILE_TAG)) {
         await requestProfileReconcile(`cron:${tags.join(",")}`);
+      } else if (tags.some((tag: string) => ACTIVE_RECONCILE_TAGS.includes(tag))) {
+        await requestActiveProfileReconcile(`cron:${tags.join(",")}`);
       }
       return NextResponse.json(
         revalidatedPaths ? { revalidated: tags, revalidatedPaths } : { revalidated: tags }

@@ -53,6 +53,31 @@ export async function listPublicPoliticianIds(
 }
 
 /**
+ * Public politicians whose profile a vote or fact-check sync can change: the vote block shows
+ * only under a current DEPUTE or SENATEUR mandate (`resolveProfileMandateType`), and a fact-check
+ * shows only on the profiles it mentions.
+ */
+export async function listActiveProfilePoliticianIds(
+  cursor: string | null,
+  take: number
+): Promise<string[]> {
+  const rows = await db.politician.findMany({
+    where: {
+      ...PUBLIC_POLITICIAN_WHERE,
+      ...(cursor ? { id: { gt: cursor } } : {}),
+      OR: [
+        { mandates: { some: { isCurrent: true, type: { in: ["DEPUTE", "SENATEUR"] } } } },
+        { factCheckMentions: { some: {} } },
+      ],
+    },
+    orderBy: { id: "asc" },
+    take,
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+/**
  * Politicians whose stored document outlived their publication (unpublished by a sync, say):
  * the public walk above never visits them. The negation of PUBLIC_POLITICIAN_WHERE is exact:
  * `publicationStatus` is a required column.

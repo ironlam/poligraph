@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const revalidateTags = vi.hoisted(() => vi.fn());
-const requestProfileReconcile = vi.hoisted(() => vi.fn());
+const requestActiveProfileReconcile = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/cache", () => ({ revalidateTags }));
 vi.mock("@/lib/politicians/profile-snapshot/events", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/politicians/profile-snapshot/events")>()),
-  requestProfileReconcile,
+  requestActiveProfileReconcile,
 }));
 
 import { runVoteSyncWithCacheInvalidation } from "../vote-cache";
@@ -77,7 +77,7 @@ describe("runVoteSyncWithCacheInvalidation", () => {
 
   it("demande un rattrapage des fiches après le sync", async () => {
     await runVoteSyncWithCacheInvalidation(async () => ({ ...NOTHING_WRITTEN, votesCreated: 1 }));
-    expect(requestProfileReconcile).toHaveBeenCalledExactlyOnceWith("sync-scrutins");
+    expect(requestActiveProfileReconcile).toHaveBeenCalledExactlyOnceWith("sync-scrutins");
   });
 
   it("ne demande pas de rattrapage quand le sync échoue", async () => {
@@ -86,6 +86,6 @@ describe("runVoteSyncWithCacheInvalidation", () => {
         throw new Error("sync failed");
       })
     ).rejects.toThrow("sync failed");
-    expect(requestProfileReconcile).not.toHaveBeenCalled();
+    expect(requestActiveProfileReconcile).not.toHaveBeenCalled();
   });
 });
