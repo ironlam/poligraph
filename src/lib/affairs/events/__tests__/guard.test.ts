@@ -325,6 +325,7 @@ describe("checkEventPublishable : listes blanches de sources", () => {
     "https://mesinfos.fr/auvergne-rhone-alpes/a",
     "https://www.lnc.nc/article/a",
     "https://outremers360.com/bassin-pacifique-appli/a",
+    "https://lejournaldemayotte.yt/articles/lex-depute-abdoulatifou-ali-pourrait-passer-par-la-case-prison",
   ])("accepte %s comme presse", (sourceUrl) => {
     expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toEqual([]);
   });

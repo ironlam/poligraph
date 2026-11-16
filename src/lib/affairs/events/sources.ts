@@ -140,6 +140,7 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "rci.fm",
   "lnc.nc",
   "outremers360.com",
+  "lejournaldemayotte.yt",
   // Presse étrangère de référence
   "lesoir.be",
   "lalibre.be",
