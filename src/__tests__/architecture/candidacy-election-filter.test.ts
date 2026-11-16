@@ -22,6 +22,21 @@ const ROOT = process.cwd();
  * What it cannot see: a `where` built elsewhere and passed as a variable, and relation loads
  * (`election.candidacies`). It reads direct `db.candidacy.*` and `tx.candidacy.*` calls only.
  */
+/**
+ * Reads allowed to keep the relation filter, with the number of them per file and the reason.
+ * An entry is a written decision, not a parking place: convert the read when the reason goes.
+ */
+const ALLOWED: Record<string, { count: number; reason: string }> = {
+  "src/lib/data/presidential-candidates-public.ts": {
+    count: 1,
+    reason:
+      "lecture publique du hub, comptée dans les budgets de requêtes des tests d'intégration : " +
+      "résoudre l'identifiant ajouterait une requête par page. Sans tri ni limite, PostgreSQL " +
+      "passe par l'index electionId (plan vérifié). À convertir quand les appelants " +
+      "transmettront l'identifiant de l'élection.",
+  },
+};
+
 const METHODS = new Set([
   "findMany",
   "findFirst",
@@ -197,9 +212,24 @@ describe("Candidacy se filtre par electionId", () => {
       const code = readFileSync(join(ROOT, path), "utf8");
       // Parsing every file of src/ takes seconds; only the ones that name the model can offend.
       if (!code.includes("candidacy.")) return [];
-      return candidacyReadsThroughElectionRelation(path, code).map((line) => `${path}:${line}`);
+      const lines = candidacyReadsThroughElectionRelation(path, code);
+      return lines.length > (ALLOWED[path]?.count ?? 0)
+        ? lines.map((line) => `${path}:${line}`)
+        : [];
     });
 
     expect(offenders).toEqual([]);
+  });
+
+  it("ne garde pas d'exception périmée", () => {
+    const stale = Object.entries(ALLOWED).flatMap(([path, { count }]) => {
+      const found = candidacyReadsThroughElectionRelation(
+        path,
+        readFileSync(join(ROOT, path), "utf8")
+      ).length;
+      return found === count ? [] : [`${path} : ${count} déclarée(s), ${found} trouvée(s)`];
+    });
+
+    expect(stale).toEqual([]);
   });
 });
