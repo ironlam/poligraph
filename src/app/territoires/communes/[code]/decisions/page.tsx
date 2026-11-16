@@ -9,7 +9,11 @@ import { getCommuneDossier } from "@/lib/data/territoires";
 import { getCommuneDecisions } from "@/lib/data/territoire-decisions";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
-import { communeCodeFromSegment, territoireCommuneDecisionsPath } from "@/lib/territoires/paths";
+import {
+  communeCodeFromSegment,
+  isCommuneSegment,
+  territoireCommuneDecisionsPath,
+} from "@/lib/territoires/paths";
 
 // ISR: 24 h backstop; publishing or unpublishing a decision refreshes `territoire:<code>`.
 export const revalidate = 86400;
@@ -22,10 +26,11 @@ interface PageProps {
   params: Promise<{ code: string }>;
 }
 
-/** The segment is `brest-29019` or the bare code: only the code finds the commune. */
-const loadDecisions = cache((segment: string) => {
+/** The segment is `brest-29019` or the bare code. The code finds the commune, a wrong name is a 404. */
+const loadDecisions = cache(async (segment: string) => {
   const code = communeCodeFromSegment(segment);
-  return code ? getCommuneDecisions(code) : null;
+  const decisions = code ? await getCommuneDecisions(code) : null;
+  return decisions && isCommuneSegment(segment, code!, decisions.commune.name) ? decisions : null;
 });
 const loadDossier = cache((segment: string) => {
   const code = communeCodeFromSegment(segment);

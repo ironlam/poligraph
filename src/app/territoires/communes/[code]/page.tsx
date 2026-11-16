@@ -33,6 +33,7 @@ import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
 import { communeDescription, communeTitle } from "@/lib/territoires/commune-display";
 import {
   communeCodeFromSegment,
+  isCommuneSegment,
   territoireCommunePath,
   territoireDepartementPath,
 } from "@/lib/territoires/paths";
@@ -49,10 +50,11 @@ interface PageProps {
   params: Promise<{ code: string }>;
 }
 
-/** The segment is `brest-29019` or the bare code: only the code finds the commune. */
-const loadDossier = cache((segment: string) => {
+/** The segment is `brest-29019` or the bare code. The code finds the commune, a wrong name is a 404. */
+const loadDossier = cache(async (segment: string) => {
   const code = communeCodeFromSegment(segment);
-  return code ? getCommuneDossier(code) : null;
+  const dossier = code ? await getCommuneDossier(code) : null;
+  return dossier && isCommuneSegment(segment, code!, dossier.identity.name) ? dossier : null;
 });
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {

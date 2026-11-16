@@ -20,7 +20,8 @@ function slugify(text: string): string {
 
 /**
  * `/territoires/communes/brest-29019`. The INSEE code is the key; the name in front is there
- * for the reader and is never used to find the commune. Without a name the bare code is
+ * for the reader and is never used to find the commune, but it has to be the right one (see
+ * `isCommuneSegment`). Without a name the bare code is
  * returned: that address still answers, by a 308 to the readable one.
  */
 export function territoireCommunePath(inseeCode: string, name?: string | null): string {
@@ -32,6 +33,19 @@ export function territoireCommunePath(inseeCode: string, name?: string | null): 
 export function communeCodeFromSegment(segment: string): string | null {
   const match = decodeURIComponent(segment).match(new RegExp(`(?:^|-)(${INSEE_CODE})$`));
   return match?.[1] ?? null;
+}
+
+/**
+ * True when the segment is an address of this commune: its readable form, letter for letter, or
+ * its bare code. A wrong name in front of the right code is another address: it gets a 404, so
+ * a commune answers under one readable address only.
+ */
+export function isCommuneSegment(segment: string, inseeCode: string, name: string): boolean {
+  const decoded = decodeURIComponent(segment);
+  return (
+    decoded === inseeCode ||
+    `/territoires/communes/${decoded}` === territoireCommunePath(inseeCode, name)
+  );
 }
 
 const LEGACY_COMMUNE_PATH = new RegExp(
