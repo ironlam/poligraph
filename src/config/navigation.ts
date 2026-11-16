@@ -190,7 +190,8 @@ export const NAV_ELECTIONS: ElectionNavItem[] = [
 ];
 
 // Mobile menu, grouped by what the reader is trying to do. The four sections of the tab bar
-// (NAV_TABS) are left out: the bar already holds them. Search is the field at the top of the menu.
+// (NAV_TABS) stay in the bar. Affaires also appears alongside Patrimoine et déclarations so that
+// readers can find both under Transparence et probité. Search is at the top of the menu.
 export const NAV_MENU_GROUPS: NavGroup[] = [
   {
     label: "Près de chez moi",
@@ -199,6 +200,13 @@ export const NAV_MENU_GROUPS: NavGroup[] = [
       { href: "/mon-depute", label: "Mon député", featureFlag: "MON_DEPUTE_SECTION" },
       { href: TERRITOIRES_DEPARTEMENTS_PATH, label: "Départements" },
       { href: TERRITOIRES_REGIONS_ANCHOR, label: "Régions" },
+    ],
+  },
+  {
+    label: "Transparence et probité",
+    items: [
+      { href: "/affaires", label: "Affaires judiciaires" },
+      { href: "/declarations-et-patrimoine", label: "Patrimoine et déclarations" },
     ],
   },
   {
