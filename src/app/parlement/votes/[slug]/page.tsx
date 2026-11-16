@@ -469,19 +469,23 @@ export default async function ScrutinPage({ params }: PageProps) {
               className="flex items-center gap-3 mb-8 p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors group"
             >
               <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground">Dossier législatif</p>
-                <p className="font-medium group-hover:underline">
-                  {scrutin.dossierLegislatif.shortTitle || scrutin.dossierLegislatif.title}
-                </p>
-              </div>
-              <div className="shrink-0 flex items-center gap-2">
-                {scrutin.dossierLegislatif.number && (
-                  <Badge variant="secondary" className="font-mono text-xs">
-                    {scrutin.dossierLegislatif.number}
-                  </Badge>
-                )}
-                <StatusBadge status={scrutin.dossierLegislatif.status} />
+              {/* Stacked below `sm`: side by side, the badges kept their width and squeezed the
+                  title to one word per line on a phone. */}
+              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-muted-foreground">Dossier législatif</p>
+                  <p className="font-medium group-hover:underline">
+                    {scrutin.dossierLegislatif.shortTitle || scrutin.dossierLegislatif.title}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {scrutin.dossierLegislatif.number && (
+                    <Badge variant="secondary" className="font-mono text-xs">
+                      {scrutin.dossierLegislatif.number}
+                    </Badge>
+                  )}
+                  <StatusBadge status={scrutin.dossierLegislatif.status} />
+                </div>
               </div>
             </Link>
           )}
