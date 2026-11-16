@@ -87,6 +87,7 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "ina.fr",
   // Presse régionale
   "ouest-france.fr",
+  "oxygeneradio.com",
   "sudouest.fr",
   "ladepeche.fr",
   "ledauphine.com",
