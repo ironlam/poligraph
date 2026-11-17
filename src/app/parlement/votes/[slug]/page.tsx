@@ -469,8 +469,8 @@ export default async function ScrutinPage({ params }: PageProps) {
               className="flex items-center gap-3 mb-8 p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors group"
             >
               <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-              {/* Stacked below `sm`: side by side, the badges kept their width and squeezed the
-                  title to one word per line on a phone. */}
+              {/* Below `sm` the badges sit under the title: they must never compete with it for
+                  width on a narrow screen. */}
               <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-muted-foreground">Dossier législatif</p>
