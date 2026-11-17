@@ -57,16 +57,85 @@ gabarit qu'il faut corriger, pas la règle.
 Nommer la source par ce qui l'établit. Une date de scrutin est indicative tant que le texte qui la
 fixe n'est pas publié ; une fois publié, c'est lui qu'on cite.
 
-## 5. Le judiciaire entre par la pédagogie
+## 5. Probité : nommer ce qui est documenté
 
-Les affaires judiciaires ne font pas l'objet de publications nominatives. Ce qui se publie, c'est la
-grammaire : comment lire une mise en examen, ce que change un non-lieu, pourquoi relaxe et
-acquittement ne sont pas synonymes.
+Un manquement à la probité ou à la transparence, documenté chez un responsable politique, peut faire
+l'objet d'une publication nominative. Le public attend de Poligraph qu'il rende la vie politique
+lisible, et un mécanisme de contrôle ne se comprend jamais aussi bien qu'à travers un cas réel.
+S'en tenir à la grammaire judiciaire laissait ce terrain à des comptes qui n'ont ni nos sources ni
+nos règles.
 
-La raison tient au format autant qu'au fond. Un visuel se repartage hors contexte : la mention de
-présomption d'innocence ne suit pas la capture d'écran de celui qui la précédait, et l'espace de
-commentaires se transforme en tribunal. Aucun décompte de condamnations n'est publié, et aucune
-comparaison entre personnes sur ce terrain.
+Cette règle remplace celle de novembre 2026, qui limitait le judiciaire à la pédagogie. Le risque
+qu'elle visait reste entier : un visuel se repartage hors contexte, la mention de présomption
+d'innocence ne suit pas une légende, et l'espace de commentaires devient un tribunal. Les conditions
+ci-dessous existent pour y répondre.
+
+### 5.1 Ce qui peut être nommé
+
+**Une publication ne va jamais plus loin que le site.** Une affaire n'est nommée sur un réseau que si
+elle est publiée sur poligraph.fr, donc passée par la validation humaine décrite dans
+[`docs/LEGAL.md`](../LEGAL.md) §7.3. Tout fait cité dans la publication figure sur la fiche vers
+laquelle elle renvoie, avec la même source. Une information trouvée en préparant la publication
+entre d'abord sur le site.
+
+Hors affaires judiciaires, un manquement à la transparence se nomme quand une autorité l'a constaté
+par écrit : avis, rapport ou décision de la HATVP, de la Commission nationale des comptes de campagne,
+du Conseil constitutionnel, de la Cour des comptes ou d'une juridiction financière.
+
+### 5.2 Le statut se dit tel qu'il est
+
+- **Condamnation définitive** : on nomme et on écrit « condamné », avec la juridiction et la date.
+- **Procédure en cours** : le terme exact (« mis en examen », « renvoyé devant le tribunal »,
+  « condamné en première instance, appel en cours »), jamais « coupable ».
+- **Issue favorable** : une relaxe, un non-lieu ou un acquittement se publie aussi quand il clôt un
+  sujet déjà traité, avec la même visibilité que la publication d'origine.
+- **Prescription** : elle clôt la procédure sans décision sur le fond, et se dit comme telle.
+- **Manquement de transparence** : une déclaration en retard ou incomplète se décrit comme telle. Le
+  vocabulaire pénal n'y entre pas.
+
+**La présomption d'innocence figure dans le visuel**, pas seulement dans la légende, dès qu'une
+procédure n'est pas définitivement jugée. C'est la seule façon qu'elle suive une capture d'écran.
+
+### 5.3 Le cas est l'accroche, le mécanisme est le sujet
+
+Chaque publication nominative explique la règle en jeu : ce qu'elle prévoit, ce qui aurait dû se
+passer, la sanction prévue et la sanction prononcée. Un cas sans mécanisme est une dénonciation,
+pas une explication.
+
+Le ton reste celui du §3 : aucun adjectif de jugement, aucune intention prêtée, aucune ironie,
+aucune musique choisie pour dramatiser. Pas de portrait ni d'illustration de la personne (voir
+[`instagram/README.md`](instagram/README.md)) : le fait sourcé porte seul.
+
+### 5.4 Le choix des cas
+
+Un cas est retenu selon des critères fixés avant de regarder qui il concerne :
+
+1. **Gravité** : la hiérarchie du site, qui suit la logique Sapin II (atteintes à la probité et
+   financement politique illégal d'abord, voir `AGENTS.md` §2).
+2. **Lien avec le mandat** : un fait commis dans l'exercice ou à l'occasion d'une fonction publique
+   passe avant un fait de vie privée.
+3. **Actualité** : une décision récente ou un fait nouveau documenté.
+
+Aucun critère ne dépend du parti. La répartition des cas publiés par famille politique se suit pour
+détecter un biais de sélection, jamais pour équilibrer par quota : un équilibre artificiel serait
+lui-même un choix éditorial déguisé.
+
+### 5.5 Agrégats et listes
+
+Un décompte de condamnations peut se publier s'il respecte les catégories des compteurs du site
+(condamnation définitive, procédure validée par un juge, enquête préliminaire, issue favorable) et
+la règle du §2 : il mesure ce que Poligraph a documenté, pas l'ensemble des faits réels.
+
+Une liste nominative couvre un périmètre défini par une fonction et une période, jamais par un
+camp : tous les gouvernements depuis une date, tous les élus d'une assemblée. Restreinte à une
+famille politique, elle se lit comme partisane, quelle que soit l'exactitude de chaque ligne. Le §3
+continue de s'appliquer : aucun classement entre personnes.
+
+### 5.6 Après publication
+
+La légende porte le contact (`contact@poligraph.fr`). Une demande de droit de réponse ou une erreur
+signalée suit la procédure de [`docs/LEGAL.md`](../LEGAL.md) §5. Une erreur avérée donne lieu à une
+correction publique sur le même compte, avec la même visibilité que la publication corrigée.
 
 ## 6. Fact-checks
 
