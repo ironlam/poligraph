@@ -23,6 +23,22 @@ describe("territoireCommunePath", () => {
     expect(territoireCommunePath("80021", "L'Étoile")).toBe("/territoires/communes/l-etoile-80021");
   });
 
+  // Régression : « œ » n'a pas de décomposition Unicode, le nom perdait ses voyelles
+  // (« marcq-en-bar-ul-59378 »). 109 communes concernées, mesuré le 2026-11-17.
+  it("écrit les ligatures œ et æ en toutes lettres", () => {
+    expect(territoireCommunePath("59378", "Marcq-en-Barœul")).toBe(
+      "/territoires/communes/marcq-en-baroeul-59378"
+    );
+    expect(territoireCommunePath("68099", "Frœningen")).toBe(
+      "/territoires/communes/froeningen-68099"
+    );
+    expect(territoireCommunePath("14202", "Cricquebœuf")).toBe(
+      "/territoires/communes/cricqueboeuf-14202"
+    );
+    expect(territoireCommunePath("00000", "Œuilly")).toBe("/territoires/communes/oeuilly-00000");
+    expect(territoireCommunePath("00000", "Ærø")).toMatch(/^\/territoires\/communes\/aer/);
+  });
+
   it("rend le code seul sans nom : l'adresse répond encore, par redirection", () => {
     expect(territoireCommunePath("29019")).toBe("/territoires/communes/29019");
     expect(territoireCommunePath("29019", null)).toBe("/territoires/communes/29019");

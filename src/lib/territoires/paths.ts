@@ -10,12 +10,17 @@ const INSEE_CODE = "[0-9]{5}|2[AB][0-9]{3}";
 
 /** Same slug as the rest of the site, inlined so this file stays free of imports. */
 function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
+  return (
+    text
+      .toLowerCase()
+      // Ligatures have no Unicode decomposition: they are spelled out before NFD.
+      .replace(/œ/g, "oe")
+      .replace(/æ/g, "ae")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+  );
 }
 
 /**
