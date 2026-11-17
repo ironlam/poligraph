@@ -2,4 +2,8 @@
 # GitHub Sponsors: confirm eligibility first (funding for political causes is restricted).
 # github: [ironlam]
 ko_fi: ironlam
-custom: ["https://www.helloasso.com/associations/association-sankofa/formulaires/1"]
+custom:
+  [
+    "https://www.helloasso.com/associations/association-sankofa/formulaires/1",
+    "https://fr.tipeee.com/poligraph",
+  ]
