@@ -8,6 +8,7 @@ import {
 import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { escapeXmlText } from "@/lib/text/escape-xml";
 import {
   buildSelectionPrompt,
@@ -32,7 +33,7 @@ import {
 import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
 import type { AnalysisSourceType } from "@/generated/prisma";
 
-const MISTRAL_MODEL = "mistral-large-latest";
+const MISTRAL_MODEL = MISTRAL_LARGE_MODEL;
 
 interface AnalysisOutput {
   argumentsFor: string;

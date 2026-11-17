@@ -19,6 +19,7 @@ import {
   parseMistralJSON,
   type MistralOptions,
 } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { db } from "@/lib/db";
 import {
   buildCandidateSynthesisPrompt,
@@ -146,7 +147,7 @@ async function generate(
   responseFormat: NonNullable<MistralOptions["responseFormat"]> = SYNTHESIS_RESPONSE_FORMAT
 ): Promise<{ text: string; provider: string }> {
   const response = await callMistral([{ role: "system", content: system }, ...messages], {
-    model: "mistral-large-latest",
+    model: MISTRAL_LARGE_MODEL,
     maxTokens,
     temperature: 0,
     responseFormat,
@@ -287,7 +288,7 @@ export async function generateCandidateSynthesis(
   let pendingCorrectedOutput:
     | { career: string; programmeClaims: CandidateProgrammeClaim[] }
     | undefined;
-  let lastProvider = "mistral-large-latest";
+  let lastProvider: string = MISTRAL_LARGE_MODEL;
   let accepted:
     | { text: string; provider: string; programmeClaims: CandidateProgrammeClaim[] }
     | undefined;

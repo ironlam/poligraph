@@ -5,6 +5,7 @@ import {
   parseMistralJSON,
   type MistralOptions,
 } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { db } from "@/lib/db";
 import { lockMeasureCandidacy } from "@/lib/measures/lock";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@/lib/presidentielle/candidacy-theme-synthesis";
 import { loadCandidacyThemeSynthesisCorpus } from "@/lib/presidentielle/candidacy-theme-synthesis-corpus";
 
-const MODEL = "mistral-large-latest";
+const MODEL = MISTRAL_LARGE_MODEL;
 
 function buildSynthesisResponseFormat(
   theme: ThemeCategory,

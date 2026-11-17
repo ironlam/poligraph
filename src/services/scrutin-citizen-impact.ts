@@ -8,11 +8,12 @@ import { MAX_DISCUSSION_CHARS } from "@/services/scrutin-substance/debate-discus
  */
 
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { escapeXmlText } from "@/lib/text/escape-xml";
 import { classifyVoteScope } from "@/lib/scrutin-scope";
 import type { SubstanceTextBlock, SubstanceDepth } from "@/services/scrutin-policy-title/types";
 
-const MISTRAL_MODEL = "mistral-large-latest";
+const MISTRAL_MODEL = MISTRAL_LARGE_MODEL;
 const MAX_TOKENS = 2000;
 
 // ============================================

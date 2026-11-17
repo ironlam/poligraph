@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ThemeCategory } from "@/generated/prisma";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import type { DiscourseAnnotation, DiscourseRole } from "./discourse";
 import { getDiscourseAnnotationIndex } from "./discourse";
@@ -454,7 +455,7 @@ export async function extractEvidenceWindow(
     ],
     {
       system: EVIDENCE_SYSTEM_PROMPT,
-      model: "mistral-large-latest",
+      model: MISTRAL_LARGE_MODEL,
       maxTokens: 3000,
       temperature: 0,
       responseFormat: { type: "json_object" },

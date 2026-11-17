@@ -15,6 +15,14 @@ import type {
   GeneratePolicyTitlesStats,
 } from "@/services/scrutin-policy-title/types";
 
+/**
+ * Consecutive unusable model outputs after which the batch stops. One bad output is a model
+ * hiccup; several in a row mean the provider changed something, and every further call would
+ * cost tokens and file one more empty title for review. In November 2026 the batch ran thirty
+ * failing calls three times a day for five days before anyone looked.
+ */
+export const MAX_CONSECUTIVE_INVALID_OUTPUTS = 3;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -74,6 +82,7 @@ export async function generateScrutinPolicyTitles(
     results: [],
   };
 
+  let consecutiveInvalid = 0;
   for (const { id } of scrutins) {
     const runOnce = (): Promise<GenerateResult> =>
       generateScrutinPolicyTitle(id, {
@@ -112,6 +121,15 @@ export async function generateScrutinPolicyTitles(
     if (result.outcome === "generated") stats.generated++;
     else if (result.outcome === "fallback") stats.fallbacks++;
     else stats.skipped++;
+
+    const invalidOutput =
+      result.outcome === "fallback" &&
+      result.warnings.some((warning) => warning.code === "LLM_OUTPUT_INVALID");
+    consecutiveInvalid = invalidOutput ? consecutiveInvalid + 1 : 0;
+    if (consecutiveInvalid >= MAX_CONSECUTIVE_INVALID_OUTPUTS) {
+      stats.aborted = "LLM_OUTPUT_INVALID";
+      break;
+    }
 
     // Rate-limit only when an LLM call likely happened: a non-skipped iteration
     // on a real run (dryRun and skipped outcomes never hit the model).

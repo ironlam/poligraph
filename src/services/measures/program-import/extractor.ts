@@ -1,4 +1,5 @@
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { isHistoricalStatement } from "./policy";
 import { extractionSchema, type DocumentSegment, type ExtractedProposal } from "./types";
@@ -351,7 +352,7 @@ export async function extractSegment(
     ],
     {
       system: EXTRACTION_SYSTEM_PROMPT,
-      model: "mistral-large-latest",
+      model: MISTRAL_LARGE_MODEL,
       maxTokens: 3000,
       temperature: 0,
       responseFormat: { type: "json_object" },
