@@ -10,7 +10,6 @@ import { syncLegislation } from "./functions/sync-legislation";
 import { syncPoliticians } from "./functions/sync-politicians";
 import { syncDaily } from "./functions/sync-daily";
 import { regenerateLegacyImpactsFn } from "./functions/regenerate-legacy-impacts";
-import { generateSocialDrafts, publishApprovedPost } from "./functions/post-social";
 import { sendNewsletter } from "./functions/send-newsletter";
 import { onboardingSend } from "./functions/onboarding-send";
 import { syncEngagement } from "./functions/sync-engagement";
@@ -41,8 +40,6 @@ const groupedFunctions = [
   discoverAffairsWebWave,
   syncDaily,
   regenerateLegacyImpactsFn,
-  generateSocialDrafts,
-  publishApprovedPost,
   sendNewsletter,
   onboardingSend,
   syncEngagement,
