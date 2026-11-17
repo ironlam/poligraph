@@ -13,6 +13,15 @@ export const alt = "Commune sur Poligraph : maire, élus et résultats";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 
+// The image is built on first request and then served from the cache, like the page it
+// illustrates. Without `generateStaticParams`, a `revalidate` on an image whose address carries a
+// parameter is ignored and the image is rebuilt on every request (measured in production).
+// Empty on purpose: nothing is built ahead, there are 35,000 communes.
+export const revalidate = 86400;
+export function generateStaticParams() {
+  return [];
+}
+
 export default async function Image({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   // Same reader and same sentence as the page: only a public, established mayor is ever named.
