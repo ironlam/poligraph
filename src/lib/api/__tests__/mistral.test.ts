@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { callMistral, callMistralEmbeddings, parseMistralJSON } from "../mistral";
+import {
+  callMistral,
+  callMistralEmbeddings,
+  extractMistralText,
+  parseMistralJSON,
+  type MistralResponse,
+} from "../mistral";
 
 describe("callMistral", () => {
   beforeEach(() => {
@@ -120,5 +126,34 @@ describe("parseMistralJSON", () => {
   it("parses raw JSON", () => {
     const result = parseMistralJSON<{ b: string }>('{"b": "hello"}');
     expect(result).toEqual({ b: "hello" });
+  });
+});
+
+describe("extractMistralText", () => {
+  const reply = (content: MistralResponse["choices"][number]["message"]["content"]) =>
+    ({
+      choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }],
+    }) as MistralResponse;
+
+  it("rend la chaîne quand la réponse est une chaîne", () => {
+    expect(extractMistralText(reply('{"ok": true}'))).toBe('{"ok": true}');
+  });
+
+  it("ne garde que les blocs de texte d'une réponse en blocs, sans le raisonnement", () => {
+    const text = extractMistralText(
+      reply([
+        { type: "thinking", thinking: [{ type: "text", text: "Je dois répondre en JSON." }] },
+        { type: "text", text: '{"ok": ' },
+        { type: "text", text: "true}" },
+      ])
+    );
+
+    expect(text).toBe('{"ok": true}');
+    expect(parseMistralJSON(text)).toEqual({ ok: true });
+  });
+
+  it("rend une chaîne vide, jamais un objet, quand aucun bloc de texte n'est présent", () => {
+    expect(extractMistralText(reply([{ type: "thinking", thinking: [] }]))).toBe("");
+    expect(extractMistralText({ choices: [] })).toBe("");
   });
 });

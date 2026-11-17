@@ -6,8 +6,9 @@
  */
 
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 
-const MISTRAL_MODEL = "mistral-large-latest";
+const MISTRAL_MODEL = MISTRAL_LARGE_MODEL;
 const MAX_TOKENS = 1500;
 
 // ============================================

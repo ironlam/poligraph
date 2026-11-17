@@ -14,10 +14,11 @@
 import { AI_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { clampConfidenceScore } from "@/services/affairs/confidence";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { AffairStatus } from "@/generated/prisma";
 
 const TIER_MODELS = {
-  TIER_1: "mistral-large-latest",
+  TIER_1: MISTRAL_LARGE_MODEL,
   TIER_2: "mistral-small-latest",
 } as const;
 

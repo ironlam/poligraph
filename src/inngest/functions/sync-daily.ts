@@ -212,9 +212,17 @@ const DAILY_STEPS: DailyStep[] = [
           generated: stats.generated,
           fallbacks: stats.fallbacks,
           errors: stats.errors.length,
+          ...(stats.aborted ? { aborted: stats.aborted } : {}),
         },
       });
       console.info("[sync-daily] generate-policy-titles", stats);
+      // Thrown after the run is recorded: the step then shows as failed instead of passing for
+      // a quiet run that had nothing to generate.
+      if (stats.aborted) {
+        throw new Error(
+          `generate-policy-titles arrêté : ${stats.fallbacks} sorties de modèle inutilisables d'affilée`
+        );
+      }
       return stats;
     },
   },

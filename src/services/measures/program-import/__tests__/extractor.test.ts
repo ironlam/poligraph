@@ -62,7 +62,7 @@ describe("extracteur Mistral", () => {
     expect(callMistral).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({
-        model: "mistral-large-latest",
+        model: "mistral-large-2512",
         responseFormat: { type: "json_object" },
       })
     );
