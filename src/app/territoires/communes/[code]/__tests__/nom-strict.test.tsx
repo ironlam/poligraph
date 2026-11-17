@@ -31,7 +31,7 @@ vi.mock("@/lib/data/territoire-votes", () => ({
 import CommunePage, { generateMetadata as communeMetadata } from "../page";
 import ElectionsPage, { generateMetadata as electionsMetadata } from "../elections/page";
 import DecisionsPage, { generateMetadata as decisionsMetadata } from "../decisions/page";
-import Image from "../opengraph-image";
+import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 
 // The fixture is Rennes (35238): `rennes-35238` is its only readable address.
 const commune = { inseeCode: "35238", name: "Rennes" };
@@ -66,10 +66,6 @@ describe("un nom faux devant le bon code : 404, jamais la fiche d'une autre adre
     await expect(DecisionsPage(params(segment))).rejects.toThrow("NEXT_NOT_FOUND");
     expect((await decisionsMetadata(params(segment))).alternates).toBeUndefined();
   });
-
-  it.each(FAUX)("image Open Graph : %s", async (segment) => {
-    await expect(Image(params(segment))).rejects.toThrow("NEXT_NOT_FOUND");
-  });
 });
 
 describe("l'adresse exacte répond toujours", () => {
@@ -86,8 +82,17 @@ describe("l'adresse exacte répond toujours", () => {
     expect(mocks.notFound).not.toHaveBeenCalled();
   });
 
-  it("rend l'image Open Graph, avec le nom comme avec le code seul", async () => {
-    await expect(Image(params("rennes-35238"))).resolves.toBeDefined();
-    await expect(Image(params("35238"))).resolves.toBeDefined();
+  it("déclare l'image de la rubrique sur les trois pages, sans image propre à la commune", async () => {
+    const images = [
+      (await communeMetadata(params("rennes-35238"))).openGraph?.images,
+      (await electionsMetadata(withSearch("rennes-35238"))).openGraph?.images,
+      (await decisionsMetadata(params("rennes-35238"))).openGraph?.images,
+    ];
+    expect(images).toEqual([
+      [TERRITOIRES_OG_IMAGE],
+      [TERRITOIRES_OG_IMAGE],
+      [TERRITOIRES_OG_IMAGE],
+    ]);
+    expect(TERRITOIRES_OG_IMAGE.url).toBe("/territoires/opengraph-image");
   });
 });
