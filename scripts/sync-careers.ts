@@ -28,6 +28,7 @@ import { setCurrentParty, setPartyRole } from "../src/services/politician";
 import { WIKIDATA_SPARQL_RATE_LIMIT_MS } from "../src/config/rate-limits";
 import { isGovernmentFunctionType } from "../src/services/sync/government-sync-guard";
 import { isCurrentChair } from "../src/services/sync/careers-chair";
+import { isDuplicateMandateCandidate } from "../src/services/sync/careers-dedup";
 
 // Mapping from Wikidata position IDs to our MandateType
 const POSITION_MAPPING: Record<string, { type: MandateType; institution: string }> = {
@@ -366,16 +367,15 @@ Features:
             continue;
           }
 
-          // Check if mandate already exists (within 30 days of start date)
-          const existingMandate = politician.mandates.find((m) => {
-            if (m.type !== mandateInfo.type) return false;
-            if (!m.startDate) return false;
-            const existingStart = new Date(m.startDate);
-            const diff = Math.abs(existingStart.getTime() - startDate.getTime());
-            return diff / (1000 * 60 * 60 * 24) < 30;
-          });
-
-          if (existingMandate) {
+          // Same guard as the service (see careers-dedup.ts): a second active
+          // DEPUTE/SENATEUR mandate would hit the Mandate_current_type_uq index.
+          if (
+            isDuplicateMandateCandidate(politician.mandates, {
+              type: mandateInfo.type,
+              startDate,
+              isCurrent: !endDate,
+            })
+          ) {
             stats.mandatesSkipped++;
             continue;
           }
