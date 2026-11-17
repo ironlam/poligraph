@@ -31,7 +31,7 @@ import {
 import { getMeasureVoteLinksForModeration } from "../_data/vote-links-query";
 
 export const metadata = {
-  title: "Fiche de modération d'une mesure (admin) | Poligraph",
+  title: "Fiche de modération d'une mesure (admin)",
   robots: { index: false },
 };
 

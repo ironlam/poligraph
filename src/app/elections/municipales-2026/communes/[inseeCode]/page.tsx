@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { stats } = commune;
   // Commune.departmentName holds the CODE, not the name, so it never reaches a reader.
   const dept = getDepartmentName(commune.departmentCode) ?? commune.departmentCode;
-  const title = `Municipales 2026 à ${commune.name} — Candidats et listes | Poligraph`;
+  const title = `Municipales 2026 à ${commune.name} : candidats et listes`;
   // Under 1000 inhabitants the ballot is plurinominal: candidates can declare no list at all and
   // stats.listCount is then 0, which "les 0 listes" would render as a mistake rather than as a
   // fact. Drop the clause instead. Agreement is spelled out for the same reason: most communes

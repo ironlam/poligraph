@@ -53,6 +53,9 @@ describe("metadata /affaires/condamnations", () => {
 
     expect(metadata.title).toContain("Parti public (PP)");
     expect(metadata.alternates?.canonical).toBe("/affaires/parti/parti-public");
+    // The root template appends the brand to `title` only: it shipped twice before.
+    expect(metadata.title).not.toContain("| Poligraph");
+    expect((metadata.openGraph as { title?: string } | undefined)?.title).toContain("| Poligraph");
   });
 
   it("construit la description avec les deux compteurs limités aux personnalités publiées", async () => {

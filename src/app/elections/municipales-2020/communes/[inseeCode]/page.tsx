@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Commune non trouvée" };
   }
 
-  const title = `Municipales 2020 à ${commune.communeName} — Résultats | Poligraph`;
+  const title = `Municipales 2020 à ${commune.communeName} : résultats`;
   // Sous 1000 habitants le scrutin est plurinominal : il n'y a pas de liste, seulement des
   // candidats. Annoncer « N listes en compétition » y était faux sur environ 34 000 communes.
   const dept = getDepartmentName(commune.departmentCode) ?? commune.departmentCode;
