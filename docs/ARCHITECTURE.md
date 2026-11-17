@@ -447,12 +447,15 @@ Newsletter hebdomadaire "Alerte Vote" envoyée chaque lundi via Inngest + Mailje
 
 ### 6.9 Auto-post social
 
-Publication automatique sur Twitter et Bluesky, 3 fois par jour (08:00, 12:30, 18:00 Paris) :
+Circuit à l'arrêt depuis novembre 2026. Les deux fonctions planifiées (génération de brouillons deux fois par jour, publication des brouillons approuvés toutes les 15 minutes) ont été retirées : plus rien n'était approuvé ni publié depuis le printemps, et elles tournaient à vide.
 
-- Sélection de contenu pertinent (votes, affaires, dossiers)
-- Génération de texte automatisée
-- Publication via les APIs Twitter et Bluesky
-- Orchestré par `src/inngest/functions/post-social.ts`
+Ce qui reste en place :
+
+- le modèle `SocialPost` et ses brouillons ;
+- la page d'administration `/admin/social`, où approuver un brouillon ne déclenche plus aucune publication ;
+- le code de sélection, de génération et d'envoi dans `src/lib/social/`.
+
+Pour relancer le circuit, il faut réintroduire un planificateur qui appelle `generateBatchDrafts` et `postToBothPlatforms`.
 
 ### 6.10 Tracker promesses 2027
 
