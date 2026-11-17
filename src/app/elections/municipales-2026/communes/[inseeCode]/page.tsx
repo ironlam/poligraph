@@ -21,6 +21,7 @@ import { SITE_URL } from "@/config/site";
 import { db } from "@/lib/db";
 import { communeRobotsMetadata } from "@/lib/seo/commune-robots";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
+import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -69,6 +70,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     openGraph: {
       title,
       description,
+      images: [TERRITOIRES_OG_IMAGE],
     },
     alternates: { canonical: `/elections/municipales-2026/communes/${inseeCode}` },
   };

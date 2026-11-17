@@ -174,9 +174,8 @@ const PARTY_SURFACES = [
   "src/app/statistiques/legislatif/page.tsx",
   "src/app/statistiques/page.tsx",
   "src/app/statistiques/participation/page.tsx",
-  // Territoires commune page and its image: same reason as the Territoires API above, they read
-  // `getCommuneDossier` only and render no party data.
-  "src/app/territoires/communes/[code]/opengraph-image.tsx",
+  // Territoires commune page: same reason as the Territoires API above, it reads
+  // `getCommuneDossier` only and renders no party data.
   "src/app/territoires/communes/[code]/page.tsx",
   // Decisions sub-page: `getCommuneDossier` for the robots verdict only, and the decisions reader,
   // which selects decision, institution, source and mayor name fields. No party data.

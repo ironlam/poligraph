@@ -37,6 +37,7 @@ import {
   territoireCommunePath,
   territoireDepartementPath,
 } from "@/lib/territoires/paths";
+import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 
 // ISR: 24 h backstop; freshness comes from the reader's cache tags.
 export const revalidate = 86400;
@@ -71,7 +72,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       population: dossier.population.value,
       maireEtabli: dossier.maire.state === "ETABLI",
     }),
-    openGraph: { title, description },
+    openGraph: { title, description, images: [TERRITOIRES_OG_IMAGE] },
     // The readable address, whatever name the request carried in front of the code.
     alternates: {
       canonical: territoireCommunePath(dossier.identity.inseeCode, dossier.identity.name),
