@@ -134,6 +134,7 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "lepoulpe.info",
   // Outre-mer (la1ere est un sous-domaine de franceinfo et francetvinfo)
   "franceantilles.fr",
+  "franceguyane.fr",
   "clicanoo.re",
   "lequotidien.re",
   "linfo.re",
