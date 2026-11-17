@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Commune non trouvée" };
   }
 
-  const title = `Municipales 2014 à ${commune.communeName} — Résultats | Poligraph`;
+  const title = `Municipales 2014 à ${commune.communeName} : résultats`;
   const description =
     commune.lists.length > 0
       ? `Résultats des élections municipales 2014 à ${commune.communeName}` +

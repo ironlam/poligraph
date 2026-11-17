@@ -43,7 +43,7 @@ describe("/elections/[slug] metadata", () => {
 
     const m = await metadataFor("municipales-2026");
 
-    expect(m.title).toBe("Municipales 2026 | Poligraph");
+    expect(m.title).toBe("Municipales 2026");
     expect(m.description).toBe("Description officielle.");
     expect(m.alternates?.canonical).toBe("/elections/municipales-2026");
     expect(m.robots).toBeUndefined();

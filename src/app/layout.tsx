@@ -80,10 +80,11 @@ export const metadata: Metadata = {
       "Observatoire citoyen de la vie politique. Mandats, votes, patrimoine, affaires judiciaires et fact-checking.",
     // Image generated automatically by opengraph-image.tsx
   },
+  // No title or description here: child segments inherit this block as a whole, so every page
+  // that set only openGraph shared on X as "Poligraph". Left empty, Next fills them from the
+  // page's openGraph (postProcessMetadata in next/dist/lib/metadata).
   twitter: {
     card: "summary_large_image",
-    title: "Poligraph",
-    description: "Observatoire citoyen de la vie politique. Fact-checking et données publiques.",
     // Image generated automatically by opengraph-image.tsx
   },
   robots: {

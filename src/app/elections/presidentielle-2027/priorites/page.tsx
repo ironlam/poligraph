@@ -21,7 +21,7 @@ export const revalidate = 86400;
  * `isPrioritesPublishable`, and `data.publishable` already carries that answer.
  */
 export const metadata: Metadata = {
-  title: "Où chacun met l'accent : priorités des candidats | Poligraph",
+  title: "Où chacun met l'accent : priorités des candidats",
   description:
     "La part du programme de chaque candidature consacrée à chaque thème, et les conditions à réunir avant de pouvoir la comparer.",
   robots: { index: false, follow: true },

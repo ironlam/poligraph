@@ -129,13 +129,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const typeLabel = ELECTION_TYPE_LABELS[election.type];
-  const title = `${election.title} | Poligraph`;
   const description =
     election.description ||
     `${typeLabel} - ${ELECTION_SCOPE_LABELS[election.scope]}. Dates, candidatures et résultats.`;
 
   return {
-    title,
+    title: election.title,
     description,
     openGraph: {
       title: election.title,

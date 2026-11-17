@@ -92,7 +92,8 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   });
 
   return {
-    title,
+    // The root template appends the brand; openGraph and twitter bypass it, so they keep it.
+    title: titleBase,
     description,
     alternates: { canonical },
     openGraph: { title, description, type: "website" },
