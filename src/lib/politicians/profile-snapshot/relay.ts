@@ -1,9 +1,11 @@
 /**
- * Sends profile-snapshot events through the application when the caller has no Inngest event key:
- * a GitHub Actions workflow. The key lives in the application only, so a script running there got
- * a 401 and its refresh request was lost until the next daily purge of `politicians` (#1355).
+ * Decides whether profile-snapshot events go through the application, and in what shape, when the
+ * caller has no Inngest event key: a GitHub Actions workflow. The key lives in the application
+ * only, so a script running there got a 401 and its refresh request was lost until the next daily
+ * purge of `politicians` (#1355).
  *
- * No import from ./events and no database access: ./events loads this module.
+ * No network call here: the HTTP transport is src/lib/api/profile-relay.ts. No import from
+ * ./events and no database access either: ./events loads this module.
  */
 
 // Kept in step with ./events by relay.test.ts.
@@ -56,21 +58,4 @@ export function toProfileRelayBodies(events: RelayEvent[]): ProfileRelayBody[] {
     bodies.push({ profileRefresh: { politicianIds, reason } });
   }
   return bodies;
-}
-
-export async function relayProfileEvents(
-  events: RelayEvent[],
-  target: ProfileRelayTarget,
-  fetchImpl: typeof fetch = fetch
-): Promise<void> {
-  for (const body of toProfileRelayBodies(events)) {
-    const response = await fetchImpl(target.endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${target.secret}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-      throw new Error(`Profile relay failed with HTTP ${response.status}`);
-    }
-  }
 }

@@ -7,7 +7,8 @@
  * initial fill is measured rather than left to whatever sync follows the deploy.
  */
 
-import { relayProfileEvents, resolveProfileRelayTarget } from "./relay";
+import { postProfileRelay } from "@/lib/api/profile-relay";
+import { resolveProfileRelayTarget, toProfileRelayBodies } from "./relay";
 
 export const PROFILE_REFRESH_EVENT = "politician/profile.refresh";
 export const PROFILE_RECONCILE_EVENT = "politician/profile.reconcile";
@@ -31,8 +32,10 @@ export async function inngestSend(events: InngestEventPayload[]): Promise<unknow
  */
 export async function defaultSend(events: InngestEventPayload[]): Promise<unknown> {
   const target = resolveProfileRelayTarget();
-  if (target) return relayProfileEvents(events, target);
-  return inngestSend(events);
+  if (!target) return inngestSend(events);
+  for (const body of toProfileRelayBodies(events)) {
+    await postProfileRelay(target.endpoint, target.secret, body);
+  }
 }
 
 /**
