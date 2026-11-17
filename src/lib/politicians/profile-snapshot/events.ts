@@ -7,6 +7,8 @@
  * initial fill is measured rather than left to whatever sync follows the deploy.
  */
 
+import { relayProfileEvents, resolveProfileRelayTarget } from "./relay";
+
 export const PROFILE_REFRESH_EVENT = "politician/profile.refresh";
 export const PROFILE_RECONCILE_EVENT = "politician/profile.reconcile";
 // Its own event rather than a field of the one above: both are debounced, the last event of a
@@ -17,10 +19,20 @@ export const PROFILE_INVALIDATION_CAP = 2000;
 export type InngestEventPayload = { name: string; data: Record<string, unknown> };
 export type Send = (events: InngestEventPayload[]) => Promise<unknown>;
 
-export async function defaultSend(events: InngestEventPayload[]): Promise<unknown> {
+export async function inngestSend(events: InngestEventPayload[]): Promise<unknown> {
   // Lazy import: loading this module must not construct the Inngest client.
   const { inngest } = await import("@/inngest/client");
   return inngest.send(events);
+}
+
+/**
+ * Inngest directly, or through the application when the caller has no event key (a GitHub Actions
+ * workflow, see ./relay.ts). The relay route itself sends with `inngestSend`, never with this.
+ */
+export async function defaultSend(events: InngestEventPayload[]): Promise<unknown> {
+  const target = resolveProfileRelayTarget();
+  if (target) return relayProfileEvents(events, target);
+  return inngestSend(events);
 }
 
 /**

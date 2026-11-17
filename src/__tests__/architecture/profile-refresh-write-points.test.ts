@@ -339,7 +339,10 @@ describe("points d'écriture des fiches politicien", () => {
     // that route's import graph (mcp-public-contract-surfaces.test.ts).
     const events = withoutComments(read("src/lib/politicians/profile-snapshot/events.ts"));
     const imports = [...events.matchAll(/(?:from|import\()\s*["']([^"']+)["']/g)].map((m) => m[1]);
-    expect(imports).toEqual(["@/inngest/client"]);
+    expect(imports).toEqual(["./relay", "@/inngest/client"]);
     expect(events).not.toMatch(/@\/lib\/db|@\/lib\/data|from "\.\/request"/);
+    // ./relay is the one local module it loads, and it loads nothing itself.
+    const relay = withoutComments(read("src/lib/politicians/profile-snapshot/relay.ts"));
+    expect(relay).not.toMatch(/(?:from|import\()\s*["']/);
   });
 });
