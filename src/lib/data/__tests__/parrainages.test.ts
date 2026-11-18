@@ -25,7 +25,9 @@ import {
   getParrainagesCandidat,
   getParrainagesCandidats,
   getParrainagesCommune,
+  getParrainagesCommuneBlocs,
   getParrainagesDepartement,
+  getParrainagesDepartementResumes,
   getParrainagesTableauDeBord,
 } from "@/lib/data/parrainages";
 
@@ -231,5 +233,32 @@ describe("getParrainagesDepartement et getParrainagesCommune", () => {
     expect(await getParrainagesCommune(SLUG, "29019")).toEqual([]);
     h.findMany.mockRejectedValueOnce(missingTable);
     expect(await getParrainagesCommune(SLUG, "29019")).toEqual([]);
+  });
+});
+
+describe("lecteurs des pages Territoires", () => {
+  it("ne rend un bloc de commune que pour une élection qui a des présentations", async () => {
+    h.findMany.mockResolvedValueOnce([ligne()]);
+    expect(await getParrainagesCommuneBlocs("29019")).toEqual([
+      { electionSlug: SLUG, lignes: [expect.objectContaining({ id: "p-1" })] },
+    ]);
+    h.findMany.mockResolvedValueOnce([]);
+    expect(await getParrainagesCommuneBlocs("29019")).toEqual([]);
+  });
+
+  it("résume un département par élection, et rien quand il n'a aucune présentation", async () => {
+    h.groupBy.mockResolvedValueOnce([
+      { candidateName: "A", _count: { _all: 40 } },
+      { candidateName: "B", _count: { _all: 2 } },
+    ]);
+    expect(await getParrainagesDepartementResumes("29")).toEqual([
+      { electionSlug: SLUG, total: 42, candidats: 2 },
+    ]);
+    expect(h.groupBy.mock.calls[0]?.[0].where).toEqual({
+      election: { slug: SLUG },
+      departmentCode: "29",
+    });
+    h.groupBy.mockResolvedValueOnce([]);
+    expect(await getParrainagesDepartementResumes("29")).toEqual([]);
   });
 });

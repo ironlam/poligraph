@@ -24,6 +24,10 @@ vi.mock("@/lib/data/territoire-decisions", () => ({
 }));
 vi.mock("@/lib/data/territoire-chiffres", () => ({ getCommuneChiffres: async () => null }));
 vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: async () => [] }));
+vi.mock("@/lib/data/parrainages", () => ({
+  getParrainagesCommuneBlocs: async () => [],
+  getParrainagesDepartementResumes: async () => [],
+}));
 vi.mock("@/lib/data/territoire-votes", () => ({
   getVotesDeputesDepartement: async () => ({ scrutins: [], deputeSlugs: [] }),
 }));
