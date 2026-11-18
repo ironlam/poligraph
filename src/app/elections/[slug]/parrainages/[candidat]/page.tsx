@@ -26,6 +26,7 @@ import { formatNombre, phraseCandidat } from "@/lib/parrainages/gabarits";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
+import { parrainagesCandidatRobotsMetadata } from "@/lib/seo/parrainages-robots";
 
 export const revalidate = 86400;
 
@@ -59,7 +60,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `Parrainages de ${name}, présidentielle ${election.annee}`,
     description: `${phraseCandidat(detail.candidat)} Liste publiée par le Conseil constitutionnel pour la présidentielle de ${election.annee}.`,
     alternates: { canonical: parrainagesCandidatPath(slug, candidat) },
-    robots: { index: false, follow: true },
+    ...parrainagesCandidatRobotsMetadata(detail.candidat.total),
   };
 }
 
