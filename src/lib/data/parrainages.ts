@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma";
 import {
   MANDAT_BY_LABEL,
   MANDAT_GROUPES,
+  PARRAINAGES_ELECTIONS,
   PARRAINAGES_FICHES_CANDIDATS,
   type ParrainageMandat,
 } from "@/config/parrainages";
@@ -315,4 +316,58 @@ export async function getParrainagesCommune(
     })
   );
   return lignes.map(toLigne);
+}
+
+export interface ParrainagesCommuneBloc {
+  electionSlug: string;
+  lignes: ParrainageLigne[];
+}
+
+/**
+ * Presentations made by the elected officials of one commune, one entry per election that has
+ * some. An empty array means the block is not rendered at all: no surface states an absence.
+ */
+export async function getParrainagesCommuneBlocs(
+  communeCode: string
+): Promise<ParrainagesCommuneBloc[]> {
+  const blocs = await Promise.all(
+    Object.keys(PARRAINAGES_ELECTIONS).map(async (electionSlug) => ({
+      electionSlug,
+      lignes: await getParrainagesCommune(electionSlug, communeCode),
+    }))
+  );
+  return blocs.filter((bloc) => bloc.lignes.length > 0);
+}
+
+export interface ParrainagesDepartementResume {
+  electionSlug: string;
+  total: number;
+  candidats: number;
+}
+
+/** Counts of one department per election, for the summary block of its Territoires page. */
+export async function getParrainagesDepartementResumes(
+  departmentCode: string
+): Promise<ParrainagesDepartementResume[]> {
+  "use cache";
+  cacheLife("synced");
+  cacheTag("parrainages");
+
+  const resumes = await Promise.all(
+    Object.keys(PARRAINAGES_ELECTIONS).map(async (electionSlug) => {
+      const candidats = await orEmpty(
+        db.parrainage.groupBy({
+          by: ["candidateName"],
+          where: { election: { slug: electionSlug }, departmentCode },
+          _count: { _all: true },
+        })
+      );
+      return {
+        electionSlug,
+        total: candidats.reduce((sum, candidat) => sum + candidat._count._all, 0),
+        candidats: candidats.length,
+      };
+    })
+  );
+  return resumes.filter((resume) => resume.total > 0);
 }

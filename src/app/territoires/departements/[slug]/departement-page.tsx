@@ -1,3 +1,5 @@
+import { ParrainagesDepartement } from "@/components/parrainages/ParrainagesTerritoire";
+import { getParrainagesDepartementResumes } from "@/lib/data/parrainages";
 import { notFound } from "next/navigation";
 import { getDepartmentBySlug } from "@/config/departments";
 import { getDeputesByDepartment, getSenateursByDepartment } from "@/lib/data/departments";
@@ -38,15 +40,17 @@ export async function DepartementPageBody({
 
   // The bare page opens on the largest communes; the A to Z views list them all.
   const accueil = query.letter === null && query.page === 1;
-  const [territoire, deputies, senators, grandes, votes, votesSenat, fil] = await Promise.all([
-    getDepartementTerritoire(dept.code, query),
-    getDeputesByDepartment(dept.code),
-    getSenateursByDepartment(dept.code),
-    accueil ? getDepartementGrandesCommunes(dept.code) : [],
-    getVotesDeputesDepartement(dept.code),
-    getVotesSenateursDepartement(dept.code),
-    getFilTerritoire("DEP", dept.code),
-  ]);
+  const [territoire, deputies, senators, grandes, votes, votesSenat, fil, parrainages] =
+    await Promise.all([
+      getDepartementTerritoire(dept.code, query),
+      getDeputesByDepartment(dept.code),
+      getSenateursByDepartment(dept.code),
+      accueil ? getDepartementGrandesCommunes(dept.code) : [],
+      getVotesDeputesDepartement(dept.code),
+      getVotesSenateursDepartement(dept.code),
+      getFilTerritoire("DEP", dept.code),
+      getParrainagesDepartementResumes(dept.code),
+    ]);
 
   if (!territoire) notFound();
   if (deputies.length === 0 && senators.length === 0 && territoire.communeCount === 0) {
@@ -99,6 +103,7 @@ export async function DepartementPageBody({
           <DepartementConseil territoire={territoire} />
           <CommuneIndex slug={slug} territoire={territoire} grandes={grandes} />
           <VotesParlementaires votes={votes} mode={{ kind: "decompte" }} senat={votesSenat} />
+          <ParrainagesDepartement resumes={parrainages} departmentSlug={slug} />
           {agir && <Agir niveau="departement" departmentCode={dept.code} />}
         </div>
         <DepartementParlement deputies={deputies} senators={senators} />

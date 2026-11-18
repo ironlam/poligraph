@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: vi.fn(async () => []) }));
+vi.mock("@/lib/data/parrainages", () => ({
+  getParrainagesCommuneBlocs: async () => [],
+  getParrainagesDepartementResumes: async () => [],
+}));
 vi.mock("@/lib/data/territoire-votes", () => ({
   getVotesDeputesDepartement: vi.fn(async () => ({ scrutins: [], deputeSlugs: [] })),
 }));
