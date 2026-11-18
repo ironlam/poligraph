@@ -64,6 +64,7 @@
     "sync:executifs": "tsx scripts/sync-executifs.ts",
     "sync:parrainages": "tsx scripts/sync-parrainages.ts",
     "sync:parrainages-elus": "tsx scripts/sync-parrainages-elus.ts",
+    "sync:parrainages-fiches": "tsx scripts/sync-parrainages-fiches.ts",
     "sync:hatvp": "tsx scripts/sync-hatvp.ts",
     "sync:photos": "tsx scripts/sync-photos.ts",
     "sync:deceased": "tsx scripts/sync-deceased.ts",

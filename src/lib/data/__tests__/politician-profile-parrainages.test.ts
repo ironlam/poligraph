@@ -56,14 +56,21 @@ describe("readProfileParrainagesRecus", () => {
     departements: 107,
   };
 
-  it("compte par la candidature reliée, sans chercher par le nom", async () => {
+  it("compte toutes les présentations du candidat désigné par la candidature, reliées ou non", async () => {
     queryRaw.mockResolvedValue([recu]);
     expect(await readProfileParrainagesRecus({ id: "pol_1", slug: "valerie-pecresse" })).toEqual([
       recu,
     ]);
     const { sql, values } = sqlOf();
-    expect(sql).toContain('c."politicianId" =');
-    expect(sql).toContain('count(DISTINCT p."departmentLabel")');
+    const flat = sql.replace(/\s+/g, " ");
+    // The candidacy designates the (election, candidate) pair; the count is not limited to the
+    // rows that carry the link, or rows imported before the candidacy existed would be lost.
+    expect(flat).toContain(
+      '(p."electionId", p."candidateName") IN ( SELECT linked."electionId", linked."candidateName"'
+    );
+    expect(flat).toContain('WHERE c."politicianId" =');
+    expect(flat).not.toMatch(/LEFT JOIN "Candidacy" c ON c\."id" = p\."candidacyId"/);
+    expect(flat).toContain('count(DISTINCT p."departmentLabel")');
     expect(values).toEqual(["pol_1"]);
   });
 

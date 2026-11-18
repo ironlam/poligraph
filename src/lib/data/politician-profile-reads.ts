@@ -424,7 +424,8 @@ export interface ProfileParrainagesRecus {
 /**
  * Counts of the presentations received by this person as a candidate. Two links only, never a
  * name: the candidacy in base that the importer matched, or the hand-checked table of
- * `PARRAINAGES_FICHES_CANDIDATS`. Empty for almost everyone, and when the table does not exist.
+ * `PARRAINAGES_FICHES_CANDIDATS`. Either one designates a published candidate of an election,
+ * and every presentation of that candidate is counted. Empty for almost everyone, and when the table does not exist.
  */
 export async function readProfileParrainagesRecus(politician: {
   id: string;
@@ -438,16 +439,23 @@ export async function readProfileParrainagesRecus(politician: {
           Prisma.sql`(e."slug" = ${electionSlug} AND p."candidateName" = ${candidateName})`
       )
   );
+  // The link names a (election, published candidate) pair; the count then covers every row of
+  // that pair. Rows imported before the candidacy existed keep a null `candidacyId`: counting
+  // only the linked rows would give a smaller figure than the candidate page.
+  const viaCandidacy = Prisma.sql`(p."electionId", p."candidateName") IN (
+    SELECT linked."electionId", linked."candidateName"
+    FROM "Parrainage" linked JOIN "Candidacy" c ON c."id" = linked."candidacyId"
+    WHERE c."politicianId" = ${politician.id}
+  )`;
   const where = viaTable.length
-    ? Prisma.sql`c."politicianId" = ${politician.id} OR ${Prisma.join(viaTable, " OR ")}`
-    : Prisma.sql`c."politicianId" = ${politician.id}`;
+    ? Prisma.sql`${viaCandidacy} OR ${Prisma.join(viaTable, " OR ")}`
+    : viaCandidacy;
   try {
     return await db.$queryRaw<ProfileParrainagesRecus[]>(Prisma.sql`
       SELECT e."slug" AS "electionSlug", p."candidateName",
              count(*)::int AS "total", count(DISTINCT p."departmentLabel")::int AS "departements"
       FROM "Parrainage" p
       JOIN "Election" e ON e."id" = p."electionId"
-      LEFT JOIN "Candidacy" c ON c."id" = p."candidacyId"
       WHERE ${where}
       GROUP BY 1, 2
       ORDER BY 1, 2

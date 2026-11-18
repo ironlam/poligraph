@@ -7,12 +7,16 @@ const h = vi.hoisted(() => ({
   election: vi.fn(),
   stored: vi.fn(),
   createMany: vi.fn(),
+  recipients: vi.fn(),
+  refresh: vi.fn(),
   updateMany: vi.fn(),
   inBase: vi.fn(),
   communes: vi.fn(),
 }));
 
 vi.mock("../csv-download", () => ({ downloadBuffer: h.download }));
+vi.mock("../parrainages-fiches", () => ({ listParrainagesRecipientIds: h.recipients }));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({ requestProfileRefresh: h.refresh }));
 vi.mock("@/lib/db", () => {
   const tx = {
     parrainage: { createMany: h.createMany, updateMany: h.updateMany, findMany: h.inBase },
@@ -46,6 +50,7 @@ beforeEach(() => {
   );
   h.election.mockResolvedValue({ id: "el-2022", slug: SLUG });
   h.stored.mockResolvedValue([]);
+  h.recipients.mockResolvedValue(["p-arthaud", "p-lepen"]);
   h.communes.mockResolvedValue([]);
   // By default the base holds, after the insert, exactly what was inserted.
   h.inBase.mockImplementation(async () =>
@@ -112,6 +117,32 @@ describe("syncParrainages", () => {
       where: { dedupeKey: stored[0]!.dedupeKey, communeCode: null },
       data: { communeCode: "02999" },
     });
+  });
+
+  it("demande le recalcul des fiches des candidats quand des présentations sont ajoutées", async () => {
+    await syncParrainages(SLUG, { write: true });
+    expect(h.recipients).toHaveBeenCalledWith(SLUG);
+    expect(h.refresh).toHaveBeenCalledWith(
+      { politicianIds: ["p-arthaud", "p-lepen"] },
+      "sync:parrainages"
+    );
+  });
+
+  it("ne demande aucun recalcul en aperçu, ni quand rien de nouveau n'est écrit", async () => {
+    await syncParrainages(SLUG, { write: false });
+    expect(h.refresh).not.toHaveBeenCalled();
+
+    const { plan } = await syncParrainages(SLUG, { write: false });
+    const stored = plan.creates.map(({ dedupeKey, candidateName, communeCode }) => ({
+      dedupeKey,
+      candidateName,
+      communeCode,
+    }));
+    h.stored.mockResolvedValue(stored);
+    h.inBase.mockResolvedValue(stored);
+    const report = await syncParrainages(SLUG, { write: true });
+    expect(report.written).toBe(0);
+    expect(h.refresh).not.toHaveBeenCalled();
   });
 
   it("refuse une élection sans liste connue ou absente de la base", async () => {
