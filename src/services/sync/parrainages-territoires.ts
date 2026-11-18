@@ -1,4 +1,5 @@
-import type { ParrainageMandat, ParrainageRow } from "./parrainages-parse";
+import type { ParrainageMandat } from "@/config/parrainages";
+import type { ParrainageRow } from "./parrainages-parse";
 
 /**
  * Territory resolution of a presidential presentation. The published list names the department

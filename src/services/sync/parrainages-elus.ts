@@ -1,5 +1,6 @@
 import type { MandateType } from "@/generated/prisma";
-import type { ParrainageMandat, ParrainageRow } from "./parrainages-parse";
+import type { ParrainageMandat } from "@/config/parrainages";
+import type { ParrainageRow } from "./parrainages-parse";
 import { normalizeTerritoryName, type TerritoryResolution } from "./parrainages-territoires";
 
 /**
