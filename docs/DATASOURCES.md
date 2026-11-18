@@ -832,7 +832,12 @@ Le script `npm run sync:daily` exécute un sous-ensemble incrémentiel (3x/jour 
 ```bash
 npm run sync:daily              # Votes du jour + législation active + presse + IA
 npm run sync:daily -- --dry-run
+npm run sync:daily -- --group=votes # Un seul groupe d'étapes
 ```
+
+Dans `sync-daily.yml`, chaque groupe (`votes`, `legislation`, `press-import`, `press-analysis`,
+`factchecks`, `scores`, `purge`) tourne dans son propre job : un groupe en échec ne fait pas
+échouer les autres, et la purge du cache passe en dernier quoi qu'il arrive.
 
 ---
 
