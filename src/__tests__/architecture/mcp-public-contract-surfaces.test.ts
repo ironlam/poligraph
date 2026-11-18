@@ -89,6 +89,9 @@ const PARTY_SURFACES = [
   "src/app/api/politiques/route.ts",
   "src/app/api/reconcile/route.ts",
   "src/app/api/search/advanced/route.ts",
+  // Commune suggestions of a department page: flagged through the territoires readers, like the
+  // Territoires API below. It returns a commune code, name, postal codes and population only.
+  "src/app/api/search/communes/route.ts",
   "src/app/api/search/filters/route.ts",
   "src/app/api/search/global/route.ts",
   "src/app/api/search/parties/route.ts",
