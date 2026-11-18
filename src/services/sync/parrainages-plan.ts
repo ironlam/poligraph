@@ -34,8 +34,13 @@ export type CandidateTotals = [candidateName: string, count: number][];
 
 export interface ParrainagesPlan {
   creates: ParrainageCreate[];
-  /** Rows of the file already in base: left untouched. */
+  /** Rows of the file already in base: their published columns are left untouched. */
   alreadyStored: number;
+  /**
+   * Stored rows without a commune code that the reference tables now resolve (a merger added to
+   * the official list, a commune added to ours). A code already set is never replaced.
+   */
+  communeBackfills: { dedupeKey: string; communeCode: string }[];
   /** Reasons that forbid any write. Empty when the plan can be applied. */
   blockers: string[];
   /** Presentations per candidate in the file, by count then by name. */
@@ -105,7 +110,7 @@ export function planParrainages(input: {
   parsed: ParrainagesParseResult;
   index: TerritoryIndex;
   candidacies: readonly { id: string; candidateName: string }[];
-  stored: readonly { dedupeKey: string; candidateName: string }[];
+  stored: readonly { dedupeKey: string; candidateName: string; communeCode?: string | null }[];
 }): ParrainagesPlan {
   const { election, sourceUrl, parsed, index, candidacies, stored } = input;
   const blockers: string[] = [];
@@ -122,7 +127,8 @@ export function planParrainages(input: {
   const candidacyByName = new Map(
     fileTotals.map(([name]) => [name, matchCandidacy(name, candidacies)])
   );
-  const storedKeys = new Set(stored.map((row) => row.dedupeKey));
+  const storedByKey = new Map(stored.map((row) => [row.dedupeKey, row]));
+  const communeBackfills: ParrainagesPlan["communeBackfills"] = [];
   const fileKeys = new Set<string>();
   const creates: ParrainageCreate[] = [];
   const resolutions = parsed.rows.map((row) => resolveParrainageTerritory(row, index));
@@ -136,7 +142,14 @@ export function planParrainages(input: {
       return;
     }
     fileKeys.add(dedupeKey);
-    if (storedKeys.has(dedupeKey)) return;
+    const existing = storedByKey.get(dedupeKey);
+    if (existing) {
+      const communeCode = resolutions[i]!.communeCode;
+      if (existing.communeCode === null && communeCode) {
+        communeBackfills.push({ dedupeKey, communeCode });
+      }
+      return;
+    }
     creates.push({
       electionId: election.id,
       candidateName: row.candidateName,
@@ -166,6 +179,7 @@ export function planParrainages(input: {
   return {
     creates,
     alreadyStored: fileKeys.size - creates.length,
+    communeBackfills,
     blockers,
     fileTotals,
     candidacyLinks: fileTotals.map(([candidateName]) => ({
