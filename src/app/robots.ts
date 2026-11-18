@@ -71,6 +71,16 @@ const INDEXER_DISALLOW = [
   ...POLITICIAN_TAB_DISALLOW,
 ];
 
+/**
+ * Crawlers whose operator documents `Crawl-delay` (seconds between two requests) as the way to
+ * slow them down without blocking them: Parallel for ShapBot, Anthropic for ClaudeBot. ShapBot
+ * walked the site in bursts of several thousand pages an hour, each one rendered on demand.
+ * The other AI crawlers document no such setting (Amazonbot rejects the directive outright), so
+ * nothing is declared for them here.
+ */
+const CRAWL_DELAY_USER_AGENTS = ["ShapBot", "ClaudeBot"] as const;
+const CRAWL_DELAY_SECONDS = 10;
+
 export default function robots(): MetadataRoute.Robots {
   if (!isProduction) {
     return { rules: [{ userAgent: "*", disallow: ["/"] }] };
@@ -92,6 +102,14 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: [...SOCIAL_PREVIEW_USER_AGENTS],
         allow: "/",
         disallow: SHARED_DISALLOW,
+      },
+      // A crawler obeys only the most specific group that names it: this one restates every
+      // rule of the generic group, plus the delay.
+      {
+        userAgent: [...CRAWL_DELAY_USER_AGENTS],
+        allow: "/",
+        disallow: INDEXER_DISALLOW,
+        crawlDelay: CRAWL_DELAY_SECONDS,
       },
     ],
     sitemap: [
