@@ -7,6 +7,7 @@ vi.mock("@/lib/db", () => ({ db: { commune: { findUnique: h.findUnique } } }));
 import { GET } from "../route";
 import { proxy } from "@/proxy";
 import { communeCodeFromSegment, legacyCommunePath } from "@/lib/territoires/paths";
+import communeNames from "@/lib/territoires/commune-names.json";
 
 const get = (query: string) =>
   GET(new NextRequest(`https://poligraph.fr/api/territoires/commune-redirect?${query}`), {
@@ -25,7 +26,34 @@ describe("redirection des anciennes adresses de commune", () => {
     expect(res.headers.get("location")).toBe(
       "https://poligraph.fr/territoires/communes/brest-29019"
     );
-    expect(h.findUnique).toHaveBeenCalledWith({ where: { id: "29019" }, select: { name: true } });
+  });
+
+  // Régression (2026-11-18) : chaque ancienne adresse lisait la base, et les robots les
+  // parcourent une commune après l'autre, donc sans jamais profiter du cache.
+  it("ne lit pas la base pour une commune de la table embarquée", async () => {
+    h.findUnique.mockResolvedValue({ name: "Nom venu de la base" });
+    const res = await get("code=29019&suite=");
+    expect(res.headers.get("location")).toBe(
+      "https://poligraph.fr/territoires/communes/brest-29019"
+    );
+    expect(h.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("lit la base pour un code absent de la table (commune créée depuis)", async () => {
+    h.findUnique.mockResolvedValue({ name: "Commune Nouvelle" });
+    const res = await get("code=99998&suite=%2Fdecisions");
+    expect(res.status).toBe(308);
+    expect(res.headers.get("location")).toBe(
+      "https://poligraph.fr/territoires/communes/commune-nouvelle-99998/decisions"
+    );
+    expect(h.findUnique).toHaveBeenCalledWith({ where: { id: "99998" }, select: { name: true } });
+  });
+
+  it("embarque une table complète, aux codes bien formés", () => {
+    const codes = Object.keys(communeNames);
+    expect(codes.length).toBeGreaterThan(34_000);
+    expect(codes.filter((code) => !/^([0-9]{5}|2[AB][0-9]{3})$/.test(code))).toEqual([]);
+    expect(Object.values(communeNames).filter((name) => !name.trim())).toEqual([]);
   });
 
   // Régression : derrière la réécriture du proxy, la requête garde son adresse d'origine et la
@@ -86,19 +114,16 @@ describe("redirection des anciennes adresses de commune", () => {
     });
 
     it("redirige un code corse", async () => {
-      h.findUnique.mockResolvedValueOnce({ name: "Ajaccio" });
       const res = await viaProd(
         "/territoires/communes/2A004/elections?code=2A004&suite=%2Felections"
       );
       expect(res.headers.get("location")).toBe(
         "https://poligraph.fr/territoires/communes/ajaccio-2A004/elections"
       );
-      expect(h.findUnique).toHaveBeenCalledWith({ where: { id: "2A004" }, select: { name: true } });
     });
 
     it("ne suit que le code du chemin quand un visiteur passe son propre `?code=`", async () => {
       const res = await viaProd("/territoires/communes/29019?code=75056&suite=%2Fdecisions&x=1");
-      expect(h.findUnique).toHaveBeenCalledWith({ where: { id: "29019" }, select: { name: true } });
       expect(res.headers.get("location")).toBe(
         "https://poligraph.fr/territoires/communes/brest-29019?x=1"
       );

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@/generated/prisma";
 import {
+  POOL_IDLE_TIMEOUT_MS,
   PRISMA_TRANSACTION_OPTIONS,
   resolveConnectionTimeout,
   resolvePoolMax,
@@ -37,7 +38,7 @@ function buildExtendedClient() {
     // instance: several cold renders share a pool, and a pool too small becomes their queue
     // rather than a safeguard. DATABASE_POOL_MAX is the lever if the pooler reports pressure.
     max: resolvePoolMax(process.env),
-    idleTimeoutMillis: 10_000,
+    idleTimeoutMillis: POOL_IDLE_TIMEOUT_MS,
     // Short on the request path, generous for jobs and scripts: the same pool serves both, and
     // only one of them has a visitor waiting.
     connectionTimeoutMillis: resolveConnectionTimeout(Boolean(process.env.NEXT_RUNTIME)),

@@ -318,6 +318,7 @@ export function MobileMenu({
 
               <Link
                 href="/signaler"
+                rel="nofollow"
                 onClick={close}
                 className="mt-6 flex min-h-12 items-center justify-between gap-3 rounded-xl border border-primary px-4 py-2.5 font-display text-[15px] font-bold text-primary transition-colors hover:bg-primary/5"
               >

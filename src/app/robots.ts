@@ -24,6 +24,10 @@ const SHARED_DISALLOW = [
   // Paginated listings are duplicate content (canonical points to
   // page 1): block crawl to avoid regenerating every ?page= variant.
   "/*?*page=",
+  // The feedback form is linked from every page with a `?from=` of its own, so one address per
+  // page of the site, each rendered on demand. It was already noindex: nothing to lose in the
+  // index, and the crawl was the cost.
+  "/signaler",
 ];
 
 /**

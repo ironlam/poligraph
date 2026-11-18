@@ -91,6 +91,24 @@ export function resolveConnectionTimeout(isWebRuntime: boolean): number {
 }
 
 /**
+ * How long an unused connection stays open before the pool closes it.
+ *
+ * On Vercel this is also how long an instance stays up after its last query: `attachDatabasePool`
+ * (see @/lib/db) holds the function until idle connections have closed, so that a suspended
+ * instance never keeps sockets open toward Supavisor. At ten seconds, a request that had answered
+ * in a few hundred milliseconds kept its instance up ten seconds more. Measured over a day on
+ * 2026-11-18: the 99th percentile of function duration sat flat at 10.3 s on routes whose render
+ * takes well under a second, and the time spent waiting dwarfed the time spent computing.
+ *
+ * Two seconds keeps a connection warm between the requests of one page load, which is what the
+ * pool is for, and the cost of the alternative is known: opening a connection takes 126 to 159 ms
+ * (measurements above). Closing sooner also leaves fewer sockets open toward the pooler, the side
+ * the 2026-10-01 incident came from. If connection churn ever shows up as latency, raise this
+ * before touching the pool size.
+ */
+export const POOL_IDLE_TIMEOUT_MS = 2_000;
+
+/**
  * Backends Supavisor opens toward Postgres for this user+db, read from the Supabase dashboard on
  * 2026-09-22 (Small compute). Shared by every process, so it is the ceiling that actually binds.
  */
