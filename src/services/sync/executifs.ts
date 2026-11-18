@@ -52,7 +52,7 @@ export interface ExecutifsReport {
   decisionsWritten: number;
 }
 
-interface LoadedRow extends PresidentRow {
+export interface LoadedRow extends PresidentRow {
   sourceUrl: string;
 }
 
@@ -70,7 +70,40 @@ function currentHolders(mandate: ExecutifMandateData) {
   });
 }
 
-async function loadPresidents(niveau: ExecutifNiveau): Promise<LoadedRow[]> {
+/**
+ * Public profile for a president, from the register line only. Called by the sync for a
+ * SANS_FICHE line, and by hand once a reviewer has ruled out every homonym.
+ */
+export async function createExecutifPolitician(
+  row: LoadedRow,
+  mandate: ExecutifMandateData,
+  registerAt: Date | null
+): Promise<{ id: string; slug: string }> {
+  const taken = await db.politician.findUnique({
+    where: { slug: buildExecutifIdentity(row, false).slug },
+    select: { id: true },
+  });
+  return db.politician.create({
+    data: {
+      ...buildExecutifIdentity(row, taken !== null),
+      source: DataSource.RNE,
+      publicationStatus: PublicationStatus.PUBLISHED,
+      mandates: {
+        create: {
+          ...mandate,
+          isCurrent: true,
+          source: DataSource.RNE,
+          externalId: executifSourceId(row),
+          sourceUrl: row.sourceUrl,
+          lastConfirmedAt: registerAt,
+        },
+      },
+    },
+    select: { id: true, slug: true },
+  });
+}
+
+export async function loadPresidents(niveau: ExecutifNiveau): Promise<LoadedRow[]> {
   const sourceUrl = await resolveRneResourceUrl(
     niveau === "DEPARTEMENTAL"
       ? RNE_CONSEILLERS_DEPARTEMENTAUX_FRAGMENTS
@@ -185,33 +218,10 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
       line.action = "fiche créée";
       report.politiciansCreated++;
       if (dryRun) continue;
-      const baseSlug = buildExecutifIdentity(row, false).slug;
-      const taken = await db.politician.findUnique({
-        where: { slug: baseSlug },
-        select: { id: true },
-      });
-      const identity = buildExecutifIdentity(row, taken !== null);
-      line.slug = identity.slug;
       // No candidate shares this family name: nothing to mistake it for, so it is public at
       // once, like a mayor created by the RNE sync.
-      const created = await db.politician.create({
-        data: {
-          ...identity,
-          source: DataSource.RNE,
-          publicationStatus: PublicationStatus.PUBLISHED,
-          mandates: {
-            create: {
-              ...mandate,
-              isCurrent: true,
-              source: DataSource.RNE,
-              externalId: sourceId,
-              sourceUrl: row.sourceUrl,
-              lastConfirmedAt: registerAt,
-            },
-          },
-        },
-        select: { id: true },
-      });
+      const created = await createExecutifPolitician(row, mandate, registerAt);
+      line.slug = created.slug;
       refreshed.push(created.id);
       continue;
     }
