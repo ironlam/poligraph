@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import type { ParrainageLigne } from "@/lib/data/parrainages";
-import { ParrainagesCommune, ParrainagesDepartement } from "../ParrainagesTerritoire";
+import {
+  ParrainagesCommune,
+  ParrainagesDepartement,
+  ParrainagesElection,
+} from "../ParrainagesTerritoire";
 
 const SLUG = "presidentielle-2022";
 const ligne = (over: Partial<ParrainageLigne> = {}): ParrainageLigne => ({
@@ -84,5 +88,30 @@ describe("ParrainagesDepartement", () => {
         'a[href="/elections/presidentielle-2022/parrainages/departements/nord"]'
       )?.textContent
     ).toBe("Élus et candidats présentés en 2022");
+  });
+});
+
+describe("ParrainagesElection", () => {
+  const tableau = { total: 3505, candidats: [{ total: 2636 }, { total: 576 }, { total: 293 }] };
+
+  it("ne rend rien pour une élection sans liste importée ou sans présentation", () => {
+    const sans = render(
+      <ParrainagesElection electionSlug={SLUG} tableau={{ total: 0, candidats: [] }} />
+    );
+    expect(sans.container.innerHTML).toBe("");
+    const inconnue = render(
+      <ParrainagesElection electionSlug="municipales-2026" tableau={tableau} />
+    );
+    expect(inconnue.container.innerHTML).toBe("");
+  });
+
+  it("résume la liste et mène au tableau de bord", () => {
+    const { container } = render(<ParrainagesElection electionSlug={SLUG} tableau={tableau} />);
+    expect(text(container).replace(/\u00a0/g, " ")).toContain(
+      "2 candidats comptent au moins 500 présentations. 3 505 présentations publiées pour 3 candidats."
+    );
+    expect(
+      container.querySelector('a[href="/elections/presidentielle-2022/parrainages"]')?.textContent
+    ).toBe("Voir les présentations par candidat et par département");
   });
 });
