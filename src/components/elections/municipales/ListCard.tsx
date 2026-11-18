@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CandidateRow } from "@/components/elections/municipales/CandidateRow";
 import { PoliticianBridge } from "@/components/elections/municipales/PoliticianBridge";
+import type { ListCardMember } from "@/components/elections/municipales/list-card-member";
 
 /**
  * Match a candidateName against an incumbent mayor's lastName,
@@ -35,23 +36,7 @@ interface ListCardProps {
       fullName: string;
     } | null;
   };
-  members: Array<{
-    id: string;
-    candidateName: string;
-    listPosition: number | null;
-    candidate: { gender: string | null } | null;
-    politician: {
-      id: string;
-      slug: string;
-      fullName: string;
-      photoUrl: string | null;
-      blobPhotoUrl: string | null;
-      currentParty: { shortName: string; color: string | null } | null;
-      mandates: Array<{ type: string }>;
-    } | null;
-    participationRate?: number | null;
-    affairsCount?: number;
-  }>;
+  members: ListCardMember[];
   incumbentMaireLastName?: string | null;
   incumbentMaireGender?: string | null;
   // Round 1 results (optional - only present after import)
