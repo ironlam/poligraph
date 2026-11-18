@@ -54,3 +54,27 @@ export function computeInputHash(input: InputHashInput): string {
   });
   return sha256(canonical);
 }
+
+function withoutAgreement(title: string): string {
+  return title.replace(/\brelati(?:f|ve)s?\b/gi, "relatif");
+}
+
+/**
+ * True when the stored hash differs from the current one ONLY because the official
+ * title had the agreement of "relatif/relative" corrected at the source (e.g.
+ * "projet de loi relative à" → "relatif à"). Two conditions, both required: the
+ * two titles are equal once that agreement is neutralised, and hashing the current
+ * inputs with the stored title gives back the stored hash, which proves links,
+ * sources, URL and label are untouched. Any other title change (amendment number,
+ * "à l'article" → "après l'article") stays a real drift.
+ */
+export function isAgreementOnlyTitleDrift(args: {
+  storedHash: string;
+  storedTitle: string;
+  current: InputHashInput;
+}): boolean {
+  const { storedHash, storedTitle, current } = args;
+  if (storedTitle === current.scrutinTitle) return false;
+  if (withoutAgreement(storedTitle) !== withoutAgreement(current.scrutinTitle)) return false;
+  return computeInputHash({ ...current, scrutinTitle: storedTitle }) === storedHash;
+}

@@ -14,7 +14,10 @@ import {
   detectEvidenceDrift,
 } from "@/app/admin/policy-titles/approve-guard";
 import { buildInputHashInput } from "@/services/scrutin-policy-title";
-import { computeInputHash } from "@/services/scrutin-policy-title/input-hash";
+import {
+  computeInputHash,
+  isAgreementOnlyTitleDrift,
+} from "@/services/scrutin-policy-title/input-hash";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
 import type {
   EvidenceQuote,
@@ -28,6 +31,10 @@ import { POLICY_TITLE_CRON } from "@/config/policy-titles";
  *  admin UI's "admin" so the revision history shows which approvals were
  *  automated. */
 export const CRON_ACTOR = "system:cron";
+
+/** Revision written when only the agreement of the official title was corrected
+ *  at the source and the stored snapshot + hash are refreshed. */
+export const OFFICIAL_TITLE_REFRESHED_ACTION = "official_title_refreshed";
 
 export interface ApprovalContext {
   row: ScrutinPolicyTitle;
@@ -79,20 +86,51 @@ export async function recomputeApprovalContext(scrutinId: string): Promise<Appro
   const { scrutin, ...row } = policy;
 
   const resolved = await resolveSubstanceSources(scrutinId);
-  const currentInputHash = computeInputHash(
-    buildInputHashInput(
-      {
-        title: scrutin.title,
-        sourceUrl: scrutin.sourceUrl,
-        amendmentLinks: scrutin.amendmentLinks.map((l) => ({
-          role: l.role,
-          amendment: { id: l.amendment.id, number: l.amendment.number },
-        })),
-      },
-      row.proceduralLabel,
-      resolved.blocks
-    )
+  const currentInput = buildInputHashInput(
+    {
+      title: scrutin.title,
+      sourceUrl: scrutin.sourceUrl,
+      amendmentLinks: scrutin.amendmentLinks.map((l) => ({
+        role: l.role,
+        amendment: { id: l.amendment.id, number: l.amendment.number },
+      })),
+    },
+    row.proceduralLabel,
+    resolved.blocks
   );
+  const currentInputHash = computeInputHash(currentInput);
+
+  // The source sometimes fixes the agreement in a bill's name after generation.
+  // That is not a change of inputs: refresh the stored snapshot and hash (with a
+  // revision) so the guard does not report INPUT_DRIFT on an unchanged scrutin.
+  // REJECTED and STALE rows are left alone: isRejectedNotRevised reads the latest
+  // revision, and a STALE row must be regenerated anyway.
+  if (
+    row.status !== "REJECTED" &&
+    row.status !== "STALE" &&
+    isAgreementOnlyTitleDrift({
+      storedHash: row.inputHash,
+      storedTitle: row.officialTitleSnapshot,
+      current: currentInput,
+    })
+  ) {
+    await db.$transaction(async (tx) => {
+      await tx.scrutinPolicyTitleRevision.create({
+        data: {
+          policyTitleId: row.id,
+          snapshot: snapshot(row as ScrutinPolicyTitle),
+          action: OFFICIAL_TITLE_REFRESHED_ACTION,
+          actorId: "system",
+        },
+      });
+      await tx.scrutinPolicyTitle.update({
+        where: { id: row.id },
+        data: { officialTitleSnapshot: scrutin.title, inputHash: currentInputHash },
+      });
+    });
+    policy.officialTitleSnapshot = row.officialTitleSnapshot = scrutin.title;
+    policy.inputHash = row.inputHash = currentInputHash;
+  }
 
   const evidenceQuotes = (row.evidenceQuotes ?? []) as unknown as EvidenceQuote[];
   const currentWarnings = computeCurrentWarnings(
