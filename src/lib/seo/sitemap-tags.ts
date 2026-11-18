@@ -17,8 +17,9 @@ export const SITEMAP_SHARD_TAGS = {
   // "gouvernements": the published governments listed at the end of the shard.
   // "changelog": the lastmod of /changelog is the date of its latest published entry.
   0: ["politicians", "affairs", "factchecks", "gouvernements", "changelog"],
-  // Affair pages, party pages, elections, departments.
-  1: ["affairs", "parties", "elections"],
+  // Affair pages, party pages, elections, departments. "parrainages": the presentation pages
+  // listed with the elections, whose lastmod is the latest publication of the list.
+  1: ["affairs", "parties", "elections", "parrainages"],
   // Dossiers + parliamentary groups. "votes" is the tag the groups listing carries
   // (getGroupesListing), so a group that loses its last member leaves with it.
   2: ["dossiers", "votes"],
