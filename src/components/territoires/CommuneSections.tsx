@@ -420,10 +420,13 @@ const ELECTION_MAX_LINES = 4;
 export function ElectionsSection({
   dossier,
   scrutins,
+  children,
 }: {
   dossier: CommuneDossier;
   /** Every scrutin of the commune, history included. Falls back on what the dossier carries. */
   scrutins?: CommuneScrutin[];
+  /** Rendered last inside the section (presidential presentations, when the commune has some). */
+  children?: React.ReactNode;
 }) {
   const { municipales2026: block, presidentielles } = dossier.elections;
   const { agregatTerritoire } = presidentielles;
@@ -490,6 +493,7 @@ export function ElectionsSection({
             après leur publication officielle.
           </div>
         )}
+      {children}
     </SectionCard>
   );
 }

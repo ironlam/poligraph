@@ -147,8 +147,9 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
             <ParlementSection dossier={dossier} />
             <VotesParlementaires votes={votes} mode={votesMode} />
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}
-            <ElectionsSection dossier={dossier} scrutins={scrutins} />
-            <ParrainagesCommune blocs={parrainages} />
+            <ElectionsSection dossier={dossier} scrutins={scrutins}>
+              <ParrainagesCommune blocs={parrainages} />
+            </ElectionsSection>
             <Agir departmentCode={identity.department.code} />
           </div>
           <div className="space-y-4">

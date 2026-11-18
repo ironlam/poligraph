@@ -17,7 +17,7 @@ import { daysUntil } from "@/lib/elections/countdown";
 import { formatDate } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { HubPrimaryPaths } from "./_components/HubPrimaryPaths";
+import { HubParrainagesEntry, HubPrimaryPaths } from "./_components/HubPrimaryPaths";
 import { DaysUntilBadge } from "./_components/DaysUntilBadge";
 import { HubClosedState } from "./_components/HubClosedState";
 import { HubCorpusState } from "./_components/HubCorpusState";
@@ -141,9 +141,13 @@ export default async function PresidentialHubPage() {
           <HubPress articles={press} />
         </div>
 
-        {/* From sm up: below it, the hub navigation above already carries these three paths. */}
+        {/* From sm up: below it, the hub navigation above already carries the first three paths,
+            and the presentations entry, which it has no tab for, is shown on its own. */}
         <div className="hidden sm:block">
           <HubPrimaryPaths candidacies={field} themeCount={themeCount} />
+        </div>
+        <div className="sm:hidden">
+          <HubParrainagesEntry />
         </div>
 
         {/* Below the gate the body says so too, instead of leaving the state in a meta tag. */}

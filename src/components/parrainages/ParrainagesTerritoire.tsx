@@ -4,6 +4,7 @@ import {
   PARRAINAGES_ELECTIONS,
   parrainagesCandidatPath,
   parrainagesDepartementPath,
+  parrainagesPath,
 } from "@/config/parrainages";
 import type { ParrainagesCommuneBloc, ParrainagesDepartementResume } from "@/lib/data/parrainages";
 import {
@@ -11,6 +12,7 @@ import {
   mandatPublie,
   nomElu,
   phraseDepartement,
+  phraseTableauDeBord,
 } from "@/lib/parrainages/gabarits";
 import { generateSlug } from "@/lib/utils";
 
@@ -27,14 +29,20 @@ const INLINE = "py-3 font-semibold underline underline-offset-2 hover:text-prima
 export function ParrainagesCommune({ blocs }: { blocs: ParrainagesCommuneBloc[] }) {
   const known = blocs.filter((bloc) => PARRAINAGES_ELECTIONS[bloc.electionSlug]);
   if (!known.length) return null;
+  // Rendered inside the Élections section of the commune page, which the "Élections" tab opens:
+  // a sub-block under a rule, not a card of its own.
   return (
-    <section id="parrainages" aria-labelledby="parrainages-titre" className={CARD}>
-      <h2 id="parrainages-titre" className={TITRE}>
+    <section
+      id="parrainages"
+      aria-labelledby="parrainages-titre"
+      className="mt-5 scroll-mt-32 space-y-3 border-t pt-5"
+    >
+      <h3 id="parrainages-titre" className="font-display text-lg font-bold text-primary">
         Parrainages présidentiels
-      </h2>
+      </h3>
       {known.map(({ electionSlug, lignes }) => (
         <div key={electionSlug} className="space-y-2">
-          <h3 className="font-bold">{PARRAINAGES_ELECTIONS[electionSlug]!.titre}</h3>
+          <h4 className="font-bold">{PARRAINAGES_ELECTIONS[electionSlug]!.titre}</h4>
           <ul className="space-y-2">
             {lignes.map((ligne) => (
               <li key={ligne.id}>
@@ -64,6 +72,31 @@ export function ParrainagesCommune({ blocs }: { blocs: ParrainagesCommuneBloc[] 
         </div>
       ))}
       <Pied electionSlug={known[0]!.electionSlug} />
+    </section>
+  );
+}
+
+/** Election page: what the list holds, and the way to its dashboard. */
+export function ParrainagesElection({
+  electionSlug,
+  tableau,
+}: {
+  electionSlug: string;
+  tableau: { total: number; candidats: readonly { total: number }[] };
+}) {
+  if (!PARRAINAGES_ELECTIONS[electionSlug] || tableau.candidats.length === 0) return null;
+  return (
+    <section id="parrainages" aria-labelledby="parrainages-titre" className={CARD}>
+      <h2 id="parrainages-titre" className={TITRE}>
+        Parrainages
+      </h2>
+      <p>{phraseTableauDeBord(tableau)}</p>
+      <p>
+        <Link href={parrainagesPath(electionSlug)} prefetch={false} className={LIEN_LIGNE}>
+          Voir les présentations par candidat et par département
+        </Link>
+      </p>
+      <Pied electionSlug={electionSlug} />
     </section>
   );
 }

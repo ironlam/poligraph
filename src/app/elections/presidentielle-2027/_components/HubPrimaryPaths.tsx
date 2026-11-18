@@ -1,10 +1,19 @@
 import Link from "next/link";
-import { ArrowRight, Columns2, LayoutGrid, Users, type LucideIcon } from "lucide-react";
+import {
+  ArrowRight,
+  ClipboardList,
+  Columns2,
+  LayoutGrid,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
+import { PARRAINAGES_A_VENIR, parrainagesPath } from "@/config/parrainages";
 import type { HubCandidacy } from "@/lib/data/hub";
 import { matchesPublishedProposals } from "@/lib/presidentielle/candidacy-filters";
 
-const BASE_PATH = "/elections/presidentielle-2027";
+const ELECTION_SLUG = "presidentielle-2027";
+const BASE_PATH = `/elections/${ELECTION_SLUG}`;
 
 type Path = {
   title: string;
@@ -44,6 +53,57 @@ function RunningFaces({ candidacies }: { candidacies: HubCandidacy[] }) {
   );
 }
 
+// The page exists before the list does: the reader is told it will fill up, and where the
+// previous list is, rather than finding the page by chance in February.
+const PARRAINAGES_PATH: Path = {
+  title: "Suivre les parrainages",
+  description: Object.hasOwn(PARRAINAGES_A_VENIR, ELECTION_SLUG)
+    ? "Les présentations d'élus s'afficheront ici dès leur publication par le Conseil constitutionnel. En attendant, la liste de 2022."
+    : "Les présentations d'élus publiées par le Conseil constitutionnel, par candidat et par département.",
+  href: parrainagesPath(ELECTION_SLUG),
+  icon: ClipboardList,
+  tile: "bg-primary/10 text-primary",
+  showsFaces: false,
+};
+
+function PathCard({ path, candidacies }: { path: Path; candidacies: HubCandidacy[] }) {
+  const Icon = path.icon;
+  return (
+    <Link
+      href={path.href}
+      prefetch={false}
+      className="flex h-full min-h-20 items-start gap-3 rounded-2xl border border-border bg-card p-4 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+    >
+      <span
+        aria-hidden="true"
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${path.tile}`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-display font-bold">{path.title}</span>
+        <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+          {path.description}
+        </span>
+        {path.showsFaces && <RunningFaces candidacies={candidacies} />}
+      </span>
+      <ArrowRight aria-hidden="true" className="mt-3 h-5 w-5 shrink-0 text-primary" />
+    </Link>
+  );
+}
+
+/**
+ * The presentations entry alone, for the widths where the three other paths are carried by the
+ * hub navigation and this block is hidden: the navigation has no room for a fifth tab.
+ */
+export function HubParrainagesEntry() {
+  return (
+    <nav aria-label="Parrainages">
+      <PathCard path={PARRAINAGES_PATH} candidacies={[]} />
+    </nav>
+  );
+}
+
 export function HubPrimaryPaths({
   candidacies,
   themeCount,
@@ -80,6 +140,7 @@ export function HubPrimaryPaths({
       tile: "bg-success text-success-foreground",
       showsFaces: false,
     },
+    PARRAINAGES_PATH,
   ];
 
   return (
@@ -87,34 +148,12 @@ export function HubPrimaryPaths({
       <h2 id="hub-primary-paths-title" className="font-display text-xl font-bold md:text-2xl">
         Explorer la présidentielle
       </h2>
-      <ul className="mt-3 grid gap-3 md:grid-cols-3">
-        {paths.map((path) => {
-          const Icon = path.icon;
-          return (
-            <li key={path.href}>
-              <Link
-                href={path.href}
-                prefetch={false}
-                className="flex h-full min-h-20 items-start gap-3 rounded-2xl border border-border bg-card p-4 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-              >
-                <span
-                  aria-hidden="true"
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${path.tile}`}
-                >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-display font-bold">{path.title}</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                    {path.description}
-                  </span>
-                  {path.showsFaces && <RunningFaces candidacies={candidacies} />}
-                </span>
-                <ArrowRight aria-hidden="true" className="mt-3 h-5 w-5 shrink-0 text-primary" />
-              </Link>
-            </li>
-          );
-        })}
+      <ul className="mt-3 grid gap-3 md:grid-cols-2">
+        {paths.map((path) => (
+          <li key={path.href}>
+            <PathCard path={path} candidacies={candidacies} />
+          </li>
+        ))}
       </ul>
     </nav>
   );
