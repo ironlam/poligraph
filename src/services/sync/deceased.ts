@@ -18,8 +18,9 @@ interface DeceasedSyncResult {
 async function fetchDeathDatesFromWikidata(wikidataIds: string[]): Promise<Map<string, Date>> {
   const results = new Map<string, Date>();
 
-  // Process in batches of 50 to avoid URL length limits
-  const batchSize = 50;
+  // 200 ids per query keeps the URL under 4,000 characters, which Wikidata accepts. At 50 the
+  // weekly run sent about 575 queries, drew 429s and ran into its 10-minute limit (#1355).
+  const batchSize = 200;
   for (let i = 0; i < wikidataIds.length; i += batchSize) {
     const batch = wikidataIds.slice(i, i + batchSize);
     const values = batch.map((id) => `wd:${id}`).join(" ");
