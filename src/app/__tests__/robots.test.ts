@@ -136,6 +136,25 @@ describe("robots.txt (production)", () => {
     );
   });
 
+  describe("crawlers slowed down by Crawl-delay", () => {
+    it.each(["ShapBot", "ClaudeBot"])("gives %s a delay between two requests", (agent) => {
+      expect(groupFor(robots, agent)!.crawlDelay).toBeGreaterThanOrEqual(5);
+    });
+
+    // A named group replaces the generic one for that crawler: forgetting a rule here would
+    // reopen to these two what is closed to everyone else.
+    it("restates every rule of the generic group", () => {
+      const generic = asArray(groupFor(robots, "*")!.disallow);
+      expect(asArray(groupFor(robots, "ShapBot")!.disallow)).toEqual(generic);
+      expect(generic.length).toBeGreaterThan(5);
+    });
+
+    it("leaves every other crawler without a delay", () => {
+      expect(groupFor(robots, "*")!.crawlDelay).toBeUndefined();
+      expect(groupFor(robots, SOCIAL_PREVIEW_USER_AGENTS[0])!.crawlDelay).toBeUndefined();
+    });
+  });
+
   describe("social preview crawlers", () => {
     it("gives every social user agent its own group", () => {
       for (const agent of SOCIAL_PREVIEW_USER_AGENTS) {
