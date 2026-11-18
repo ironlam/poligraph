@@ -1,6 +1,11 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { Prisma } from "@/generated/prisma";
-import { MANDAT_BY_LABEL, MANDAT_GROUPES, type ParrainageMandat } from "@/config/parrainages";
+import {
+  MANDAT_BY_LABEL,
+  MANDAT_GROUPES,
+  PARRAINAGES_FICHES_CANDIDATS,
+  type ParrainageMandat,
+} from "@/config/parrainages";
 import { isMissingTableError } from "@/lib/data/commune-population";
 import { db } from "@/lib/db";
 import { generateSlug } from "@/lib/utils";
@@ -27,8 +32,10 @@ export interface ParrainageCandidat {
   maxParDepartement: number;
   /** Name of the candidacy in base, null when the published candidate has none. */
   candidacyName: string | null;
-  /** Published profile of the candidate, when there is one. */
+  /** Published profile of the candidate: through the candidacy, else the hand-checked table. */
   politicianSlug: string | null;
+  /** Name shown on the link to that profile. Null exactly when `politicianSlug` is. */
+  politicianName: string | null;
 }
 
 export interface ParrainageLigne {
@@ -104,11 +111,12 @@ export async function getParrainagesCandidats(electionSlug: string): Promise<Par
         maxParDepartement: number;
         candidacyName: string | null;
         politicianSlug: string | null;
+        politicianName: string | null;
       }[]
     >(Prisma.sql`
       SELECT t."candidateName", sum(t.n)::int AS "total", count(*)::int AS "departements",
              max(t.n)::int AS "maxParDepartement", max(c."candidateName") AS "candidacyName",
-             max(pol."slug") AS "politicianSlug"
+             max(pol."slug") AS "politicianSlug", max(pol."fullName") AS "politicianName"
       FROM (
         SELECT p."candidateName", p."departmentLabel", max(p."candidacyId") AS "candidacyId",
                count(*) AS n
@@ -122,8 +130,31 @@ export async function getParrainagesCandidats(electionSlug: string): Promise<Par
       GROUP BY 1
     `)
   );
+
+  // Candidates without a candidacy: the hand-checked table, and only towards a published profile.
+  const table = PARRAINAGES_FICHES_CANDIDATS[electionSlug] ?? {};
+  const wanted = rows.flatMap((row) =>
+    !row.politicianSlug && table[row.candidateName] ? [table[row.candidateName]!] : []
+  );
+  const fiches = wanted.length
+    ? await db.politician.findMany({
+        where: { slug: { in: wanted }, publicationStatus: "PUBLISHED" },
+        select: { slug: true, fullName: true },
+      })
+    : [];
+  const ficheBySlug = new Map(fiches.map((fiche) => [fiche.slug, fiche.fullName]));
+
   return rows
-    .map((row) => ({ ...row, slug: generateSlug(row.candidateName) }))
+    .map((row) => {
+      const slug = row.politicianSlug ?? table[row.candidateName] ?? null;
+      const name = row.politicianSlug ? row.politicianName : slug ? ficheBySlug.get(slug) : null;
+      return {
+        ...row,
+        politicianSlug: name ? slug : null,
+        politicianName: name ?? null,
+        slug: generateSlug(row.candidateName),
+      };
+    })
     .sort(byCountThenName((row) => row.candidateName));
 }
 

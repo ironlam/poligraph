@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   queryRaw: vi.fn(),
+  politicians: vi.fn(),
   findMany: vi.fn(),
   groupBy: vi.fn(),
   cacheTag: vi.fn(),
@@ -10,7 +11,11 @@ const h = vi.hoisted(() => ({
 
 vi.mock("next/cache", () => ({ cacheTag: h.cacheTag, cacheLife: h.cacheLife }));
 vi.mock("@/lib/db", () => ({
-  db: { $queryRaw: h.queryRaw, parrainage: { findMany: h.findMany, groupBy: h.groupBy } },
+  db: {
+    $queryRaw: h.queryRaw,
+    parrainage: { findMany: h.findMany, groupBy: h.groupBy },
+    politician: { findMany: h.politicians },
+  },
 }));
 
 import {
@@ -33,6 +38,7 @@ const candidat = (candidateName: string, total: number, over: Record<string, unk
   maxParDepartement: 2,
   candidacyName: null,
   politicianSlug: null,
+  politicianName: null,
   ...over,
 });
 const ligne = (over: Record<string, unknown> = {}) => ({
@@ -60,6 +66,7 @@ beforeEach(() => {
   ]);
   h.findMany.mockResolvedValue([ligne()]);
   h.groupBy.mockResolvedValue([]);
+  h.politicians.mockResolvedValue([]);
 });
 
 describe("getParrainagesCandidats", () => {
@@ -75,6 +82,46 @@ describe("getParrainagesCandidats", () => {
     expect(sql).toContain('max(p."candidacyId")');
     expect(sql).toMatch(/GROUP BY 1, 2 \) t/);
     expect(sql).not.toMatch(/GROUP BY 1, 2, 3/);
+  });
+
+  it("relie un candidat sans candidature par la table validée à la main, si la fiche est publiée", async () => {
+    h.queryRaw.mockResolvedValue([
+      candidat("TAUBIRA Christiane", 274),
+      candidat("ASSELINEAU François", 293),
+      candidat("INCONNU Hors-Table", 5),
+      candidat("MACRON Emmanuel", 2098, {
+        candidacyName: "Emmanuel Macron",
+        politicianSlug: "emmanuel-macron",
+        politicianName: "Emmanuel Macron",
+      }),
+    ]);
+    // The Asselineau profile is not published: the table alone gives no link.
+    h.politicians.mockResolvedValue([
+      { slug: "christiane-taubira", fullName: "Christiane Taubira" },
+    ]);
+    const bySlug = new Map((await getParrainagesCandidats(SLUG)).map((c) => [c.slug, c]));
+
+    expect(h.politicians.mock.calls[0]?.[0].where).toEqual({
+      slug: { in: ["christiane-taubira", "francois-asselineau"] },
+      publicationStatus: "PUBLISHED",
+    });
+    expect(bySlug.get("taubira-christiane")).toMatchObject({
+      politicianSlug: "christiane-taubira",
+      politicianName: "Christiane Taubira",
+      candidacyName: null,
+    });
+    expect(bySlug.get("asselineau-francois")).toMatchObject({
+      politicianSlug: null,
+      politicianName: null,
+    });
+    expect(bySlug.get("inconnu-hors-table")).toMatchObject({
+      politicianSlug: null,
+      politicianName: null,
+    });
+    expect(bySlug.get("macron-emmanuel")).toMatchObject({
+      politicianSlug: "emmanuel-macron",
+      politicianName: "Emmanuel Macron",
+    });
   });
 
   it("pose le profil synced et le tag parrainages", async () => {

@@ -75,3 +75,71 @@ export const MANDAT_BY_LABEL: Readonly<Record<string, ParrainageMandat>> = {
   "Président du conseil consulaire": "PRESIDENT_CONSEIL_CONSULAIRE",
   "Présidente du conseil consulaire": "PRESIDENT_CONSEIL_CONSULAIRE",
 };
+
+/** Elections whose list is imported: route gate, display year and official source of the pages. */
+export const PARRAINAGES_ELECTIONS: Readonly<
+  Record<string, { annee: number; titre: string; sourceLabel: string; sourceUrl: string }>
+> = {
+  "presidentielle-2022": {
+    annee: 2022,
+    titre: "Présidentielle 2022",
+    sourceLabel: "Conseil constitutionnel",
+    sourceUrl:
+      "https://www.data.gouv.fr/datasets/parrainages-des-candidats-a-lelection-presidentielle-francaise-de-2022",
+  },
+};
+
+/**
+ * Elections whose list is not published yet. Their page says so, with what the law fixes and a
+ * link to the previous list, instead of answering 404. Move the entry to PARRAINAGES_ELECTIONS
+ * with the first import.
+ */
+export const PARRAINAGES_A_VENIR: Readonly<
+  Record<string, { annee: number; titre: string; precedente: string; verifieLe: string }>
+> = {
+  "presidentielle-2027": {
+    annee: 2027,
+    titre: "Présidentielle 2027",
+    precedente: "presidentielle-2022",
+    // Last time the absence of published dates was checked. Change it with each check.
+    verifieLe: "2026-11-18",
+  },
+};
+
+/**
+ * Published candidates without a candidacy in base, linked by hand to their Poligraph profile.
+ * Keys are the names exactly as published (double spaces included). One line is added only after
+ * a human has checked that the profile is the person presented: a name alone proves nothing, so
+ * no line is ever derived automatically. A profile that is not published gives no link.
+ */
+export const PARRAINAGES_FICHES_CANDIDATS: Readonly<
+  Record<string, Readonly<Record<string, string>>>
+> = {
+  "presidentielle-2022": {
+    "ASSELINEAU François": "francois-asselineau",
+    "TAUBIRA Christiane": "christiane-taubira",
+    "KAZIB Anasse": "anasse-kazib",
+    "EGGER Clara": "clara-egger",
+    "MARTINEZ Antoine": "antoine-martinez",
+    "BARNIER Michel": "michel-barnier",
+    "BLANCHET Christophe": "christophe-blanchet",
+    "BORLOO Jean-Louis": "jean-louis-borloo",
+    "CAZENEUVE  Bernard": "bernard-cazeneuve",
+    "DELGA Carole": "carole-delga",
+    "GLUCKSMANN Raphaël": "raphael-glucksmann",
+    "HOLLANDE François": "francois-hollande",
+    "MONTEBOURG Arnaud": "arnaud-montebourg",
+    "PHILIPPE Edouard": "edouard-philippe",
+    "PHILIPPOT Florian": "florian-philippot",
+    "RUFFIN François": "francois-ruffin",
+    "SAINT-PAUL Laetitia": "laetitia-saint-paul",
+  },
+};
+
+export const parrainagesPath = (electionSlug: string) => `/elections/${electionSlug}/parrainages`;
+export const parrainagesCandidatPath = (electionSlug: string, candidatSlug: string) =>
+  `${parrainagesPath(electionSlug)}/${candidatSlug}`;
+export const parrainagesDepartementPath = (electionSlug: string, departementSlug: string) =>
+  `${parrainagesPath(electionSlug)}/departements/${departementSlug}`;
+export const parrainagesMethodePath = (electionSlug: string) =>
+  `${parrainagesPath(electionSlug)}/methode`;
