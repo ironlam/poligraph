@@ -9,6 +9,7 @@ import {
 } from "@/lib/data/municipales";
 import { CommuneRadiographie } from "@/components/elections/municipales/CommuneRadiographie";
 import { ListCard } from "@/components/elections/municipales/ListCard";
+import { toListCardMember } from "@/components/elections/municipales/list-card-member";
 import { AlerteCumul } from "@/components/elections/municipales/PoliticianBridge";
 import { IncumbentMaireCard } from "@/components/elections/municipales/IncumbentMaireCard";
 import { NATIONAL_MANDATE_TYPES } from "@/config/labels";
@@ -278,8 +279,16 @@ export default async function CommuneDetailPage({ params }: PageProps) {
                   partyLabel={list.partyLabel}
                   candidateCount={list.candidateCount}
                   femaleCount={list.femaleCount}
-                  teteDeListe={list.teteDeListe}
-                  members={list.members}
+                  teteDeListe={{
+                    candidateName: list.teteDeListe.candidateName,
+                    politician: list.teteDeListe.politician
+                      ? {
+                          slug: list.teteDeListe.politician.slug,
+                          fullName: list.teteDeListe.politician.fullName,
+                        }
+                      : null,
+                  }}
+                  members={list.members.map(toListCardMember)}
                   incumbentMaireLastName={commune.incumbentMaire?.maire.lastName ?? null}
                   incumbentMaireGender={commune.incumbentMaire?.maire.gender ?? null}
                   round1Pct={list.round1Pct}

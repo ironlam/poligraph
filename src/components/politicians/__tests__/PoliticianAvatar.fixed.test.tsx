@@ -16,12 +16,13 @@ describe("PoliticianAvatar fixedPx", () => {
     expect(img.getAttribute("height")).toBe("48");
   });
 
-  it("keeps fill + sizes by default", () => {
+  it("sizes the image from `size` by default, never with fill + sizes", () => {
     const { container } = render(
       <PoliticianAvatar photoUrl={null} blobPhotoUrl={photo} fullName="Jean Test" size="sm" />
     );
     const img = container.querySelector("img")!;
-    expect(img.getAttribute("sizes")).toBe("40px");
-    expect(img.getAttribute("width")).toBeNull();
+    expect(img.getAttribute("sizes")).toBeNull();
+    expect(img.getAttribute("width")).toBe("40");
+    expect(img.getAttribute("height")).toBe("40");
   });
 });
