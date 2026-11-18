@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { DEPARTMENTS } from "@/config/departments";
 import {
+  buildCommuneSuccessors,
   buildTerritoryIndex,
+  type CommuneEvent,
   normalizeTerritoryName,
   resolveParrainageTerritory,
   summarizeTerritoryResolutions,
@@ -158,6 +160,93 @@ describe("summarizeTerritoryResolutions", () => {
     expect(report).toEqual({
       department: { RESOLVED: 3, AMBIGUOUS: 0, NOT_FOUND: 0, NOT_APPLICABLE: 1 },
       commune: { RESOLVED: 1, AMBIGUOUS: 1, NOT_FOUND: 1, NOT_APPLICABLE: 1 },
+      viaSuccessor: 0,
     });
+  });
+});
+
+describe("buildCommuneSuccessors, événements réels du Code officiel géographique", () => {
+  const event = (
+    DATE_EFF: string,
+    COM_AV: string,
+    LIBELLE_AV: string,
+    COM_AP: string,
+    TYPECOM_AP = "COM",
+    TYPECOM_AV = "COM"
+  ): CommuneEvent => ({ DATE_EFF, TYPECOM_AV, COM_AV, LIBELLE_AV, TYPECOM_AP, COM_AP });
+  const EVENTS = [
+    event("2025-01-01", "93059", "Pierrefitte-sur-Seine", "93066"),
+    event("2025-01-01", "93059", "Pierrefitte-sur-Seine", "93059", "COMD"),
+    event("2026-01-01", "95218", "Éragny", "95218"),
+    event("2024-01-01", "69149", "Oullins", "69149"),
+    event("2024-01-01", "69152", "Pierre-Bénite", "69149"),
+    // Before the list: already in today's table under its own name.
+    event("2019-01-01", "29019", "Brest-Ancien", "29019"),
+    // A commune absorbed in 2023 by one that merged again in 2025 (fictitious chain).
+    event("2023-01-01", "01901", "Hameau-Exemple", "01902"),
+    event("2025-01-01", "01902", "Bourg-Exemple", "01903"),
+    // A former name that two communes of today can claim (fictitious split).
+    event("2024-01-01", "15141", "Val-Exemple", "15141"),
+    event("2024-01-01", "15141", "Val-Exemple", "15142"),
+    // A delegated commune is not a commune: its line says nothing of a successor.
+    event("2025-01-01", "02077", "Berzy-le-Sec", "02564", "COM", "COMD"),
+  ];
+  const known = new Set(["93066", "95218", "69149", "01903", "15141", "15142", "29019", "02564"]);
+  const successors = buildCommuneSuccessors(EVENTS, "2022-02-01", known);
+  const withSuccessors = buildTerritoryIndex(
+    DEPARTMENTS,
+    [{ id: "93066", name: "Saint-Denis", departmentCode: "93" }],
+    successors
+  );
+  const resolve = (constituencyLabel: string, departmentLabel: string) =>
+    resolveParrainageTerritory(
+      { mandat: "MAIRE", constituencyLabel, departmentLabel },
+      withSuccessors
+    );
+
+  it("donne la commune d'aujourd'hui d'une commune fusionnée ou renommée", () => {
+    expect(successors.get("93\tpierrefitte sur seine")).toEqual(["93066"]);
+    expect(successors.get("95\teragny")).toEqual(["95218"]);
+    expect(successors.get("69\tpierre benite")).toEqual(["69149"]);
+  });
+
+  it("suit une fusion jusqu'au bout", () => {
+    expect(successors.get("01\thameau exemple")).toEqual(["01903"]);
+  });
+
+  it("ignore les événements antérieurs à la liste et les lignes de communes déléguées", () => {
+    expect(successors.has("29\tbrest ancien")).toBe(false);
+    expect(successors.has("02\tberzy le sec")).toBe(false);
+  });
+
+  it("écarte un successeur absent de notre table des communes", () => {
+    expect(buildCommuneSuccessors(EVENTS, "2022-02-01", new Set()).size).toBe(0);
+  });
+
+  it("ne sert qu'en repli, quand le nom publié n'est plus dans la table", () => {
+    expect(resolve("Pierrefitte-sur-Seine", "Seine-Saint-Denis")).toEqual({
+      departmentCode: "93",
+      departmentStatus: "RESOLVED",
+      communeCode: "93066",
+      communeStatus: "RESOLVED",
+      communeViaSuccessor: true,
+    });
+    expect(resolve("Saint-Denis", "Seine-Saint-Denis")).not.toHaveProperty("communeViaSuccessor");
+  });
+
+  it("ne choisit pas entre deux successeurs", () => {
+    expect(resolve("Val-Exemple", "Cantal")).toMatchObject({
+      communeCode: null,
+      communeStatus: "AMBIGUOUS",
+    });
+  });
+
+  it("compte les communes retrouvées par leur successeur", () => {
+    const report = summarizeTerritoryResolutions([
+      resolve("Pierrefitte-sur-Seine", "Seine-Saint-Denis"),
+      resolve("Saint-Denis", "Seine-Saint-Denis"),
+    ]);
+    expect(report.commune.RESOLVED).toBe(2);
+    expect(report.viaSuccessor).toBe(1);
   });
 });

@@ -7,16 +7,20 @@ const h = vi.hoisted(() => ({
   election: vi.fn(),
   stored: vi.fn(),
   createMany: vi.fn(),
+  updateMany: vi.fn(),
   inBase: vi.fn(),
+  communes: vi.fn(),
 }));
 
 vi.mock("../csv-download", () => ({ downloadBuffer: h.download }));
 vi.mock("@/lib/db", () => {
-  const tx = { parrainage: { createMany: h.createMany, findMany: h.inBase } };
+  const tx = {
+    parrainage: { createMany: h.createMany, updateMany: h.updateMany, findMany: h.inBase },
+  };
   return {
     db: {
       election: { findUnique: h.election },
-      commune: { findMany: vi.fn().mockResolvedValue([]) },
+      commune: { findMany: h.communes },
       candidacy: { findMany: vi.fn().mockResolvedValue([]) },
       parrainage: { findMany: h.stored },
       $transaction: (run: (client: typeof tx) => Promise<void>) => run(tx),
@@ -24,17 +28,25 @@ vi.mock("@/lib/db", () => {
   };
 });
 
-import { syncParrainages } from "../parrainages";
+import { COG_EVENTS_URL, syncParrainages } from "../parrainages";
 
 const extrait = readFileSync(join(__dirname, "parrainages-2022-extrait.csv"));
 const SLUG = "presidentielle-2022";
+const COG_HEADER = "MOD,DATE_EFF,TYPECOM_AV,COM_AV,LIBELLE_AV,TYPECOM_AP,COM_AP,LIBELLE_AP\n";
+let cog = COG_HEADER;
+let liste: Buffer | string = extrait;
 const missingTable = { meta: { driverAdapterError: { cause: { kind: "TableDoesNotExist" } } } };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.download.mockResolvedValue(extrait);
+  cog = COG_HEADER;
+  liste = extrait;
+  h.download.mockImplementation(async (url: string) =>
+    Buffer.from(url === COG_EVENTS_URL ? cog : liste)
+  );
   h.election.mockResolvedValue({ id: "el-2022", slug: SLUG });
   h.stored.mockResolvedValue([]);
+  h.communes.mockResolvedValue([]);
   // By default the base holds, after the insert, exactly what was inserted.
   h.inBase.mockImplementation(async () =>
     h.createMany.mock.calls.flatMap(([args]) => args.data as { candidateName: string }[])
@@ -76,9 +88,30 @@ describe("syncParrainages", () => {
   });
 
   it("refuse d'écrire un fichier bloqué", async () => {
-    h.download.mockResolvedValue(Buffer.from(`${extrait.toString("utf8")}\nligne;cassée`));
+    liste = `${extrait.toString("utf8")}\nligne;cassée`;
     await expect(syncParrainages(SLUG, { write: true })).rejects.toThrow(/Import refusé/);
     expect(h.createMany).not.toHaveBeenCalled();
+  });
+
+  it("complète le code d'une commune fusionnée depuis la liste, sur les lignes déjà en base", async () => {
+    const { plan } = await syncParrainages(SLUG, { write: false });
+    const stored = plan.creates.map(({ dedupeKey, candidateName, communeCode }) => ({
+      dedupeKey,
+      candidateName,
+      communeCode,
+    }));
+    h.stored.mockResolvedValue(stored);
+    h.inBase.mockResolvedValue(stored);
+    h.communes.mockResolvedValue([{ id: "02999", name: "Mont-Exemple", departmentCode: "02" }]);
+    cog = `${COG_HEADER}32,2025-01-01,COM,02524,Mont-Saint-Père,COM,02999,Mont-Exemple\n`;
+
+    const report = await syncParrainages(SLUG, { write: true });
+    expect(report).toMatchObject({ written: 0, backfilled: 1 });
+    expect(report.plan.territories.viaSuccessor).toBe(1);
+    expect(h.updateMany).toHaveBeenCalledWith({
+      where: { dedupeKey: stored[0]!.dedupeKey, communeCode: null },
+      data: { communeCode: "02999" },
+    });
   });
 
   it("refuse une élection sans liste connue ou absente de la base", async () => {
