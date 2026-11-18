@@ -55,6 +55,9 @@ jobs:
       - name: Sync photos
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Without an Inngest event key, profile refresh requests go through the application.
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL || 'https://poligraph.fr' }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           INPUT_VALIDATE: ${{ inputs.validate }}
           INPUT_SLUG: ${{ inputs.slug }}

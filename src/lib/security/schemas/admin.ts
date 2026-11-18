@@ -15,6 +15,21 @@ export const revalidatePathsSchema = z
   .min(1)
   .max(10);
 
+// Profile-snapshot requests relayed by a workflow that has no Inngest event key. 100 ids: the
+// size of one batch on the sending side, so one request never fans out further than one send.
+export const profileRefreshRelaySchema = z.object({
+  politicianIds: z
+    .array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/))
+    .min(1)
+    .max(100),
+  reason: z.string().min(1).max(200),
+});
+
+export const profileReconcileRelaySchema = z.object({
+  reason: z.string().min(1).max(200),
+  active: z.boolean(),
+});
+
 export const revalidateCacheSchema = z.union([
   z.object({ all: z.literal(true) }),
   z.object({ tags: z.array(z.enum(SELECTABLE_TAGS)).min(1) }),
