@@ -238,6 +238,9 @@ enum DataSource {
   FACTCHECK
   JUDILIBRE
   OPENSANCTIONS
+  // Presidential presentations list. Added by
+  // prisma/migrations/manual/2026-11-18-datasource-conseil-constitutionnel.sql.
+  CONSEIL_CONSTITUTIONNEL
 }
 
 enum MatchMethod {
