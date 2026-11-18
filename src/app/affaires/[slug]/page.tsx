@@ -58,6 +58,7 @@ import {
 import { SlappBadge } from "@/components/slapp/SlappBadge";
 import { CriteriaList } from "@/components/slapp/CriteriaList";
 import type { SlappCriteriaPayload } from "@/config/slapp";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -246,7 +247,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title,
     description,
     alternates: { canonical: `/affaires/${affair.slug}` },
-    openGraph: { title, description, type: "article" },
+    openGraph: openGraph({ title, description, type: "article", images: SEGMENT_IMAGE_FILE }),
   };
 }
 

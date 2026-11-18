@@ -10,6 +10,7 @@ const ACTION_LABELS: Record<string, string> = {
   rejected: "Rejeté",
   regenerate_requested: "Régénération demandée",
   regenerated: "Régénéré",
+  official_title_refreshed: "Titre officiel corrigé à la source",
 };
 
 const ACTION_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {

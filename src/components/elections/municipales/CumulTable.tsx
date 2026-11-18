@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 
 // ---------------------------------------------------------------------------
@@ -72,6 +71,14 @@ function getSortValue(c: CumulCandidate, key: SortKey): string {
       return c.politician?.currentParty?.shortName ?? "";
   }
 }
+
+/**
+ * Same look as `<Badge variant="secondary">`, without its 500 characters of state classes: the
+ * table renders each mandate twice (desktop row and mobile card) for several hundred candidates,
+ * and those classes alone weighed 480 KB of the page.
+ */
+const MANDATE_PILL =
+  "inline-flex whitespace-nowrap rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -234,9 +241,9 @@ export function CumulTable({ candidates }: CumulTableProps) {
                 {/* Mandate badge */}
                 <td className="py-3 px-2">
                   {c.politician?.mandates.map((m, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs mr-1">
+                    <span key={i} className={`${MANDATE_PILL} mr-1`}>
                       {mandateLabel(m.type)}
-                    </Badge>
+                    </span>
                   ))}
                 </td>
                 {/* Commune */}
@@ -331,9 +338,9 @@ export function CumulTable({ candidates }: CumulTableProps) {
             {/* Mandate badges */}
             <div className="flex flex-wrap gap-1 mb-2">
               {c.politician?.mandates.map((m, i) => (
-                <Badge key={i} variant="secondary" className="text-xs">
+                <span key={i} className={MANDATE_PILL}>
                   {mandateLabel(m.type)}
-                </Badge>
+                </span>
               ))}
             </div>
 

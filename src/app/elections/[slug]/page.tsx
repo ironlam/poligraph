@@ -32,6 +32,7 @@ import { SITE_URL } from "@/config/site";
 import { PARRAINAGES_ELECTIONS } from "@/config/parrainages";
 import { ParrainagesElection } from "@/components/parrainages/ParrainagesTerritoire";
 import { getParrainagesTableauDeBord } from "@/lib/data/parrainages";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export const revalidate = 3600; // ISR: revalidate every hour
 
@@ -139,10 +140,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: election.title,
     description,
-    openGraph: {
+    openGraph: openGraph({
       title: election.title,
       description,
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
     alternates: { canonical: `/elections/${slug}` },
   };
 }

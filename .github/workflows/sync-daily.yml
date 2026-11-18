@@ -12,6 +12,12 @@ permissions:
   contents: read
   issues: write
 
+# A run that starts late can meet the next one: queue it instead of letting two
+# runs write the same rows.
+concurrency:
+  group: sync-daily
+  cancel-in-progress: false
+
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   CRON_SECRET: ${{ secrets.CRON_SECRET }}
@@ -31,52 +37,147 @@ env:
   MAILJET_SENDER_EMAIL: ${{ secrets.MAILJET_SENDER_EMAIL }}
   MAILJET_SENDER_NAME: ${{ secrets.MAILJET_SENDER_NAME }}
   PRESS_BACKLOG_NOTIFY_EMAIL: ${{ secrets.PRESS_BACKLOG_NOTIFY_EMAIL }}
+  DB_READ_TELEMETRY: ${{ vars.DB_READ_TELEMETRY || 'false' }}
+  DB_READ_SAMPLE_RATE: ${{ vars.DB_READ_SAMPLE_RATE || '1' }}
+  DB_READ_MAX_EVENTS: ${{ vars.DB_READ_MAX_EVENTS || '60' }}
+  DB_READ_WINDOW_MS: ${{ vars.DB_READ_WINDOW_MS || '60000' }}
+  DB_READ_ENVIRONMENT: production
+  DB_READ_CONTEXT: ${{ github.event_name == 'schedule' && 'scheduled' || 'script' }}
 
 jobs:
-  daily-sync:
+  votes:
+    name: Votes (Assemblée, Sénat)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     environment: production
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
+      - name: Setup
+        uses: ./.github/actions/setup-sync
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Run daily sync (votes)
+        run: npm run sync:daily -- --group=votes
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
+  legislation:
+    name: Législation et résumés
+    # After the votes: the scrutin summaries cover what the votes job just imported.
+    # Runs even when that job failed.
+    needs: [votes]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
 
-      - name: Run daily sync
-        env:
-          DB_READ_TELEMETRY: ${{ vars.DB_READ_TELEMETRY || 'false' }}
-          DB_READ_SAMPLE_RATE: ${{ vars.DB_READ_SAMPLE_RATE || '1' }}
-          DB_READ_MAX_EVENTS: ${{ vars.DB_READ_MAX_EVENTS || '60' }}
-          DB_READ_WINDOW_MS: ${{ vars.DB_READ_WINDOW_MS || '60000' }}
-          DB_READ_ENVIRONMENT: production
-          DB_READ_CONTEXT: ${{ github.event_name == 'schedule' && 'scheduled' || 'script' }}
-        run: npm run sync:daily
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Summary
-        if: always()
-        run: |
-          echo "## Daily Sync Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Date**: $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+      - name: Setup
+        uses: ./.github/actions/setup-sync
+
+      - name: Run daily sync (legislation)
+        run: npm run sync:daily -- --group=legislation
+
+  press-import:
+    name: Presse (import RSS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup-sync
+
+      - name: Run daily sync (press-import)
+        run: npm run sync:daily -- --group=press-import
+
+  press-analysis:
+    name: Presse (analyse, réconciliation)
+    # After the import, never alongside it. Runs even when the import failed: the
+    # analysis works through the backlog.
+    needs: [press-import]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup-sync
+
+      - name: Run daily sync (press-analysis)
+        run: npm run sync:daily -- --group=press-analysis
+
+  factchecks:
+    name: Fact-checks, thèmes, embeddings
+    needs: [legislation, press-import]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup-sync
+
+      - name: Run daily sync (factchecks)
+        run: npm run sync:daily -- --group=factchecks
+
+  scores:
+    name: Scores, statuts, statistiques
+    # Reads what every job above wrote. Runs whatever their outcome.
+    needs: [votes, legislation, press-analysis, factchecks]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup-sync
+
+      - name: Run daily sync (scores)
+        run: npm run sync:daily -- --group=scores
+
+  purge:
+    name: Purge du cache
+    # Last, and even after a failure or a cancellation: a job that failed halfway
+    # still wrote rows the site should show.
+    needs: [votes, legislation, press-import, press-analysis, factchecks, scores]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup-sync
+
+      - name: Run daily sync (purge)
+        run: npm run sync:daily -- --group=purge
 
   notify:
     name: Notify on Failure
     runs-on: ubuntu-latest
-    needs: [daily-sync]
+    needs: [votes, legislation, press-import, press-analysis, factchecks, scores, purge]
     if: failure() && !cancelled()
 
     steps:
@@ -95,7 +196,7 @@ jobs:
               `**Commit**: \`${context.sha.slice(0, 7)}\``,
               "",
               "### Checklist",
-              "- [ ] Open the workflow run and identify the failing step",
+              "- [ ] Open the workflow run and identify the failing job and step",
               "- [ ] Check `docs/RUNBOOK.md` for triage steps",
               "- [ ] Re-run the workflow once the underlying cause is fixed",
               "- [ ] Close this issue when resolved",

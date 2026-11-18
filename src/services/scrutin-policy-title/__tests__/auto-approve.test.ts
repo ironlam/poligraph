@@ -43,6 +43,7 @@ interface SeedOpts {
   generationSource?: "DETERMINISTIC" | "LLM" | "MANUAL" | "FALLBACK";
   /** Hours in the past for generatedAt. Default 48 (clears the 24h age gate). */
   ageHours?: number;
+  title?: string;
 }
 
 interface Seeded {
@@ -66,7 +67,7 @@ async function seedRow(opts: SeedOpts): Promise<Seeded> {
   const scrutin = await db.scrutin.create({
     data: {
       externalId: `${ext}_S`,
-      title: "Sous-amendement n° 100 sur la qualité de l'eau",
+      title: opts.title ?? "Sous-amendement n° 100 sur la qualité de l'eau",
       votingDate: new Date("2026-03-10T00:00:00Z"),
       legislature: 17,
       chamber: "AN",
@@ -236,6 +237,45 @@ describeIfDb("autoApproveBatchEligible", () => {
     expect(stats.approved).toBe(0);
     expect(stats.byReason.INPUT_DRIFT).toBeGreaterThanOrEqual(1);
     expect(await statusOf(scrutinId)).toBe("DRAFT");
+  });
+
+  it("accepts a source-side fix of the relatif/relative agreement in the official title", async () => {
+    const before = "Sous-amendement n° 100 au projet de loi relative à la qualité de l'eau";
+    const after = "Sous-amendement n° 100 au projet de loi relatif à la qualité de l'eau";
+    const { scrutinId } = await seedRow({ suffix: "AGREE", ageHours: 48, title: before });
+    await db.scrutin.update({ where: { id: scrutinId }, data: { title: after } });
+
+    const stats = await autoApproveBatchEligible({ scrutinIds: [scrutinId] });
+
+    expect(stats.approved).toBe(1);
+    const row = await db.scrutinPolicyTitle.findUnique({ where: { scrutinId } });
+    expect(row?.status).toBe("APPROVED");
+    expect(row?.officialTitleSnapshot).toBe(after);
+    const rev = await db.scrutinPolicyTitleRevision.findFirst({
+      where: { policyTitleId: row!.id, action: "official_title_refreshed" },
+    });
+    expect((rev?.snapshot as { officialTitleSnapshot?: string }).officialTitleSnapshot).toBe(
+      before
+    );
+  });
+
+  it("still reports INPUT_DRIFT when the official title changes on substance", async () => {
+    const { scrutinId } = await seedRow({
+      suffix: "TITLE_DRIFT",
+      ageHours: 48,
+      title: "Sous-amendement n° 100 au projet de loi relative à la qualité de l'eau",
+    });
+    await db.scrutin.update({
+      where: { id: scrutinId },
+      data: { title: "Sous-amendement n° 1100 au projet de loi relatif à la qualité de l'eau" },
+    });
+
+    const stats = await autoApproveBatchEligible({ scrutinIds: [scrutinId] });
+
+    expect(stats.approved).toBe(0);
+    expect(stats.byReason.INPUT_DRIFT).toBe(1);
+    const row = await db.scrutinPolicyTitle.findUnique({ where: { scrutinId } });
+    expect(row?.officialTitleSnapshot).toContain("relative");
   });
 
   it("public view: approved → policy title, unapproved → official title (no leak)", async () => {

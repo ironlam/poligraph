@@ -43,6 +43,7 @@ import {
   DEFAULT_LISTING_INVOLVEMENTS,
   VICTIM_LISTING_INVOLVEMENTS,
 } from "@/lib/affairs/public-filters";
+import { openGraph } from "@/lib/seo/open-graph";
 
 export const revalidate = 300; // 5 minutes — CDN edge cache with ISR
 
@@ -95,10 +96,10 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   return {
     title,
     description,
-    openGraph: {
+    openGraph: openGraph({
       title: `${title} | Poligraph`,
       description,
-    },
+    }),
     ...listingRobotsMetadata(noindex),
     alternates: {
       canonical: (() => {

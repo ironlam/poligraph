@@ -15,6 +15,7 @@ import {
   territoireCommuneElectionsPath,
 } from "@/lib/territoires/paths";
 import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
+import { openGraph } from "@/lib/seo/open-graph";
 
 // ISR: 24 h backstop; results import refreshes `territoire:<code>` and `elections`.
 // No generateStaticParams: the `type` filter reads searchParams (see AGENTS.md, ISR gotchas).
@@ -47,7 +48,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
     // A sub-page inherits the verdict of its commune page (AGENTS.md §5). A filtered view is a
     // subset of the same content: it never competes with the unfiltered page.
     robots: verdict.robots ?? (type ? { index: false, follow: true } : undefined),
-    openGraph: { title, description, images: [TERRITOIRES_OG_IMAGE] },
+    openGraph: openGraph({ title, description, images: [TERRITOIRES_OG_IMAGE] }),
     alternates: {
       canonical: territoireCommuneElectionsPath(data.commune.inseeCode, data.commune.name),
     },
