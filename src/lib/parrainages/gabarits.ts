@@ -63,6 +63,21 @@ export function phraseDepartement(input: { total: number; candidats: number }): 
 export const partDuSeuil = (total: number) =>
   Math.min(100, Math.round((total / SEUIL_PRESENTATIONS) * 100));
 
+/** Line of a profile: "A présenté HIDALGO Anne en 2022 (Maire, Quimper, publié le 15 février 2022)." */
+export function phraseFiche(input: {
+  candidateName: string;
+  annee: number;
+  mandateLabel: string;
+  constituencyLabel: string;
+  publishedOn: string;
+}): { avant: string; candidat: string; apres: string } {
+  return {
+    avant: "A présenté ",
+    candidat: input.candidateName,
+    apres: ` en ${input.annee} (${mandatPublie(input)}, publié le ${formatDatePublication(input.publishedOn)}).`,
+  };
+}
+
 /** One line of a commune page: "Gilles CORDIVAL (Maire, Mont-Saint-Père) a présenté …". */
 export function phrasePresentation(ligne: {
   firstName: string;

@@ -64,8 +64,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `Parrainages de la présidentielle ${election.annee}`,
     description: `Les présentations d'élus publiées par le Conseil constitutionnel pour l'élection présidentielle de ${election.annee}, par candidat et par département.`,
     alternates: { canonical: parrainagesPath(slug) },
-    // Not opened to indexation yet: the thresholds are decided in the indexation step.
-    robots: { index: false, follow: true },
   };
 }
 

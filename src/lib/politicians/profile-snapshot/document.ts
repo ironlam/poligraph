@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma";
 import type {
   PoliticianDossier,
   PoliticianIdentity,
+  ProfileParrainage,
   ProfileVoteStats,
 } from "@/lib/data/politician-profile-reads";
 
@@ -15,6 +16,12 @@ export type PoliticianProfileDocument = {
   voteStats: ProfileVoteStats | null;
   /** Derived from the current parliamentary mandate, as `page.tsx` does. */
   mandateType: "DEPUTE" | "SENATEUR" | null;
+  /**
+   * Presidential presentations made by the person. Absent, not empty, for everyone else: the
+   * stored document and its hash of a profile without presentation stay exactly what they were,
+   * which is why adding this field did not bump the version.
+   */
+  parrainages?: ProfileParrainage[];
 };
 
 type Json = Prisma.InputJsonValue;

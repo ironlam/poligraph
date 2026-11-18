@@ -28,7 +28,10 @@ export const ALL_TAGS = [
  * so a routine sync must never regenerate those pages. They stay individually
  * selectable by an operator who knows what they are doing.
  */
-export const FROZEN_TAGS = ["elections-municipales-2026"] as const;
+// "parrainages" is the presidential presentations (src/lib/data/parrainages.ts): a list changes
+// only when the Conseil constitutionnel publishes, so the importer purges it by name and a
+// routine sync leaves those pages alone.
+export const FROZEN_TAGS = ["elections-municipales-2026", "parrainages"] as const;
 
 /**
  * Narrow sub-tags applied ALONGSIDE a broad tag on specific data functions
