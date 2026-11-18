@@ -103,6 +103,7 @@ model Politician {
   factCheckMentions         FactCheckMention[] // Mentions in fact-checks
   promises                  Promise[] // Tracker promesses 2027 (Q4 prototype)
   candidacies               Candidacy[] // Election candidacies
+  parrainages               Parrainage[] // Presidential presentations made as an elected official
   candidates                Candidate[] // Local election candidates linked to this politician
   participation             PoliticianParticipation? // Pre-computed participation stats
   profileSnapshot           PoliticianProfileSnapshot? // Pre-computed politician profile document
@@ -2345,6 +2346,7 @@ model Election {
   platforms             Platform[]
   measures              Measure[]
   programEditions       ProgramEdition[]
+  parrainages           Parrainage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2370,6 +2372,7 @@ model Candidacy {
 
   measures        Measure[]
   programEditions ProgramEdition[]
+  parrainages     Parrainage[]
   partyLabel      String?
 
   // Pre-campaign editorial status (used for présidentielle 2027 and future open elections)
@@ -3065,6 +3068,51 @@ model TerritoireEvenement {
   createdAt     DateTime            @default(now())
 
   @@index([territoryType, territoryCode, status, occurredOn])
+}
+
+/// One presentation ("parrainage") of a presidential candidate by an elected official, as published
+/// by the Conseil constitutionnel. One row per presentation. The published columns are written
+/// once by the importer and never updated; only the resolved columns (communeCode, departmentCode,
+/// candidacyId, politicianId) are filled afterwards, each by its own tested step.
+/// A presentation is not a political endorsement: no surface may read it as one.
+/// Created by prisma/migrations/manual/2026-11-18-parrainages.sql.
+model Parrainage {
+  id                String   @id @default(cuid())
+  electionId        String
+  /// Candidate as published, e.g. "ARTHAUD Nathalie".
+  candidateName     String
+  /// Null when the published candidate has no candidacy in base: shown as published, no link.
+  candidacyId       String?
+  civility          String
+  lastName          String
+  firstName         String
+  /// Mandate label as published, feminine and masculine forms kept apart.
+  mandateLabel      String
+  /// "Circonscription" column as published: a commune name for a mayor, otherwise a canton, a
+  /// constituency or an empty string.
+  constituencyLabel String
+  /// Department or collectivity name as published. The file carries no INSEE code.
+  departmentLabel   String
+  /// Resolved by exact match only. Null when the name is ambiguous or not found, never guessed.
+  communeCode       String?
+  departmentCode    String?
+  /// Publication date of this presentation by the Conseil constitutionnel, never the import date.
+  publishedOn       DateTime @db.Date
+  sourceUrl         String
+  /// Set only on a SAME verdict of the identity resolver (src/lib/identity/).
+  politicianId      String?
+  /// Idempotence key of the importer, derived from the election and the published columns.
+  dedupeKey         String   @unique
+  createdAt         DateTime @default(now())
+
+  election   Election    @relation(fields: [electionId], references: [id], onDelete: Restrict)
+  candidacy  Candidacy?  @relation(fields: [candidacyId], references: [id], onDelete: SetNull)
+  politician Politician? @relation(fields: [politicianId], references: [id], onDelete: SetNull)
+
+  @@index([electionId, candidateName])
+  @@index([electionId, departmentCode])
+  @@index([communeCode])
+  @@index([politicianId])
 }
 
 /// Nature of an intercommunal body, as coded by INSEE and BANATIC. MET69 is the Métropole de
