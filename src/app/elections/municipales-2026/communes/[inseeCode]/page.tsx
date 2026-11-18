@@ -9,6 +9,7 @@ import {
 } from "@/lib/data/municipales";
 import { CommuneRadiographie } from "@/components/elections/municipales/CommuneRadiographie";
 import { ListCard } from "@/components/elections/municipales/ListCard";
+import { toListCardMember } from "@/components/elections/municipales/list-card-member";
 import { AlerteCumul } from "@/components/elections/municipales/PoliticianBridge";
 import { IncumbentMaireCard } from "@/components/elections/municipales/IncumbentMaireCard";
 import { NATIONAL_MANDATE_TYPES } from "@/config/labels";
@@ -22,6 +23,7 @@ import { db } from "@/lib/db";
 import { communeRobotsMetadata } from "@/lib/seo/commune-robots";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
+import { openGraph } from "@/lib/seo/open-graph";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -67,11 +69,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     // Communes under the floor are thin candidate rosters: noindex,follow (issue #385). Not because
     // of panachage, which the 2026 list ballot ended in every commune (see commune-robots.ts).
     ...communeRobotsMetadata(commune.population),
-    openGraph: {
+    openGraph: openGraph({
       title,
       description,
       images: [TERRITOIRES_OG_IMAGE],
-    },
+    }),
     alternates: { canonical: `/elections/municipales-2026/communes/${inseeCode}` },
   };
 }
@@ -278,8 +280,16 @@ export default async function CommuneDetailPage({ params }: PageProps) {
                   partyLabel={list.partyLabel}
                   candidateCount={list.candidateCount}
                   femaleCount={list.femaleCount}
-                  teteDeListe={list.teteDeListe}
-                  members={list.members}
+                  teteDeListe={{
+                    candidateName: list.teteDeListe.candidateName,
+                    politician: list.teteDeListe.politician
+                      ? {
+                          slug: list.teteDeListe.politician.slug,
+                          fullName: list.teteDeListe.politician.fullName,
+                        }
+                      : null,
+                  }}
+                  members={list.members.map(toListCardMember)}
                   incumbentMaireLastName={commune.incumbentMaire?.maire.lastName ?? null}
                   incumbentMaireGender={commune.incumbentMaire?.maire.gender ?? null}
                   round1Pct={list.round1Pct}

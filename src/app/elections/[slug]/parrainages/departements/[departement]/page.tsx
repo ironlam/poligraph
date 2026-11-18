@@ -49,7 +49,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `Parrainages dans le département ${dept.name} (${dept.code}), présidentielle ${election.annee}`,
     description: `Les élus du département ${dept.name} qui ont présenté un candidat à la présidentielle de ${election.annee}, d'après la liste du Conseil constitutionnel.`,
     alternates: { canonical: parrainagesDepartementPath(slug, departement) },
-    robots: { index: false, follow: true },
   };
 }
 

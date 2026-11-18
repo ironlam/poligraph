@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { describe, it, expect, vi } from "vitest";
@@ -7,6 +7,12 @@ import {
   MAIRE_MIN_COMMUNE_POPULATION,
   type PoliticianIndexSignals,
 } from "../politician-robots";
+import {
+  PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS,
+  isIndexableParrainagesCandidat,
+  parrainagesCandidatRobotsMetadata,
+  parrainagesSitemapEntries,
+} from "../parrainages-robots";
 import { communeRobotsMetadata, COMMUNE_MIN_POPULATION } from "../commune-robots";
 import {
   territoireCommuneRobotsMetadata,
@@ -759,5 +765,101 @@ describe("doctrine — indexable routes the 2026-11-12 audit found missing from 
     "/parlement/votes?filter",
   ])("does not list %s", (fragment) => {
     expect(code).not.toContain(fragment);
+  });
+});
+
+describe("doctrine : parrainages présidentiels", () => {
+  const page = (path: string) =>
+    readFileSync(join(process.cwd(), "src/app/elections/[slug]/parrainages", path), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+  const NOINDEX = "robots: { index: false, follow: true }";
+  const tableau = {
+    dernierePublication: "2022-03-07",
+    candidats: [
+      { slug: "pecresse-valerie", total: 2636 },
+      { slug: "koenig-gaspard", total: PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS },
+      { slug: "kuzmanovic-georges", total: PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS - 1 },
+    ],
+    departements: [{ code: "29" }, { code: "984" }],
+  };
+
+  it("page candidat indexable à partir du seuil", () => {
+    expect(parrainagesCandidatRobotsMetadata(PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS)).toEqual({});
+    expect(isIndexableParrainagesCandidat(2636)).toBe(true);
+  });
+
+  it("page candidat sous le seuil : noindex, follow", () => {
+    expect(parrainagesCandidatRobotsMetadata(PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS - 1)).toEqual({
+      robots: { index: false, follow: true },
+    });
+    expect(parrainagesCandidatRobotsMetadata(1)).toEqual({
+      robots: { index: false, follow: true },
+    });
+  });
+
+  it("la page candidat tient son verdict du prédicat partagé, sans valeur en dur", () => {
+    const src = page("[candidat]/page.tsx");
+    expect(src).toContain("parrainagesCandidatRobotsMetadata(detail.candidat.total)");
+    expect(src).not.toContain(NOINDEX);
+  });
+
+  it("tableau de bord et pages département indexables", () => {
+    expect(page("departements/[departement]/page.tsx")).not.toContain(NOINDEX);
+    // The dashboard file also serves the waiting page of an election without a list.
+    const dashboard = page("page.tsx");
+    expect(dashboard.split(NOINDEX)).toHaveLength(2);
+    expect(dashboard.indexOf(NOINDEX)).toBeLessThan(
+      dashboard.indexOf("return {", dashboard.indexOf(NOINDEX))
+    );
+    expect(dashboard).toContain("slug in PARRAINAGES_A_VENIR");
+  });
+
+  it("page de méthode hors de l'index", () => {
+    expect(page("methode/page.tsx")).toContain(NOINDEX);
+  });
+
+  it("aucune page par élu : aucune route sous un nom de parrain", () => {
+    const dirs = readdirSync(join(process.cwd(), "src/app/elections/[slug]/parrainages"), {
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+    expect(dirs).toEqual(["[candidat]", "departements", "methode"]);
+  });
+
+  it("le sitemap liste le tableau de bord, les candidats au seuil et les départements, datés de la publication", () => {
+    const entries = parrainagesSitemapEntries(
+      "https://poligraph.fr",
+      "presidentielle-2022",
+      tableau
+    );
+    const base = "https://poligraph.fr/elections/presidentielle-2022/parrainages";
+    expect(entries.map((entry) => entry.url)).toEqual([
+      base,
+      `${base}/pecresse-valerie`,
+      `${base}/koenig-gaspard`,
+      `${base}/departements/finistere`,
+    ]);
+    for (const entry of entries) {
+      expect(entry.lastModified).toEqual(new Date("2022-03-07T00:00:00Z"));
+    }
+  });
+
+  it("le sitemap ne liste rien tant qu'aucune présentation n'est publiée", () => {
+    expect(
+      parrainagesSitemapEntries("https://poligraph.fr", "presidentielle-2027", {
+        dernierePublication: null,
+        candidats: [],
+        departements: [],
+      })
+    ).toEqual([]);
+  });
+
+  it("le sitemap passe par le prédicat partagé", () => {
+    const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
+    expect(src).toContain('from "@/lib/seo/parrainages-robots"');
+    expect(src).toContain("parrainagesSitemapEntries(SITE_URL, slug,");
   });
 });

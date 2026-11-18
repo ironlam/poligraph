@@ -22,12 +22,18 @@ interface PoliticianAvatarProps {
   className?: string;
   priority?: boolean; // Load immediately (above the fold)
   /**
-   * Fixed rendered width in CSS pixels. When set, the image is sized with width/height instead of
-   * `fill` + `sizes`, so next/image emits a 1x/2x srcSet instead of every configured width: much
-   * lighter HTML on pages listing many avatars.
+   * Rendered width in CSS pixels, when a caller shrinks the avatar below its `size` through
+   * `className`. Defaults to the width of `size`.
    */
   fixedPx?: number;
 }
+
+/**
+ * The image is sized with width/height, never `fill` + `sizes`: with `sizes`, next/image writes
+ * every configured width into the srcSet (16 candidates, 2.6 KB per avatar), against two for a
+ * fixed width. On a scrutin page listing 576 voters that was 1.5 MB of a 2.6 MB document.
+ */
+const SIZE_PX = { sm: 40, md: 56, lg: 96, xl: 128 } as const;
 
 const sizeClasses = {
   sm: "w-10 h-10 text-sm",
@@ -87,16 +93,10 @@ export function PoliticianAvatar({
       <Image
         src={imageSrc}
         alt={displayName}
-        {...(fixedPx
-          ? { width: fixedPx, height: fixedPx }
-          : {
-              fill: true,
-              sizes:
-                size === "sm" ? "40px" : size === "md" ? "56px" : size === "lg" ? "96px" : "128px",
-            })}
+        width={fixedPx ?? SIZE_PX[size]}
+        height={fixedPx ?? SIZE_PX[size]}
         className={cn(
-          "object-cover transition-opacity duration-200",
-          fixedPx && "h-full w-full",
+          "h-full w-full object-cover transition-opacity duration-200",
           imageLoaded ? "opacity-100" : "opacity-0"
         )}
         onError={() => setImageError(true)}

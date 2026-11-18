@@ -50,6 +50,7 @@ import { normalizeText } from "@/lib/name-matching";
 import { cn } from "@/lib/utils";
 import { GOUVERNEMENTS_MEMBRES_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 const PATH = "/politiques/gouvernements/membres";
 const RETURN_LABEL = "Retour à « Membres des gouvernements »";
@@ -86,14 +87,12 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     title,
     description,
     alternates: { canonical: PATH },
-    openGraph: {
+    openGraph: openGraph({
       title: `${title} | Poligraph`,
       description,
       url: PATH,
-      type: "website",
-      siteName: "Poligraph",
-      locale: "fr_FR",
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
     twitter: { card: "summary_large_image", title, description },
     ...listingRobotsMetadata(
       hasActiveListingFilter(flatten(sp), GOUVERNEMENTS_MEMBRES_FILTER_KEYS)

@@ -19,6 +19,8 @@ import {
   DonneesSources,
   type DownloadFile,
 } from "@/components/territoires/DonneesSections";
+import { openGraph } from "@/lib/seo/open-graph";
+import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 
 /*
  * Indexable: the page carries the licence register and the column documentation, real content
@@ -32,11 +34,12 @@ export const metadata: Metadata = {
   title: "Données des territoires : fichiers CSV et licences",
   description: DESCRIPTION,
   alternates: { canonical: TERRITOIRES_DONNEES_PATH },
-  openGraph: {
+  openGraph: openGraph({
     title: "Données des territoires : fichiers CSV et licences",
     description: DESCRIPTION,
     url: TERRITOIRES_DONNEES_PATH,
-  },
+    images: [TERRITOIRES_OG_IMAGE],
+  }),
 };
 
 /** BOM included, as served by the export routes. */

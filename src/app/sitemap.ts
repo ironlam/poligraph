@@ -39,6 +39,9 @@ import {
   MIN_BIOGRAPHY_LENGTH,
 } from "@/lib/seo/politician-robots";
 import { TERRITOIRE_COMMUNE_MIN_POPULATION } from "@/lib/seo/territoire-robots";
+import { parrainagesSitemapEntries } from "@/lib/seo/parrainages-robots";
+import { PARRAINAGES_ELECTIONS } from "@/config/parrainages";
+import { getParrainagesTableauDeBord } from "@/lib/data/parrainages";
 import {
   PUBLIC_PARTY_WHERE,
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
@@ -710,6 +713,15 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       priority: 0.7,
     }));
 
+  // Presidential presentations: same predicate as the candidate pages (parrainages-robots.ts).
+  const parrainagesPages: MetadataRoute.Sitemap = (
+    await Promise.all(
+      Object.keys(PARRAINAGES_ELECTIONS).map(async (slug) =>
+        parrainagesSitemapEntries(SITE_URL, slug, await getParrainagesTableauDeBord(slug))
+      )
+    )
+  ).flat();
+
   const presidentialDirectoryPages: MetadataRoute.Sitemap =
     presidentielleHubPublishable && presidentielle2027 !== undefined
       ? [
@@ -853,6 +865,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     ...partyProgrammePages,
     ...partyAffairPages,
     ...electionPages,
+    ...parrainagesPages,
     ...presidentialDirectoryPages,
     ...presidentialSubjectPages,
     ...presidentialReaderGuidePages,

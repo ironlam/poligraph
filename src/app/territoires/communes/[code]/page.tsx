@@ -40,6 +40,7 @@ import {
   territoireDepartementPath,
 } from "@/lib/territoires/paths";
 import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
+import { openGraph } from "@/lib/seo/open-graph";
 
 // ISR: 24 h backstop; freshness comes from the reader's cache tags.
 export const revalidate = 86400;
@@ -74,7 +75,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       population: dossier.population.value,
       maireEtabli: dossier.maire.state === "ETABLI",
     }),
-    openGraph: { title, description, images: [TERRITOIRES_OG_IMAGE] },
+    openGraph: openGraph({ title, description, images: [TERRITOIRES_OG_IMAGE] }),
     // The readable address, whatever name the request carried in front of the code.
     alternates: {
       canonical: territoireCommunePath(dossier.identity.inseeCode, dossier.identity.name),
@@ -146,8 +147,9 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
             <ParlementSection dossier={dossier} />
             <VotesParlementaires votes={votes} mode={votesMode} />
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}
-            <ElectionsSection dossier={dossier} scrutins={scrutins} />
-            <ParrainagesCommune blocs={parrainages} />
+            <ElectionsSection dossier={dossier} scrutins={scrutins}>
+              <ParrainagesCommune blocs={parrainages} />
+            </ElectionsSection>
             <Agir departmentCode={identity.department.code} />
           </div>
           <div className="space-y-4">

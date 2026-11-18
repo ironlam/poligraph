@@ -17,6 +17,7 @@ import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistr
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { SITE_URL } from "@/config/site";
+import { OPEN_GRAPH_BASE } from "@/lib/seo/open-graph";
 import "./globals.css";
 
 // Fonts are served from the repository rather than fetched from Google Fonts during the build.
@@ -70,16 +71,8 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Poligraph" }],
   creator: "Poligraph",
-  openGraph: {
-    type: "website",
-    locale: "fr_FR",
-    url: SITE_URL,
-    siteName: "Poligraph",
-    title: "Poligraph",
-    description:
-      "Observatoire citoyen de la vie politique. Mandats, votes, patrimoine, affaires judiciaires et fact-checking.",
-    // Image generated automatically by opengraph-image.tsx
-  },
+  // No image key: each segment attaches its own opengraph-image file, the root one by default.
+  openGraph: OPEN_GRAPH_BASE,
   // No title or description here: child segments inherit this block as a whole, so every page
   // that set only openGraph shared on X as "Poligraph". Left empty, Next fills them from the
   // page's openGraph (postProcessMetadata in next/dist/lib/metadata).

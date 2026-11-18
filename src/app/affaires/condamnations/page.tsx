@@ -14,6 +14,7 @@ import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 import { buildListTitle, buildDescription, buildCanonical } from "@/lib/seo/condamnations-metadata";
 import { CollectionPageJsonLd, AffairItemListJsonLd, DatasetJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export const revalidate = 300;
 
@@ -96,7 +97,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     title: titleBase,
     description,
     alternates: { canonical },
-    openGraph: { title, description, type: "website" },
+    openGraph: openGraph({ title, description, images: SEGMENT_IMAGE_FILE }),
     twitter: { card: "summary_large_image", title, description },
   };
 }

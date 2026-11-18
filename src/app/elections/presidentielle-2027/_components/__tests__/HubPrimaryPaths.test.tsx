@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { HubCandidacy } from "@/lib/data/hub";
-import { HubPrimaryPaths } from "../HubPrimaryPaths";
+import { HubParrainagesEntry, HubPrimaryPaths } from "../HubPrimaryPaths";
 
 function candidacy(over: Partial<HubCandidacy> = {}): HubCandidacy {
   return {
@@ -25,7 +25,7 @@ function candidacy(over: Partial<HubCandidacy> = {}): HubCandidacy {
 }
 
 describe("HubPrimaryPaths", () => {
-  it("présente les trois parcours structurants au même niveau", () => {
+  it("présente les quatre parcours structurants au même niveau", () => {
     render(
       <HubPrimaryPaths
         candidacies={[candidacy(), candidacy({ id: "c2", measureCount: 3 })]}
@@ -45,6 +45,16 @@ describe("HubPrimaryPaths", () => {
       "href",
       "/elections/presidentielle-2027/comparer"
     );
+    expect(screen.getByRole("link", { name: /Suivre les parrainages/ })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/parrainages"
+    );
+    // The list is not published yet: the entry says so and points to the previous one.
+    expect(
+      screen.getByText(/dès leur publication par le Conseil constitutionnel/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/la liste de 2022/)).toBeInTheDocument();
+    expect(screen.getAllByRole("link")).toHaveLength(4);
     expect(screen.getByText(/1 a déjà des propositions publiées, sur 2/)).toBeInTheDocument();
     expect(screen.getByText(/16 thèmes/)).toBeInTheDocument();
   });
@@ -72,5 +82,13 @@ describe("HubPrimaryPaths", () => {
       .map((face) => face.getAttribute("aria-label"));
     expect(faces).toEqual(["Avatar de Alix Dupont", "Avatar de Chloé Petit"]);
     expect(screen.getByText("Candidatures en cours, par ordre alphabétique")).toBeInTheDocument();
+  });
+
+  it("garde l'entrée des parrainages seule, pour les largeurs où le bloc est masqué", () => {
+    render(<HubParrainagesEntry />);
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute("href", "/elections/presidentielle-2027/parrainages");
+    expect(links[0]).toHaveTextContent("Suivre les parrainages");
   });
 });
