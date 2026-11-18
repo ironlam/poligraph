@@ -1,8 +1,11 @@
 import { getDepartmentName, getDepartmentSlug } from "@/config/departments";
+import { getRegionBySlug } from "@/config/regions";
+import { generateSlug } from "@/lib/utils";
 import {
   territoireCommuneDecisionsPath,
   territoireCommunePath,
   territoireDepartementPath,
+  territoireRegionPath,
 } from "./paths";
 
 /** INSEE code at the end of a local mandate label: "Carcassonne (11069)", "Ajaccio (2A004)". */
@@ -44,15 +47,34 @@ export interface MandateDepartementLinkInput {
   departmentCode: string | null;
 }
 
+const DEPARTEMENT_LINKED_TYPES = new Set(["DEPUTE", "SENATEUR", "PRESIDENT_DEPARTEMENT"]);
+
 /**
- * Link from the current mandate of a deputy or a senator to the Territoires page of the
- * department they sit for. Null for a code without a department page (seats of the French
+ * Link from the current mandate of a deputy, a senator or a departmental council president to
+ * the Territoires page of their department. Null for a code without a department page (seats of the French
  * abroad, collectivities outside the referential): never a guessed destination.
  */
 export function mandateDepartementHref(mandate: MandateDepartementLinkInput): string | null {
-  if (!mandate.isCurrent || (mandate.type !== "DEPUTE" && mandate.type !== "SENATEUR")) return null;
+  if (!mandate.isCurrent || !DEPARTEMENT_LINKED_TYPES.has(mandate.type)) return null;
   const name = getDepartmentName(mandate.departmentCode);
   return name ? territoireDepartementPath(getDepartmentSlug(name)) : null;
+}
+
+/**
+ * Link from a current regional presidency to its region page. `constituency` carries the region
+ * name, the key the region page reads the presidency by; a name outside the referential yields
+ * no link.
+ */
+export function mandateRegionHref(mandate: {
+  type: string;
+  isCurrent: boolean;
+  constituency: string | null;
+}): string | null {
+  if (!mandate.isCurrent || mandate.type !== "PRESIDENT_REGION" || !mandate.constituency) {
+    return null;
+  }
+  const region = getRegionBySlug(generateSlug(mandate.constituency));
+  return region ? territoireRegionPath(region.slug) : null;
 }
 
 const MUNICIPAL_TYPES = new Set(["MAIRE", "ADJOINT_MAIRE", "CONSEILLER_MUNICIPAL"]);

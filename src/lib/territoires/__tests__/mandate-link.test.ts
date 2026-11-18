@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mandateCommuneLink, mandateDecisionsHref, mandateDepartementHref } from "../mandate-link";
+import {
+  mandateCommuneLink,
+  mandateDecisionsHref,
+  mandateDepartementHref,
+  mandateRegionHref,
+} from "../mandate-link";
 
 const mandateTerritoireHref = (m: Parameters<typeof mandateCommuneLink>[0]) =>
   mandateCommuneLink(m)?.href ?? null;
@@ -92,8 +97,15 @@ describe("mandateDepartementHref", () => {
     );
   });
 
+  it("relie la présidence en cours d'un conseil départemental à son département", () => {
+    expect(mandateDepartementHref({ ...depute, type: "PRESIDENT_DEPARTEMENT" })).toBe(
+      "/territoires/departements/finistere"
+    );
+  });
+
   it("ne relie ni un mandat terminé, ni un autre type de mandat", () => {
     expect(mandateDepartementHref({ ...depute, isCurrent: false })).toBeNull();
+    expect(mandateDepartementHref({ ...depute, type: "PRESIDENT_REGION" })).toBeNull();
     expect(mandateDepartementHref({ ...depute, type: "MAIRE" })).toBeNull();
     expect(mandateDepartementHref({ ...depute, type: "DEPUTE_EUROPEEN" })).toBeNull();
   });
@@ -101,5 +113,20 @@ describe("mandateDepartementHref", () => {
   it("ne devine pas de page pour un siège sans département", () => {
     expect(mandateDepartementHref({ ...depute, departmentCode: null })).toBeNull();
     expect(mandateDepartementHref({ ...depute, departmentCode: "ZZ" })).toBeNull();
+  });
+});
+
+describe("mandateRegionHref", () => {
+  const presidence = { type: "PRESIDENT_REGION", isCurrent: true, constituency: "Île-de-France" };
+
+  it("relie la présidence en cours d'un conseil régional à sa région", () => {
+    expect(mandateRegionHref(presidence)).toBe("/territoires/regions/ile-de-france");
+  });
+
+  it("ne relie ni une présidence terminée, ni un autre mandat, ni un nom hors référentiel", () => {
+    expect(mandateRegionHref({ ...presidence, isCurrent: false })).toBeNull();
+    expect(mandateRegionHref({ ...presidence, type: "SENATEUR" })).toBeNull();
+    expect(mandateRegionHref({ ...presidence, constituency: "Aquitaine" })).toBeNull();
+    expect(mandateRegionHref({ ...presidence, constituency: null })).toBeNull();
   });
 });

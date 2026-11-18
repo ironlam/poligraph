@@ -1,6 +1,6 @@
 import { parse } from "csv-parse/sync";
 import { db } from "@/lib/db";
-import { DataSource, Judgement, type Prisma } from "@/generated/prisma";
+import { DataSource, Judgement, PublicationStatus, type Prisma } from "@/generated/prisma";
 import { HTTPClient } from "@/lib/api/http-client";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { resolveBatch, type ResolveResult } from "@/lib/identity";
@@ -12,11 +12,13 @@ import {
   resolveRneResourceUrl,
 } from "./rne-resource";
 import {
+  buildExecutifIdentity,
   buildExecutifMandate,
   classifyExecutif,
   executifSourceId,
   parsePresidentRows,
   registreDepasse,
+  type ExecutifMandateData,
   type ExecutifNiveau,
   type ExecutifVerdict,
   type PresidentRow,
@@ -25,8 +27,9 @@ import {
 /**
  * Links the presidents of departmental and regional councils listed by the RNE to their
  * `Politician` (D22), by writing the executive mandate the Territoires pages already read.
- * Re-runnable: a line already decided or already linked is left as is. Conseillers are never
- * linked. A mandate whose holder left the register is not closed here.
+ * A president with no candidate profile at all (SANS_FICHE) gets one, built from the register
+ * line only. Re-runnable: a line already decided or already linked is left as is. Conseillers
+ * are never linked. A mandate whose holder left the register is not closed here.
  */
 
 const DECIDED_BY = "system:sync-executifs";
@@ -45,14 +48,62 @@ export interface ExecutifsReport {
   dryRun: boolean;
   lines: ExecutifLine[];
   mandatesCreated: number;
+  politiciansCreated: number;
   decisionsWritten: number;
 }
 
-interface LoadedRow extends PresidentRow {
+export interface LoadedRow extends PresidentRow {
   sourceUrl: string;
 }
 
-async function loadPresidents(niveau: ExecutifNiveau): Promise<LoadedRow[]> {
+function currentHolders(mandate: ExecutifMandateData) {
+  return db.mandate.findMany({
+    where: {
+      type: mandate.type,
+      isCurrent: true,
+      OR: [
+        { constituency: mandate.constituency },
+        ...(mandate.departmentCode ? [{ departmentCode: mandate.departmentCode }] : []),
+      ],
+    },
+    select: { politicianId: true },
+  });
+}
+
+/**
+ * Public profile for a president, from the register line only. Called by the sync for a
+ * SANS_FICHE line, and by hand once a reviewer has ruled out every homonym.
+ */
+export async function createExecutifPolitician(
+  row: LoadedRow,
+  mandate: ExecutifMandateData,
+  registerAt: Date | null
+): Promise<{ id: string; slug: string }> {
+  const taken = await db.politician.findUnique({
+    where: { slug: buildExecutifIdentity(row, false).slug },
+    select: { id: true },
+  });
+  return db.politician.create({
+    data: {
+      ...buildExecutifIdentity(row, taken !== null),
+      source: DataSource.RNE,
+      publicationStatus: PublicationStatus.PUBLISHED,
+      mandates: {
+        create: {
+          ...mandate,
+          isCurrent: true,
+          source: DataSource.RNE,
+          externalId: executifSourceId(row),
+          sourceUrl: row.sourceUrl,
+          lastConfirmedAt: registerAt,
+        },
+      },
+    },
+    select: { id: true, slug: true },
+  });
+}
+
+export async function loadPresidents(niveau: ExecutifNiveau): Promise<LoadedRow[]> {
   const sourceUrl = await resolveRneResourceUrl(
     niveau === "DEPARTEMENTAL"
       ? RNE_CONSEILLERS_DEPARTEMENTAUX_FRAGMENTS
@@ -128,7 +179,13 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
   const politicianById = new Map(politicians.map((p) => [p.id, p]));
   const decided = new Set(decisions.map((d) => `${d.sourceId}|${d.politicianId}`));
 
-  const report: ExecutifsReport = { dryRun, lines: [], mandatesCreated: 0, decisionsWritten: 0 };
+  const report: ExecutifsReport = {
+    dryRun,
+    lines: [],
+    mandatesCreated: 0,
+    politiciansCreated: 0,
+    decisionsWritten: 0,
+  };
   const refreshed: string[] = [];
 
   for (const [i, row] of rows.entries()) {
@@ -145,7 +202,30 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
       action: "aucune",
     };
     report.lines.push(line);
-    if (!result || !politician || verdict === "SANS_FICHE" || verdict === "HOMONYME") continue;
+    const registerDate = registerDateFromUrl(row.sourceUrl);
+    const registerAt = registerDate ? new Date(`${registerDate}T12:00:00Z`) : null;
+
+    if (verdict === "SANS_FICHE") {
+      const mandate = buildExecutifMandate(row);
+      if (!mandate) {
+        line.action = "territoire hors référentiel ou date de début absente";
+        continue;
+      }
+      if ((await currentHolders(mandate)).length > 0) {
+        line.action = "conflit : un autre titulaire a ce mandat";
+        continue;
+      }
+      line.action = "fiche créée";
+      report.politiciansCreated++;
+      if (dryRun) continue;
+      // No candidate shares this family name: nothing to mistake it for, so it is public at
+      // once, like a mayor created by the RNE sync.
+      const created = await createExecutifPolitician(row, mandate, registerAt);
+      line.slug = created.slug;
+      refreshed.push(created.id);
+      continue;
+    }
+    if (!result || !politician || verdict === "HOMONYME") continue;
 
     if (!decided.has(`${sourceId}|${politician.id}`)) {
       report.decisionsWritten++;
@@ -172,8 +252,6 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
       line.action = "fiche non publique, pas de mandat";
       continue;
     }
-    const registerDate = registerDateFromUrl(row.sourceUrl);
-    const registerAt = registerDate ? new Date(`${registerDate}T12:00:00Z`) : null;
     if (
       registreDepasse(
         registerAt,
@@ -189,17 +267,7 @@ export async function syncExecutifs(options: { dryRun?: boolean } = {}): Promise
       continue;
     }
 
-    const holders = await db.mandate.findMany({
-      where: {
-        type: mandate.type,
-        isCurrent: true,
-        OR: [
-          { constituency: mandate.constituency },
-          ...(mandate.departmentCode ? [{ departmentCode: mandate.departmentCode }] : []),
-        ],
-      },
-      select: { politicianId: true },
-    });
+    const holders = await currentHolders(mandate);
     if (holders.length > 0) {
       line.action = holders.some((h) => h.politicianId === politician.id)
         ? "déjà relié"

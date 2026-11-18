@@ -149,6 +149,13 @@ describe("doctrine — strong surfaces stay indexable", () => {
   it("mayor of a significant commune", () => {
     expect(politicianRobotsMetadata(BIG_MAYOR)).toEqual(INDEXABLE);
   });
+  it("council president created from the RNE, with no other signal (D22)", () => {
+    for (const type of ["PRESIDENT_DEPARTEMENT", "PRESIDENT_REGION"]) {
+      expect(politicianRobotsMetadata({ mandates: [{ type }], ...NO_OTHER_SIGNAL })).toEqual(
+        INDEXABLE
+      );
+    }
+  });
   it("significant commune page (>= threshold)", () => {
     expect(communeRobotsMetadata(COMMUNE_MIN_POPULATION)).toEqual(INDEXABLE);
   });

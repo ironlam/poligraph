@@ -11,6 +11,7 @@ import {
   mandateCommuneLink,
   mandateDecisionsHref,
   mandateDepartementHref,
+  mandateRegionHref,
 } from "@/lib/territoires/mandate-link";
 
 const MAIRE_TYPES: MandateType[] = ["MAIRE", "ADJOINT_MAIRE", "CONSEILLER_MUNICIPAL"];
@@ -57,6 +58,7 @@ const TERRITOIRE_LINK =
 function TerritoireLinks({ mandate }: { mandate: MandateWithGroup }) {
   const commune = mandateCommuneLink(mandate);
   const departement = mandateDepartementHref(mandate);
+  const region = mandateRegionHref(mandate);
   return (
     <>
       {commune && (
@@ -67,6 +69,11 @@ function TerritoireLinks({ mandate }: { mandate: MandateWithGroup }) {
       {departement && (
         <Link href={departement} className={TERRITOIRE_LINK} prefetch={false}>
           Page du département →
+        </Link>
+      )}
+      {region && (
+        <Link href={region} className={TERRITOIRE_LINK} prefetch={false}>
+          Page de la région →
         </Link>
       )}
     </>
