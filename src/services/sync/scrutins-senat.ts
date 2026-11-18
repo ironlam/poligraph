@@ -13,7 +13,9 @@ import { writeVotesForScrutin } from "@/services/sync/scrutins-vote-writer";
 import { HTTPClient } from "@/lib/api/http-client";
 import { decodeHtmlEntities, parseFrenchDate } from "@/lib/parsing";
 import { removeTags } from "@/lib/parsing/html-utils";
-import { generateDateSlug, generateUniqueSlug } from "@/lib/utils";
+import { generateUniqueSlug } from "@/lib/utils";
+import { buildScrutinSlugBase } from "@/lib/votes/scrutin-slug";
+import { extractScrutinNumber } from "@/lib/votes/scrutin-number";
 import { VotePosition, VotingResult, DataSource, Chamber } from "@/generated/prisma";
 import { classifyScrutinTitle } from "@/lib/scrutin-type";
 import { applySenateVoteCorrections } from "@/lib/votes/senate-corrections";
@@ -288,9 +290,18 @@ async function buildMatriculeToIdMap(): Promise<Map<string, string>> {
 /**
  * Generate a unique slug for a Sénat scrutin (with "senat-" prefix)
  */
-async function generateUniqueScrutinSlug(date: Date, title: string): Promise<string> {
-  const senatSlug = `senat-${generateDateSlug(date, title)}`.slice(0, 80);
-  return generateUniqueSlug(senatSlug, (s) =>
+async function generateUniqueScrutinSlug(
+  externalId: string,
+  date: Date,
+  title: string
+): Promise<string> {
+  const baseSlug = buildScrutinSlugBase({
+    chamber: "SENAT",
+    date,
+    number: extractScrutinNumber(externalId),
+    title,
+  });
+  return generateUniqueSlug(baseSlug, (s) =>
     db.scrutin.findUnique({ where: { slug: s } }).then(Boolean)
   );
 }
@@ -480,7 +491,11 @@ export async function syncScrutinsSenat(
             if (existing) {
               const updateData: typeof scrutinData & { slug?: string } = { ...scrutinData };
               if (!existing.slug) {
-                updateData.slug = await generateUniqueScrutinSlug(metadata.date, metadata.title);
+                updateData.slug = await generateUniqueScrutinSlug(
+                  externalId,
+                  metadata.date,
+                  metadata.title
+                );
               }
               scrutin = await db.scrutin.update({
                 where: { id: existing.id },
@@ -488,7 +503,11 @@ export async function syncScrutinsSenat(
               });
               stats.scrutinsUpdated++;
             } else {
-              const slug = await generateUniqueScrutinSlug(metadata.date, metadata.title);
+              const slug = await generateUniqueScrutinSlug(
+                externalId,
+                metadata.date,
+                metadata.title
+              );
               scrutin = await db.scrutin.create({
                 data: { ...scrutinData, slug },
               });
