@@ -93,6 +93,8 @@ export async function getParrainagesCandidats(electionSlug: string): Promise<Par
   cacheLife("synced");
   cacheTag("parrainages");
 
+  // One group per candidate and department, whatever the candidacy link: rows imported before a
+  // candidacy existed keep a null link, and grouping on it would count their department twice.
   const rows = await orEmpty(
     db.$queryRaw<
       {
@@ -108,10 +110,11 @@ export async function getParrainagesCandidats(electionSlug: string): Promise<Par
              max(t.n)::int AS "maxParDepartement", max(c."candidateName") AS "candidacyName",
              max(pol."slug") AS "politicianSlug"
       FROM (
-        SELECT p."candidateName", p."departmentLabel", p."candidacyId", count(*) AS n
+        SELECT p."candidateName", p."departmentLabel", max(p."candidacyId") AS "candidacyId",
+               count(*) AS n
         FROM "Parrainage" p JOIN "Election" e ON e."id" = p."electionId"
         WHERE e."slug" = ${electionSlug}
-        GROUP BY 1, 2, 3
+        GROUP BY 1, 2
       ) t
       LEFT JOIN "Candidacy" c ON c."id" = t."candidacyId"
       LEFT JOIN "Politician" pol
