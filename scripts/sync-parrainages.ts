@@ -30,6 +30,9 @@ async function main() {
   console.log(
     `  communes : ${t.commune.RESOLVED} résolues, ${t.commune.AMBIGUOUS} ambiguës, ${t.commune.NOT_FOUND} introuvables, ${t.commune.NOT_APPLICABLE} sans objet`
   );
+  console.log(
+    `  communes retrouvées par fusion ou changement de nom : ${t.viaSuccessor}, codes à compléter en base : ${plan.communeBackfills.length}`
+  );
   console.log(`  publications : ${plan.publications.map(([d, n]) => `${d}=${n}`).join(" ")}`);
   console.log("\n  Présentations par candidat (fichier), candidature en base :");
   const links = new Map(plan.candidacyLinks.map((l) => [l.candidateName, l.candidacyName]));
@@ -39,7 +42,7 @@ async function main() {
   if (plan.blockers.length) {
     console.log(`\n  BLOCAGES :\n  - ${plan.blockers.join("\n  - ")}`);
   }
-  console.log(`\n  écrit : ${r.written}`);
+  console.log(`\n  écrit : ${r.written}, codes de commune complétés : ${r.backfilled}`);
   await db.$disconnect();
   if (plan.blockers.length) process.exit(1);
 }

@@ -87,6 +87,29 @@ describe("planParrainages, imports suivants", () => {
     expect(next.blockers).toEqual([]);
   });
 
+  it("complète un code de commune resté vide, sans jamais en remplacer un", () => {
+    const [first, ...rest] = plan.creates.map(({ dedupeKey, candidateName, communeCode }) => ({
+      dedupeKey,
+      candidateName,
+      communeCode,
+    }));
+    expect(first!.communeCode).toBe("02524");
+    const empty = planParrainages({
+      ...base,
+      parsed,
+      stored: [{ ...first!, communeCode: null }, ...rest],
+    });
+    expect(empty.communeBackfills).toEqual([{ dedupeKey: first!.dedupeKey, communeCode: "02524" }]);
+    expect(empty.creates).toEqual([]);
+
+    const other = planParrainages({
+      ...base,
+      parsed,
+      stored: [{ ...first!, communeCode: "99999" }, ...rest],
+    });
+    expect(other.communeBackfills).toEqual([]);
+  });
+
   it("bloque quand une ligne en base a disparu du fichier", () => {
     const orphan = { dedupeKey: "inconnue", candidateName: "ARTHAUD Nathalie" };
     const drifted = planParrainages({ ...base, parsed, stored: [...stored, orphan] });
