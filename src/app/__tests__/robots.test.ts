@@ -92,6 +92,17 @@ describe("robots.txt (production)", () => {
       expect(disallow()).toContain(path);
     });
 
+    // One address per page of the site (`?from=`), each rendered on demand.
+    it.each(["/signaler", "/signaler?from=%2Fpolitiques%2Fexemple"])(
+      "blocks the feedback form %s, for social bots too",
+      (url) => {
+        const social = asArray(groupFor(robots, SOCIAL_PREVIEW_USER_AGENTS[0])!.disallow);
+        for (const rules of [disallow(), social]) {
+          expect(rules.some((pattern) => matchesRobotsPattern(pattern, url))).toBe(true);
+        }
+      }
+    );
+
     it.each(OG_IMAGE_DISALLOW_PATHS)("blocks the opengraph-image route %s", (path) => {
       expect(disallow()).toContain(path);
     });

@@ -134,6 +134,7 @@
     "sync:legislation:senat": "tsx scripts/sync-legislation-senat.ts",
     "sync:legislation:senat:stats": "tsx scripts/sync-legislation-senat.ts --stats",
     "generate:tweets": "tsx scripts/generate-tweets.ts",
+    "generate:commune-names": "tsx --env-file=.env scripts/generate-commune-names.ts",
     "index:embeddings": "tsx scripts/index-embeddings.ts",
     "index:embeddings:stats": "tsx scripts/index-embeddings.ts --stats",
     "db:backup": "tsx scripts/backup-database.ts",

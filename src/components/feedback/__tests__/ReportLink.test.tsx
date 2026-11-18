@@ -16,6 +16,12 @@ describe("ReportLink", () => {
     );
   });
 
+  it("demande aux robots de ne pas suivre le lien", () => {
+    usePathname.mockReturnValue("/politiques/yael-braun-pivet");
+    render(<ReportLink />);
+    expect(screen.getByRole("link")).toHaveAttribute("rel", "nofollow");
+  });
+
   it("n'ajoute rien quand le chemin est inconnu ou que l'on est déjà sur le formulaire", () => {
     usePathname.mockReturnValue(null);
     const { rerender } = render(<ReportLink />);

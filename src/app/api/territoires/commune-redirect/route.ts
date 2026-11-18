@@ -2,15 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { legacyCommunePath, territoireCommunePath } from "@/lib/territoires/paths";
+import communeNames from "@/lib/territoires/commune-names.json";
+
+const COMMUNE_NAMES: Record<string, string> = communeNames;
 
 /**
  * Permanent redirect from a commune address written with the bare INSEE code to the readable
  * one. `src/proxy.ts` rewrites `/territoires/communes/29019` here: a page cannot answer a real
  * 308 (AGENTS.md §8), a Route Handler can.
  *
- * The destination is built from the commune name read by primary key, never from the request.
+ * The destination is built from the commune name, never from the request. The name comes from
+ * a table shipped with the code (`npm run generate:commune-names`): crawlers walk the old
+ * addresses one commune at a time, so the CDN cache never answers twice and each redirect used
+ * to cost a query, plus the time the instance then stays up for its idle connection. Only a code
+ * missing from the table reads the database, which covers a commune created since.
  * A code no commune carries gets a 307 to the page, which answers the 404 of the site.
- * The answer is cacheable: an old address costs one query, then the CDN answers.
  */
 export const GET = withPublicRoute(async (request: NextRequest) => {
   // Behind the proxy rewrite the request keeps its original path, so the path is read first.
@@ -28,10 +34,10 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     );
   if (!legacy) return NextResponse.json({ error: "Adresse invalide" }, { status: 400 });
 
-  const commune = await db.commune.findUnique({
-    where: { id: legacy.code },
-    select: { name: true },
-  });
+  const known = Object.hasOwn(COMMUNE_NAMES, legacy.code) ? COMMUNE_NAMES[legacy.code] : undefined;
+  const commune = known
+    ? { name: known }
+    : await db.commune.findUnique({ where: { id: legacy.code }, select: { name: true } });
 
   // Unknown code: a Route Handler cannot render the 404 page of the site (`notFound()` answers
   // an empty body here), so the visitor is sent to a readable-shaped address, which the proxy
