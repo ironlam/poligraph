@@ -3052,8 +3052,9 @@ model TerritoireRepere {
 /// by a language model. Created by prisma/migrations/manual/2026-11-15-territoire-evenements.sql.
 model TerritoireEvenement {
   id            String              @id @default(cuid())
-  /// CHANGEMENT_MAIRE, CHANGEMENT_PRESIDENT, RESULTAT_ELECTION: the closed list and the payload
-  /// schema of each type live in src/lib/territoires/evenements.ts.
+  /// CHANGEMENT_MAIRE, CHANGEMENT_PRESIDENT, RESULTAT_ELECTION, ELECTION_MAIRE,
+  /// ELECTION_SENATEURS: the closed list and the payload schema of each type live in
+  /// src/lib/territoires/evenements.ts.
   type          String
   territoryType RepereTerritoryType
   /// INSEE code of the commune, department or region.

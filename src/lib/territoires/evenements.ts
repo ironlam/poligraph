@@ -32,10 +32,30 @@ const resultatElection = z.strictObject({
   tour: z.union([z.literal(1), z.literal(2)]),
 });
 
+/**
+ * The council elected a mayor on that day. Says nothing of who held the office before: true
+ * for a re-elected mayor as for a first term, which `CHANGEMENT_MAIRE` without a predecessor
+ * ("devient maire") is not.
+ */
+const electionMaire = z.strictObject({
+  type: z.literal("ELECTION_MAIRE"),
+  nom,
+});
+
+/** Senatorial election in one department: the number of seats filled, nobody named. */
+const electionSenateurs = z.strictObject({
+  type: z.literal("ELECTION_SENATEURS"),
+  electionSlug: resultatElection.shape.electionSlug,
+  electionLabel: resultatElection.shape.electionLabel,
+  sieges: z.number().int().min(1).max(20),
+});
+
 export const territoireEvenementSchema = z.discriminatedUnion("type", [
   changementMaire,
   changementPresident,
   resultatElection,
+  electionMaire,
+  electionSenateurs,
 ]);
 
 export type TerritoireEvenementPayload = z.infer<typeof territoireEvenementSchema>;
@@ -81,5 +101,11 @@ export function phraseEvenement(evenement: TerritoireEvenementPayload): string {
     }
     case "RESULTAT_ELECTION":
       return `${evenement.electionLabel} : résultats du ${evenement.tour === 1 ? "1er" : "2d"} tour.`;
+    case "ELECTION_MAIRE":
+      return `Élection du maire par le conseil municipal : ${evenement.nom}.`;
+    case "ELECTION_SENATEURS":
+      return `${evenement.electionLabel} : ${
+        evenement.sieges === 1 ? "1 siège pourvu" : `${evenement.sieges} sièges pourvus`
+      }.`;
   }
 }

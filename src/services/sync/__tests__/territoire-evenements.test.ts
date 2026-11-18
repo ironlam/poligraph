@@ -79,10 +79,48 @@ describe("phraseEvenement", () => {
     );
   });
 
+  it("élection du maire : la phrase ne dit rien d'un prédécesseur ni d'un premier mandat", () => {
+    const phrase = phraseEvenement({ type: "ELECTION_MAIRE", nom: "Claire Martin" });
+    expect(phrase).toBe("Élection du maire par le conseil municipal : Claire Martin.");
+    expect(phrase).not.toMatch(/devient|succède|réélu/);
+  });
+
+  it("élection du maire : un prédécesseur dans le contenu est refusé", () => {
+    expect(parseEvenementPayload("ELECTION_MAIRE", { nom: "Claire Martin" })).not.toBeNull();
+    expect(
+      parseEvenementPayload("ELECTION_MAIRE", { nom: "Claire Martin", predecesseur: "Paul Durand" })
+    ).toBeNull();
+  });
+
+  it("sénatoriales : sièges pourvus, au singulier et au pluriel", () => {
+    const base = {
+      type: "ELECTION_SENATEURS" as const,
+      electionSlug: "senatoriales-2026",
+      electionLabel: "Élections sénatoriales de 2026",
+    };
+    expect(phraseEvenement({ ...base, sieges: 1 })).toBe(
+      "Élections sénatoriales de 2026 : 1 siège pourvu."
+    );
+    expect(phraseEvenement({ ...base, sieges: 4 })).toBe(
+      "Élections sénatoriales de 2026 : 4 sièges pourvus."
+    );
+    expect(parseEvenementPayload("ELECTION_SENATEURS", { ...base, sieges: 0 })).toBeNull();
+    expect(parseEvenementPayload("ELECTION_SENATEURS", { ...base, sieges: 2.5 })).toBeNull();
+  });
+
   it("aucun gabarit ne contient de tiret long", () => {
-    for (const draft of [maire(), maire({ predecesseur: null })]) {
-      expect(phraseEvenement(draft.payload)).not.toMatch(/[—–]/);
-    }
+    const payloads = [
+      maire().payload,
+      maire({ predecesseur: null }).payload,
+      { type: "ELECTION_MAIRE" as const, nom: "Claire Martin" },
+      {
+        type: "ELECTION_SENATEURS" as const,
+        electionSlug: "senatoriales-2026",
+        electionLabel: "Élections sénatoriales de 2026",
+        sieges: 3,
+      },
+    ];
+    for (const payload of payloads) expect(phraseEvenement(payload)).not.toMatch(/[—–]/);
   });
 });
 
