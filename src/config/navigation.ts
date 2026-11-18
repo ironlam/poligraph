@@ -330,6 +330,7 @@ export const FOOTER_SECTIONS: FooterSection[] = [
       { href: "/parlement", label: "Travail parlementaire" },
       { href: "/parlement/assemblee-nationale", label: "Assemblée nationale" },
       { href: "/parlement/senat", label: "Sénat" },
+      { href: "/parlement/votes/archives", label: "Archives des votes" },
       {
         href: "/parlement/dossiers",
         label: "Dossiers législatifs",

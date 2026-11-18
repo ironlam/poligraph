@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Metadata } from "next";
 import { getDepartmentPartyData } from "@/lib/data/municipales";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
@@ -102,6 +103,28 @@ export default async function CartePage() {
           </div>
         </section>
       )}
+
+      {/* The map only reveals a department's link on a click: without this list the department
+          pages have no link a crawler can follow, nor a keyboard path that skips the map. */}
+      <section className="py-6 border-t">
+        <h2 className="text-lg font-semibold mb-4">Tous les départements</h2>
+        <ul className="grid grid-cols-2 gap-x-4 text-sm sm:grid-cols-3 lg:grid-cols-4">
+          {[...departmentData]
+            .sort((a, b) => a.code.localeCompare(b.code, "fr", { numeric: true }))
+            .map((dept) => (
+              <li key={dept.code}>
+                <Link
+                  href={`/elections/municipales-2026/departements/${dept.code}`}
+                  prefetch={false}
+                  className="flex min-h-11 items-center gap-2 hover:text-primary hover:underline"
+                >
+                  <span className="tabular-nums text-muted-foreground">{dept.code}</span>
+                  {dept.name}
+                </Link>
+              </li>
+            ))}
+        </ul>
+      </section>
 
       {/* Stats summary */}
       <section className="py-6 border-t">

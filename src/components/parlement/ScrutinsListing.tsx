@@ -175,6 +175,13 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
               Aujourd{"'"}hui
             </Link>
             <Link
+              href={ROUTES.voteArchives}
+              prefetch={false}
+              className="inline-flex min-h-11 items-center gap-2 px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-sm font-medium transition-colors"
+            >
+              Archives
+            </Link>
+            <Link
               href={statsHref("legislatif")}
               className="inline-flex min-h-11 items-center gap-2 px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-sm font-medium transition-colors"
             >

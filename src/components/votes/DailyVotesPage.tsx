@@ -1,13 +1,16 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { DateNavigation } from "./DateNavigation";
-import { DailyVotesList } from "./DailyVotesList";
 import { DailyVotesContent } from "./DailyVotesContent";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { getScrutinsByDate, getAdjacentVoteDates } from "@/lib/data/scrutins";
 import { SITE_URL } from "@/config/site";
 import { formatDateFrUTC } from "@/lib/utils";
+import {
+  archiveMonthOfDay,
+  formatArchiveMonth,
+  voteArchiveMonthPath,
+} from "@/lib/votes/vote-archive";
 import { Vote, ArrowRight } from "lucide-react";
 
 interface DailyVotesPageProps {
@@ -15,15 +18,13 @@ interface DailyVotesPageProps {
   isToday?: boolean;
 }
 
-// The `type` tab is read client-side in DailyVotesList (useSearchParams), NOT
-// here — accessing searchParams in this server component would opt the whole
-// route (and the scrutin-detail [slug] route that renders it) into dynamic
-// rendering, defeating ISR. The data fetch returns ALL scrutins regardless of
-// tab, so client-side filtering is lossless.
+// No searchParams here: reading them would opt this route, and the scrutin-detail [slug] route
+// that renders it, into dynamic rendering.
 export async function DailyVotesPage({ date, isToday }: DailyVotesPageProps) {
   const [data, adjacent] = await Promise.all([getScrutinsByDate(date), getAdjacentVoteDates(date)]);
 
   const formatted = formatDateFrUTC(date);
+  const month = archiveMonthOfDay(date);
   const title = isToday ? "Votes du jour" : `Votes du ${formatted}`;
   const canonicalPath = isToday ? "/parlement/votes/aujourd-hui" : `/parlement/votes/${date}`;
 
@@ -57,20 +58,19 @@ export async function DailyVotesPage({ date, isToday }: DailyVotesPageProps) {
             currentDate={date}
             isToday={isToday}
           />
+          <p className="mt-2 text-center text-sm">
+            <Link
+              href={voteArchiveMonthPath(month)}
+              prefetch={false}
+              className="inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground hover:underline"
+            >
+              Tous les votes de {formatArchiveMonth(month)}
+            </Link>
+          </p>
         </div>
 
         {data.total > 0 ? (
-          <Suspense
-            fallback={
-              <DailyVotesContent
-                scrutins={data.scrutins}
-                typeTab="votes"
-                canonicalPath={canonicalPath}
-              />
-            }
-          >
-            <DailyVotesList scrutins={data.scrutins} canonicalPath={canonicalPath} />
-          </Suspense>
+          <DailyVotesContent scrutins={data.scrutins} />
         ) : (
           <EmptyState prevDate={adjacent.prevDate} />
         )}
