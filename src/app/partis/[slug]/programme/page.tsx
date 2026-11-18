@@ -14,6 +14,7 @@ import { PositionChart } from "@/components/programmes/PositionChart";
 import { ProposalCard } from "@/components/programmes/ProposalCard";
 import { THEMATIC_AXIS_SCOPE, QUIZ_ELECTION_SCOPE_LABELS } from "@/config/labels";
 import type { ThematicAxis, QuizElectionScope, Proposal } from "@/generated/prisma";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -55,11 +56,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description: description || `Aucun programme de ${party.name} n'est documenté à ce jour.`,
-    openGraph: {
+    openGraph: openGraph({
       title: `${title} | Poligraph`,
       description,
       type: "article",
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
     alternates: { canonical: `/partis/${slug}/programme` },
     // Nothing to read yet: keep the page reachable but out of the index.
     ...(measureCount === 0 && !platform ? { robots: { index: false, follow: true } } : {}),

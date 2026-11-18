@@ -43,7 +43,8 @@ function enclosingKey(src: string, pos: number): string {
     else if (ch === "{") {
       if (depth === 0) {
         const before = src.slice(Math.max(0, i - 60), i);
-        return /(\w+)\s*:\s*\{?\s*$/.exec(before)?.[1] ?? "ROOT";
+        // `openGraph: {` and the helper call `openGraph({` both name the block.
+        return /(\w+)\s*(?::\s*\{?|\()\s*$/.exec(before)?.[1] ?? "ROOT";
       }
       depth--;
     }
@@ -108,6 +109,10 @@ describe("suffixe de marque dans les titres de page", () => {
     const i = sample.indexOf('title: "Page | Poligraph"');
     expect(enclosingKey(sample, i)).toBe("openGraph");
     expect(enclosingKey(sample, sample.indexOf('title: "Page"'))).toBe("ROOT");
+    const viaHelper = `return { title: "Page", openGraph: openGraph({ title: "Page | Poligraph" }) };`;
+    expect(enclosingKey(viaHelper, viaHelper.indexOf('title: "Page | Poligraph"'))).toBe(
+      "openGraph"
+    );
   });
 
   it("détecte un titre contenant une apostrophe", () => {

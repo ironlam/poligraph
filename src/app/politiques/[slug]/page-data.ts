@@ -4,7 +4,7 @@ import { MANDATE_TYPE_LABELS } from "@/config/labels";
 import { statsHref, DEFAULT_STATS_TAB } from "@/config/routes";
 import { SITE_URL } from "@/config/site";
 import type { PersonJsonLd } from "@/components/seo/JsonLd";
-import { formatCompactCurrency } from "@/lib/utils";
+import { formatCompactCurrency, normalizeImageUrl } from "@/lib/utils";
 import { politicianRobotsMetadata } from "@/lib/seo/politician-robots";
 import { getPoliticianProfile, readProfileSnapshot } from "@/lib/data/politician-profile";
 import {
@@ -23,6 +23,7 @@ import { resolveProfileMandateType } from "@/lib/politicians/profile-snapshot/bu
 import type { DeclarationDetails } from "@/types/hatvp";
 import type { PoliticianProfileBodyProps } from "./_components/PoliticianProfileBody";
 import { parisDay } from "@/lib/governments/dates";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export type PoliticianPageData = {
   profile: PoliticianProfileDocument;
@@ -105,31 +106,34 @@ export function buildPoliticianMetadata(identity: PoliticianIdentity, slug: stri
     biography: identity.biography,
   });
 
+  // Some upstream portraits are stored with an http:// address, which a share card must not carry.
+  const sharePhoto = normalizeImageUrl(identity.photoUrl);
+
   return {
     title: identity.fullName,
     description,
     ...robots,
     alternates: { canonical: `/politiques/${slug}` },
-    openGraph: {
+    openGraph: openGraph({
       title: `${identity.fullName} | Poligraph`,
       description,
       type: "profile",
-      images: identity.photoUrl
+      images: sharePhoto
         ? [
             {
-              url: identity.photoUrl,
+              url: sharePhoto,
               width: 200,
               height: 200,
               alt: identity.fullName,
             },
           ]
-        : undefined,
-    },
+        : SEGMENT_IMAGE_FILE,
+    }),
     twitter: {
       card: "summary",
       title: identity.fullName,
       description,
-      images: identity.photoUrl ? [identity.photoUrl] : undefined,
+      images: sharePhoto ? [sharePhoto] : undefined,
     },
   };
 }

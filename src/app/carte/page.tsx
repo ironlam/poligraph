@@ -4,6 +4,7 @@ import { CarteClient } from "./CarteClient";
 import { getElectionMapData } from "@/services/electionMap";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { openGraph } from "@/lib/seo/open-graph";
 
 export const revalidate = 300; // ISR: re-check feature flag every 5 minutes
 
@@ -11,12 +12,11 @@ export const metadata: Metadata = {
   title: "Carte des Résultats Électoraux",
   description:
     "Carte interactive des résultats électoraux par département. Visualisez la répartition politique des sièges aux législatives 2024 en France métropolitaine et outre-mer.",
-  openGraph: {
+  openGraph: openGraph({
     title: "Carte des Résultats Électoraux | Poligraph",
     description:
       "Carte interactive des résultats électoraux par département. Visualisez la répartition politique des sièges aux législatives 2024.",
-    type: "website",
-  },
+  }),
   alternates: { canonical: "/carte" },
 };
 

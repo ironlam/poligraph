@@ -26,6 +26,7 @@ import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 import { PartyAffairsCard } from "./_components/PartyAffairsCard";
 import { PartySidebar } from "./_components/PartySidebar";
 import { PartyShareSheet } from "@/components/share/PartyShareSheet";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export async function generateStaticParams() {
   const parties = await db.party.findMany({
@@ -88,7 +89,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `${party.name} (${party.shortName})`,
     description,
-    openGraph: {
+    openGraph: openGraph({
       title: `${party.name} | Poligraph`,
       description,
       type: "profile",
@@ -99,8 +100,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
               alt: party.name,
             },
           ]
-        : undefined,
-    },
+        : SEGMENT_IMAGE_FILE,
+    }),
     twitter: {
       card: "summary",
       title: `${party.name} (${party.shortName})`,
