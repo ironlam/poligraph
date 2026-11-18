@@ -1,4 +1,5 @@
 import { parse } from "csv-parse/sync";
+import { MANDAT_BY_LABEL, type ParrainageMandat } from "@/config/parrainages";
 
 /**
  * Parsing of the list of presidential presentations ("parrainages") published by the Conseil
@@ -6,62 +7,6 @@ import { parse } from "csv-parse/sync";
  * published (trimmed, nothing else); the only derived field is `mandat`, read from an explicit
  * table. Anything the table or the date format does not cover is reported, never guessed.
  */
-
-/** Mandates under which an elected official may present a candidate, one key for both genders. */
-export type ParrainageMandat =
-  | "MAIRE"
-  | "MAIRE_DELEGUE"
-  | "MAIRE_ARRONDISSEMENT"
-  | "PRESIDENT_EPCI"
-  | "CONSEILLER_DEPARTEMENTAL"
-  | "CONSEILLER_REGIONAL"
-  | "CONSEILLER_PARIS"
-  | "CONSEILLER_METROPOLE_LYON"
-  | "MEMBRE_ASSEMBLEE_CORSE"
-  | "MEMBRE_ASSEMBLEE_OUTRE_MER"
-  | "PRESIDENT_EXECUTIF_OUTRE_MER"
-  | "DEPUTE"
-  | "SENATEUR"
-  | "DEPUTE_EUROPEEN"
-  | "CONSEILLER_AFE"
-  | "PRESIDENT_CONSEIL_CONSULAIRE";
-
-/**
- * The 29 labels of the 2022 list. A label absent from this table is not matched by resemblance:
- * the row keeps `mandat: null` and the label is reported in `unknownMandateLabels`.
- */
-export const MANDAT_BY_LABEL: Readonly<Record<string, ParrainageMandat>> = {
-  Maire: "MAIRE",
-  "Maire délégué d'une commune associée ou d'une commune déléguée": "MAIRE_DELEGUE",
-  "Maire déléguée d'une commune associée ou d'une commune déléguée": "MAIRE_DELEGUE",
-  "Maire d'arrondissement": "MAIRE_ARRONDISSEMENT",
-  "Président d'un EPCI à fiscalité propre": "PRESIDENT_EPCI",
-  "Présidente d'un EPCI à fiscalité propre": "PRESIDENT_EPCI",
-  "Conseiller départemental": "CONSEILLER_DEPARTEMENTAL",
-  "Conseillère départementale": "CONSEILLER_DEPARTEMENTAL",
-  "Conseiller régional": "CONSEILLER_REGIONAL",
-  "Conseillère régionale": "CONSEILLER_REGIONAL",
-  "Conseiller de Paris": "CONSEILLER_PARIS",
-  "Conseillère de Paris": "CONSEILLER_PARIS",
-  "Conseiller métropolitain de Lyon": "CONSEILLER_METROPOLE_LYON",
-  "Conseillère métropolitaine de Lyon": "CONSEILLER_METROPOLE_LYON",
-  "Membre de l'Assemblée de Corse": "MEMBRE_ASSEMBLEE_CORSE",
-  "Membre d'une assemblée d'une collectivité territoriale d'outre-mer à statut particulier":
-    "MEMBRE_ASSEMBLEE_OUTRE_MER",
-  "Président de la Polynésie française": "PRESIDENT_EXECUTIF_OUTRE_MER",
-  "Président du gouvernement de la Nouvelle-Calédonie": "PRESIDENT_EXECUTIF_OUTRE_MER",
-  "Président du Conseil exécutif de Martinique": "PRESIDENT_EXECUTIF_OUTRE_MER",
-  Député: "DEPUTE",
-  Députée: "DEPUTE",
-  Sénateur: "SENATEUR",
-  Sénatrice: "SENATEUR",
-  "Représentant français au Parlement européen": "DEPUTE_EUROPEEN",
-  "Représentante française au Parlement européen": "DEPUTE_EUROPEEN",
-  "Conseiller à l'Assemblée des Français de l'étranger": "CONSEILLER_AFE",
-  "Conseillère à l'Assemblée des Français de l'étranger": "CONSEILLER_AFE",
-  "Président du conseil consulaire": "PRESIDENT_CONSEIL_CONSULAIRE",
-  "Présidente du conseil consulaire": "PRESIDENT_CONSEIL_CONSULAIRE",
-};
 
 /** Header of the 2022 file, in order. A different header means a different format: we stop. */
 export const PARRAINAGES_COLUMNS = [

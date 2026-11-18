@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { MANDAT_BY_LABEL } from "@/config/parrainages";
 import {
-  MANDAT_BY_LABEL,
   PARRAINAGES_COLUMNS,
   parseParrainagesCsv,
   parsePublicationDate,
