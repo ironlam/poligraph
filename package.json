@@ -155,6 +155,7 @@
     "test:visual:grep": "playwright test --grep",
     "visual": "tsx scripts/visual-test-runner.ts",
     "audit:affairs": "tsx scripts/audit-affairs.ts",
+    "audit:parrainages-elus": "tsx scripts/audit-parrainages-elus.ts",
     "audit:group-stats": "tsx scripts/audit-group-stats.ts",
     "audit:profile-snapshots": "tsx scripts/audit-profile-snapshot-equivalence.ts",
     "audit:government-support": "tsx scripts/audit-government-support.ts",
