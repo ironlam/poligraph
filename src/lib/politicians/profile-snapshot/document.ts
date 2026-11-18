@@ -4,6 +4,7 @@ import type {
   PoliticianDossier,
   PoliticianIdentity,
   ProfileParrainage,
+  ProfileParrainagesRecus,
   ProfileVoteStats,
 } from "@/lib/data/politician-profile-reads";
 
@@ -22,6 +23,8 @@ export type PoliticianProfileDocument = {
    * which is why adding this field did not bump the version.
    */
   parrainages?: ProfileParrainage[];
+  /** Presentations the person received as a presidential candidate. Absent in the same way. */
+  parrainagesRecus?: ProfileParrainagesRecus[];
 };
 
 type Json = Prisma.InputJsonValue;

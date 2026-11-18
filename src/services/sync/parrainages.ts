@@ -1,7 +1,9 @@
 import { db } from "@/lib/db";
 import { DEPARTMENTS } from "@/config/departments";
 import { isMissingTableError } from "@/lib/data/commune-population";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { downloadBuffer } from "./csv-download";
+import { listParrainagesRecipientIds } from "./parrainages-fiches";
 import { parseParrainagesCsv } from "./parrainages-parse";
 import {
   countByCandidate,
@@ -143,5 +145,11 @@ export async function syncParrainages(
   );
   report.written = plan.creates.length;
   report.backfilled = plan.communeBackfills.length;
+  // New presentations change the count shown on the profile of the candidates who received them.
+  if (plan.creates.length > 0) {
+    const politicianIds = await listParrainagesRecipientIds(electionSlug);
+    if (politicianIds.length > 0)
+      await requestProfileRefresh({ politicianIds }, "sync:parrainages");
+  }
   return report;
 }

@@ -63,6 +63,20 @@ export function phraseDepartement(input: { total: number; candidats: number }): 
 export const partDuSeuil = (total: number) =>
   Math.min(100, Math.round((total / SEUIL_PRESENTATIONS) * 100));
 
+/** Counter of a candidate's profile: "A reçu 2 636 présentations en 2022, venues de 107 départements ou collectivités." */
+export function phraseRecues(input: { total: number; departements: number; annee: number }): {
+  avant: string;
+  lien: string;
+  apres: string;
+} {
+  const venues = input.total > 1 ? "venues" : "venue";
+  return {
+    avant: "A reçu ",
+    lien: pluriel(input.total, "présentation"),
+    apres: ` en ${input.annee}, ${venues} de ${libelleDepartements(input.departements)}.`,
+  };
+}
+
 /** Line of a profile: "A présenté HIDALGO Anne en 2022 (Maire, Quimper, publié le 15 février 2022)." */
 export function phraseFiche(input: {
   candidateName: string;
