@@ -87,9 +87,8 @@ export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on
 //
 // This is only safe because the route does NOT access `searchParams`: combining
 // generateStaticParams + searchParams + the "use cache" data functions triggers
-// DYNAMIC_SERVER_USAGE. The date-archive `type` tab is therefore read client-side
-// inside DailyVotesList (useSearchParams), so /parlement/votes/YYYY-MM-DD?type=
-// still works while the route stays cacheable.
+// DYNAMIC_SERVER_USAGE. The date archive renders every scrutin of the day for that reason,
+// with no tab to read from the URL.
 export async function generateStaticParams() {
   return [];
 }
@@ -259,8 +258,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function ScrutinPage({ params }: PageProps) {
   const { slug } = await params;
 
-  // Date archive page (e.g., /votes/2026-03-04). The `type` tab is handled
-  // client-side in DailyVotesList, so this route never reads searchParams.
+  // Date archive page (e.g., /votes/2026-03-04). This route never reads searchParams.
   if (isVoteDateArchiveSlug(slug)) {
     const date = new Date(slug + "T00:00:00Z");
     if (!isNaN(date.getTime())) {

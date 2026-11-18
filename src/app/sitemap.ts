@@ -14,6 +14,8 @@ import { PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
 import { ROUTES, STATS_SECTIONS, STATS_TABS } from "@/config/routes";
 import { CURRENT_LEGISLATURE } from "@/config/scrutin-importance";
 import { getPublishedChangelog } from "@/lib/data/changelog";
+import { getVoteArchiveMonths } from "@/lib/data/vote-archives";
+import { voteArchiveMonthPath } from "@/lib/votes/vote-archive";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
 import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
@@ -951,12 +953,26 @@ async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
     LIMIT 500
   `);
 
-  return scrutins.map((s) => ({
+  // The monthly archives: the path by which a crawler reaches the scrutins this shard does not
+  // list. Only the current month still changes.
+  const months = await getVoteArchiveMonths();
+  const archivePages: MetadataRoute.Sitemap = [
+    { url: `${SITE_URL}${ROUTES.voteArchives}`, changeFrequency: "weekly", priority: 0.5 },
+    ...months.map((m, i) => ({
+      url: `${SITE_URL}${voteArchiveMonthPath(m)}`,
+      changeFrequency: i === 0 ? ("daily" as const) : ("yearly" as const),
+      priority: 0.4,
+    })),
+  ];
+
+  const scrutinPages: MetadataRoute.Sitemap = scrutins.map((s) => ({
     url: `${SITE_URL}/parlement/votes/${s.slug}`,
     lastModified: s.updatedAt,
     changeFrequency: "monthly" as const,
     priority: 0.4,
   }));
+
+  return [...archivePages, ...scrutinPages];
 }
 
 // Sitemap 4: Top 200 communes by population, restricted to those with candidacies (priority 0.6)
