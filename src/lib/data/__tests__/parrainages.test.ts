@@ -69,6 +69,14 @@ describe("getParrainagesCandidats", () => {
     expect(candidats[0]).toMatchObject({ slug: "durand-paul", total: 7, candidacyName: null });
   });
 
+  it("compte un département une seule fois, que ses lignes soient reliées ou non à une candidature", async () => {
+    await getParrainagesCandidats(SLUG);
+    const sql = (h.queryRaw.mock.calls[0]?.[0] as { sql: string }).sql.replace(/\s+/g, " ");
+    expect(sql).toContain('max(p."candidacyId")');
+    expect(sql).toMatch(/GROUP BY 1, 2 \) t/);
+    expect(sql).not.toMatch(/GROUP BY 1, 2, 3/);
+  });
+
   it("pose le profil synced et le tag parrainages", async () => {
     await getParrainagesCandidats(SLUG);
     expect(h.cacheLife).toHaveBeenCalledWith("synced");
