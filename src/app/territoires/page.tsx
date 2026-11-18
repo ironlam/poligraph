@@ -8,6 +8,7 @@ import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 import { EntreeHero } from "@/components/territoires/EntreeHero";
 import { EntreeAccesRapides } from "@/components/territoires/EntreeAccesRapides";
 import { CouvertureEntree, EntreeRegions } from "@/components/territoires/EntreeRegions";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 /*
  * Rendered once and cached: this page reads no searchParams. The search form submits to
@@ -21,11 +22,12 @@ export const metadata: Metadata = {
   title: "Territoires : élus et résultats par commune, département et région",
   description: DESCRIPTION,
   alternates: { canonical: TERRITOIRES_PATH },
-  openGraph: {
+  openGraph: openGraph({
     title: "Les élus et les décisions de votre territoire",
     description: DESCRIPTION,
     url: TERRITOIRES_PATH,
-  },
+    images: SEGMENT_IMAGE_FILE,
+  }),
 };
 
 export default async function TerritoiresPage() {

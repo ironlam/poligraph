@@ -10,6 +10,8 @@ import {
 } from "@/config/territoire-methodes";
 import { TERRITOIRES_PATH } from "@/lib/territoires/paths";
 import { formatDateFrUTC } from "@/lib/utils";
+import { openGraph } from "@/lib/seo/open-graph";
+import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 
 // Static text: 24 h backstop only, no data read.
 export const revalidate = 86400;
@@ -31,7 +33,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    openGraph: { title, description },
+    openGraph: openGraph({ title, description, images: [TERRITOIRES_OG_IMAGE] }),
     alternates: { canonical: repereMethodePath(m.slug) },
   };
 }

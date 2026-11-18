@@ -3,6 +3,7 @@ import { getDepartmentBySlug, getDepartmentSlug, DEPARTMENTS } from "@/config/de
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { DepartementPageBody } from "./departement-page";
 import { territoireDepartementPath } from "@/lib/territoires/paths";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export const revalidate = 3600; // ISR: revalidate every hour
 
@@ -33,10 +34,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: name,
     description: `Députés et sénateurs du département ${name}. Liste complète des représentants politiques.`,
-    openGraph: {
+    openGraph: openGraph({
       title: `${name} | Poligraph`,
       description: `Découvrez les députés et sénateurs du département ${name}.`,
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
     alternates: {
       canonical: territoireDepartementPath(slug),
     },

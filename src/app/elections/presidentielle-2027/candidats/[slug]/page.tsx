@@ -39,6 +39,7 @@ import {
   CandidateThemeSpread,
   CandidateThemes,
 } from "./_components/CandidateFicheBlocks";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 /**
  * Candidate fiche for the presidential hub. `[slug]` is the POLITICIAN slug, consistent with
@@ -110,12 +111,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     // No `images` here: the `opengraph-image` route beside this file already provides the card, and
     // naming a second image would let the two drift. `summary_large_image` is what that 1200x630
     // card is drawn for, and X falls back to `og:image` since we ship no `twitter-image` route.
-    openGraph: {
+    openGraph: openGraph({
       title: shareTitle,
       description,
       type: "profile",
       url: fichePath(slug),
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
     twitter: { card: "summary_large_image", title: shareTitle, description },
   };
 }

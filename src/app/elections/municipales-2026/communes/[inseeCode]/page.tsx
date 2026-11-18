@@ -22,6 +22,7 @@ import { db } from "@/lib/db";
 import { communeRobotsMetadata } from "@/lib/seo/commune-robots";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
+import { openGraph } from "@/lib/seo/open-graph";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -67,11 +68,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     // Communes under the floor are thin candidate rosters: noindex,follow (issue #385). Not because
     // of panachage, which the 2026 list ballot ended in every commune (see commune-robots.ts).
     ...communeRobotsMetadata(commune.population),
-    openGraph: {
+    openGraph: openGraph({
       title,
       description,
       images: [TERRITOIRES_OG_IMAGE],
-    },
+    }),
     alternates: { canonical: `/elections/municipales-2026/communes/${inseeCode}` },
   };
 }

@@ -14,6 +14,7 @@ import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
 import { FactCheckShareSheet } from "@/components/share/FactCheckShareSheet";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -75,11 +76,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: factCheck.title,
     description,
     alternates: { canonical: `/factchecks/${slug}` },
-    openGraph: {
+    openGraph: openGraph({
       title: `${ratingLabel} — ${factCheck.title}`,
       description,
       type: "article",
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
   };
 }
 

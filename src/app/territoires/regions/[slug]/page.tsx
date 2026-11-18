@@ -22,6 +22,7 @@ import {
   type RegionElection,
 } from "@/components/territoires/RegionSections";
 import { formatCompte } from "@/lib/territoires/format";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 // The 18 regions are a closed list: every page is prerendered, any other slug is a 404.
 export const dynamicParams = false;
@@ -48,11 +49,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `${region.name} : départements, communes et élus`,
     description,
     alternates: { canonical: territoireRegionPath(region.slug) },
-    openGraph: {
+    openGraph: openGraph({
       title: region.name,
       description,
       url: territoireRegionPath(region.slug),
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
   };
 }
 

@@ -14,6 +14,7 @@ import {
   Newspaper,
 } from "lucide-react";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { openGraph } from "@/lib/seo/open-graph";
 
 export const revalidate = 300; // ISR: re-check feature flag every 5 minutes
 
@@ -22,10 +23,10 @@ export const metadata: Metadata = {
   description:
     "Posez vos questions sur les représentants politiques français, les votes parlementaires et les dossiers législatifs. Réponses basées sur des sources officielles.",
   alternates: { canonical: "/chat" },
-  openGraph: {
+  openGraph: openGraph({
     title: "Assistant IA - Poligraph",
     description: "Posez vos questions sur la politique française. Réponses sourcées et factuelles.",
-  },
+  }),
 };
 
 const EXAMPLE_QUESTIONS = [

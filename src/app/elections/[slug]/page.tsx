@@ -29,6 +29,7 @@ import { CandidacyCard } from "@/components/elections/CandidacyCard";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import type { ElectionStatus } from "@/types";
 import { SITE_URL } from "@/config/site";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export const revalidate = 3600; // ISR: revalidate every hour
 
@@ -136,10 +137,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: election.title,
     description,
-    openGraph: {
+    openGraph: openGraph({
       title: election.title,
       description,
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
     alternates: { canonical: `/elections/${slug}` },
   };
 }
