@@ -1,3 +1,4 @@
+import { CommuneRecherche } from "./CommuneRecherche";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { DepartementCommuneRow, DepartementTerritoire } from "@/lib/data/territoires";
@@ -78,6 +79,13 @@ export function CommuneIndex({ slug, territoire, grandes = [] }: CommuneIndexPro
           population municipale et le maire en fonction.
         </p>
       </div>
+
+      {communeCount > communes.pageSize && (
+        <CommuneRecherche
+          departmentCode={territoire.department.code}
+          departmentName={territoire.department.name ?? territoire.department.code}
+        />
+      )}
 
       {/* A list that fits on one page needs no index, unless a letter is already chosen. */}
       {!accueil && (communeCount > communes.pageSize || letter !== null) && (

@@ -69,6 +69,7 @@ import {
   resolvePremierTour,
   resolveTitulaire,
   searchTerritoires,
+  suggestCommunesInDepartement,
 } from "../territoires";
 
 type Status = "PUBLISHED" | "DRAFT";
@@ -889,5 +890,70 @@ describe("searchTerritoires", () => {
   it("ignore une requête trop courte", async () => {
     expect(await searchTerritoires(" a ")).toEqual({ communes: [], departements: [], regions: [] });
     expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe("suggestCommunesInDepartement", () => {
+  const quimper = {
+    id: "29232",
+    name: "Quimper",
+    postalCodes: ["29000"],
+    population: 63000,
+    departmentCode: "29",
+  };
+  const sqlOf = (call: unknown[]) => {
+    const [strings, ...values] = call as [
+      TemplateStringsArray | { sql: string; values: unknown[] },
+      ...unknown[],
+    ];
+    return Array.isArray(strings)
+      ? { sql: strings.join("?"), values }
+      : (strings as { sql: string; values: unknown[] });
+  };
+
+  it("cherche dans le seul département, accents et tirets repliés, et borne le résultat", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([quimper]);
+    const result = await suggestCommunesInDepartement("29", "  Saint-pol ");
+
+    expect(result).toEqual([
+      { inseeCode: "29232", name: "Quimper", postalCodes: ["29000"], population: 63000 },
+    ]);
+    const { sql, values } = sqlOf(mocks.queryRaw.mock.calls[0]!);
+    expect(sql).toContain('c."departmentCode" =');
+    expect(sql).toContain("unaccent(replace(c.\"name\", '-', ' '))");
+    expect(values).toEqual(["29", "%Saint pol%", "Saint pol%", 8]);
+  });
+
+  it("neutralise les jokers de LIKE saisis par l'utilisateur", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([]);
+    await suggestCommunesInDepartement("29", "100%_x");
+    expect(sqlOf(mocks.queryRaw.mock.calls[0]!).values.slice(1, 3)).toEqual([
+      "%100\\%\\_x%",
+      "100\\%\\_x%",
+    ]);
+  });
+
+  it("lit cinq chiffres comme un code postal du département", async () => {
+    mocks.communeFindMany.mockResolvedValueOnce([quimper]);
+    await suggestCommunesInDepartement("29", "29000");
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+    expect(mocks.communeFindMany.mock.calls[0]![0]).toMatchObject({
+      where: { departmentCode: "29", postalCodes: { has: "29000" } },
+      take: 8,
+    });
+  });
+
+  it("ne lance aucune requête pour un département inconnu ou un texte trop court", async () => {
+    expect(await suggestCommunesInDepartement("999", "quimper")).toEqual([]);
+    expect(await suggestCommunesInDepartement("__proto__", "quimper")).toEqual([]);
+    expect(await suggestCommunesInDepartement("29", " q ")).toEqual([]);
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+    expect(mocks.communeFindMany).not.toHaveBeenCalled();
+  });
+
+  it("coupe un texte démesuré avant la requête", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([]);
+    await suggestCommunesInDepartement("29", "a".repeat(500));
+    expect(String(sqlOf(mocks.queryRaw.mock.calls[0]!).values[2])).toHaveLength(81);
   });
 });

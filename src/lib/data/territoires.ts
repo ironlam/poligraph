@@ -1451,6 +1451,55 @@ export function matchRegions(query: string): RegionRef[] {
     .map((r) => regionRef(r)!);
 }
 
+export interface CommuneSuggestion {
+  inseeCode: string;
+  name: string;
+  postalCodes: string[];
+  population: number | null;
+}
+
+/** Suggestions returned for one keystroke. */
+export const COMMUNE_SUGGESTIONS_LIMIT = 8;
+const SUGGESTION_QUERY_MAX = 80;
+
+/**
+ * Communes of one department matching what is being typed, for the search field of the
+ * department page. Accents, case and hyphens are folded; a name starting with the text comes
+ * before a name that only contains it, then the larger commune first. A 5-digit text is read as a
+ * postal code. Never cached (free text), always bounded, and scoped to a known department so the
+ * accent-folding scan reads a few hundred rows at most.
+ */
+export async function suggestCommunesInDepartement(
+  departmentCode: string,
+  rawQuery: string
+): Promise<CommuneSuggestion[]> {
+  const query = rawQuery.trim().slice(0, SUGGESTION_QUERY_MAX);
+  if (!Object.hasOwn(DEPARTMENTS, departmentCode) || query.length < 2) return [];
+
+  const rows = /^\d{5}$/.test(query)
+    ? await db.commune.findMany({
+        where: { departmentCode, postalCodes: { has: query } },
+        select: COMMUNE_SEARCH_SELECT,
+        orderBy: [{ population: { sort: "desc", nulls: "last" } }, { name: "asc" }],
+        take: COMMUNE_SUGGESTIONS_LIMIT,
+      })
+    : await db.$queryRaw<CommuneSearchRow[]>(Prisma.sql`
+        SELECT c."id", c."name", c."postalCodes", c."population", c."departmentCode"
+        FROM "Commune" c
+        WHERE c."departmentCode" = ${departmentCode}
+          AND unaccent(replace(c."name", '-', ' ')) ILIKE unaccent(${`%${escapeLike(query.replace(/-/g, " "))}%`})
+        ORDER BY (unaccent(replace(c."name", '-', ' ')) ILIKE unaccent(${`${escapeLike(query.replace(/-/g, " "))}%`})) DESC,
+                 c."population" DESC NULLS LAST, c."name" ASC
+        LIMIT ${COMMUNE_SUGGESTIONS_LIMIT}
+      `);
+  return rows.map((row) => ({
+    inseeCode: row.id,
+    name: row.name,
+    postalCodes: row.postalCodes,
+    population: row.population,
+  }));
+}
+
 /**
  * Free-text search across communes (name, postal code, INSEE code), departments and regions.
  * Never cached: the key would be unbounded (AGENTS.md §5). Every query is bounded.
