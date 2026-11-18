@@ -626,6 +626,8 @@ interface CollectionPageJsonLdProps {
   description: string;
   url: string;
   numberOfItems?: number;
+  /** ISO date of the last change of the content, never the render date. */
+  dateModified?: string;
   about?: {
     name: string;
     url: string;
@@ -684,6 +686,7 @@ export function CollectionPageJsonLd({
   description,
   url,
   numberOfItems,
+  dateModified,
   about,
 }: CollectionPageJsonLdProps) {
   const jsonLd = {
@@ -692,6 +695,7 @@ export function CollectionPageJsonLd({
     name,
     description,
     url,
+    ...(dateModified && { dateModified }),
     ...(numberOfItems !== undefined && {
       mainEntity: {
         "@type": "ItemList",
