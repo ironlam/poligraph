@@ -79,4 +79,26 @@ describe("ThemesIndexList", () => {
     }
     expect(screen.getAllByText("Aucune revue publiée").length).toBeGreaterThan(0);
   });
+
+  it("résume chaque thème en une ligne sur mobile : candidats et mesures", () => {
+    render(<ThemesIndexList data={data()} />);
+
+    expect(screen.getByText("2 candidats · 3 mesures")).toBeInTheDocument();
+    expect(screen.getByText("Aucune mesure publiée")).toBeInTheDocument();
+  });
+
+  it("dit qu'un thème n'est pas encore comparable, au singulier quand il le faut", () => {
+    const single = data();
+    single.themes[0] = {
+      ...single.themes[0]!,
+      documentedMeasureCount: 1,
+      currentlyDefendedMeasureCount: 1,
+      documentedCandidacyCount: 1,
+      candidaciesWithVerifiedMeasure: 1,
+      publishable: false,
+    };
+    render(<ThemesIndexList data={single} />);
+
+    expect(screen.getByText("1 candidat · 1 mesure · pas encore comparable")).toBeInTheDocument();
+  });
 });

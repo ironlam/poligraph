@@ -271,3 +271,32 @@ describe("annuaire présidentiel", () => {
     expect(screen.getByText("2 personnalités affichées")).toBeInTheDocument();
   });
 });
+
+describe("annuaire présidentiel : filtres repliés sur mobile", () => {
+  beforeEach(() => {
+    navigation.searchParams = new URLSearchParams();
+    window.history.replaceState(null, "", "/elections/presidentielle-2027/candidats");
+  });
+
+  it("replie les statuts derrière un bouton qui dit s'il est ouvert", () => {
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    const toggle = screen.getByRole("button", { name: "Filtrer" });
+    const filters = document.getElementById("candidacy-filters")!;
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(filters.className).toContain("max-sm:hidden");
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(filters.className).not.toContain("max-sm:hidden");
+  });
+
+  it("compte les filtres actifs sur le bouton, recherche exclue", () => {
+    navigation.searchParams = new URLSearchParams(
+      "statut=pressenties&propositions=publiees&q=alix"
+    );
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    expect(screen.getByRole("button", { name: "Filtrer (2)" })).toBeInTheDocument();
+  });
+});

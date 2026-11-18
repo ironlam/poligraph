@@ -29,7 +29,6 @@ import { HubTopics } from "./_components/HubTopics";
 import { HubReaderGuides } from "./_components/HubReaderGuides";
 import { PresidentialHubNav } from "./_components/PresidentialHubNav";
 import { PresidentialCorpusSearch } from "./_components/PresidentialCorpusSearch";
-import { YoutubeBanner } from "@/components/youtube/YoutubeBanner";
 
 // ISR: 24h backstop. Real changes propagate on demand: a measure write busts election-measures:<id>.
 export const revalidate = 86400;
@@ -166,10 +165,6 @@ export default async function PresidentialHubPage() {
 
         <HubComparisonLauncher candidacies={field} themes={context.themes} />
 
-        {/* After the content: ahead of it, the banner stood between the navigation and the
-            latest measures. */}
-        <YoutubeBanner />
-
         {programmesEnabled && (
           <p className="text-sm text-muted-foreground">
             Les programmes des partis, classés par thème, sont sur la page{" "}
@@ -188,10 +183,10 @@ export default async function PresidentialHubPage() {
           className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
-            <h2 id="campaign-contact-title" className="font-display text-lg font-bold">
+            <h2 id="campaign-contact-title" className="font-display text-base font-bold sm:text-lg">
               Vous représentez une équipe de campagne ?
             </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground max-sm:hidden">
               Envoyez-nous le programme officiel, une correction ou une source. Chaque ajout reste
               soumis à la même vérification éditoriale.
             </p>

@@ -5,6 +5,7 @@ import {
   TERRITOIRES_REGIONS_ANCHOR,
   TERRITOIRES_DEPARTEMENTS_PATH,
 } from "@/lib/territoires/paths";
+import { YOUTUBE_CHANNEL_URL } from "@/config/youtube";
 
 export interface NavItem {
   href: string;
@@ -396,15 +397,23 @@ export const RSS_FEEDS = [
   { href: "/api/rss/factchecks.xml", label: "Fact-checks" },
 ] as const;
 
-// Social media links for footer
+// Social networks: footer on every page, mobile menu, and the homepage hero on desktop.
+export type SocialIconName = "youtube" | "instagram" | "tiktok" | "x" | "bluesky" | "github";
+
 export interface SocialLink {
   href: string;
   label: string;
-  /** Lucide icon name, or "x" for custom SVG */
-  icon: "x" | "bluesky" | "instagram" | "github";
+  icon: SocialIconName;
 }
 
 export const SOCIAL_LINKS: SocialLink[] = [
+  { href: YOUTUBE_CHANNEL_URL, label: "YouTube", icon: "youtube" },
+  {
+    href: "https://www.instagram.com/poligraph_fr",
+    label: "Instagram",
+    icon: "instagram",
+  },
+  { href: "https://www.tiktok.com/@poligraph_fr", label: "TikTok", icon: "tiktok" },
   { href: "https://x.com/poligraph_fr", label: "X (Twitter)", icon: "x" },
   {
     href: "https://bsky.app/profile/poligraph-fr.bsky.social",
@@ -412,13 +421,11 @@ export const SOCIAL_LINKS: SocialLink[] = [
     icon: "bluesky",
   },
   {
-    href: "https://www.instagram.com/poligraph_fr",
-    label: "Instagram",
-    icon: "instagram",
-  },
-  {
     href: "https://github.com/ironlam/poligraph",
     label: "GitHub",
     icon: "github",
   },
 ];
+
+/** The accounts a reader follows: GitHub is a code repository and stays in the footer. */
+export const FOLLOW_LINKS: SocialLink[] = SOCIAL_LINKS.filter((link) => link.icon !== "github");
