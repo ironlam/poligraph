@@ -94,6 +94,7 @@ export async function DepartementPageBody({
           premier,
           { href: `#${COMMUNES_ANCHOR}`, label: "Communes" },
           { href: "#parlement", label: "Parlement" },
+          ...(parrainages.length > 0 ? [{ href: "#parrainages", label: "Parrainages" }] : []),
           ...(agir ? [{ href: "#agir", label: "Agir" }] : []),
         ]}
       />
