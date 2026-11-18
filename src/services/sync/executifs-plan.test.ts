@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { Judgement, MatchMethod } from "@/generated/prisma";
 import type { ResolveResult } from "@/lib/identity";
 import {
+  buildExecutifIdentity,
   buildExecutifMandate,
   classifyExecutif,
+  formatRegisterName,
   executifSourceId,
   parsePresidentRows,
   registreDepasse,
@@ -159,5 +161,46 @@ describe("registreDepasse", () => {
   it("sans date de registre, tout mandat parlementaire courant retient le lien", () => {
     expect(registreDepasse(null, [new Date("2020-10-01")])).toBe(true);
     expect(registreDepasse(null, [])).toBe(false);
+  });
+});
+
+describe("buildExecutifIdentity", () => {
+  const [president] = parsePresidentRows("DEPARTEMENTAL", [
+    record({ "Nom de l'élu": "SANDRAGNÉ", "Prénom de l'élu": "Hélène", "Code sexe": "F" }),
+  ]);
+
+  it("takes the civil status of the register line, birth date included", () => {
+    expect(buildExecutifIdentity(president!, false)).toEqual({
+      slug: "helene-sandragne",
+      civility: "Mme",
+      firstName: "Hélène",
+      lastName: "Sandragné",
+      fullName: "Hélène Sandragné",
+      birthDate: new Date("1966-03-12T12:00:00.000Z"),
+    });
+  });
+
+  it("suffixes the slug with the territory code when the plain slug is taken", () => {
+    expect(buildExecutifIdentity(president!, true).slug).toBe("helene-sandragne-19");
+  });
+
+  it("leaves the civility empty when the register gives no sex code", () => {
+    const [row] = parsePresidentRows("DEPARTEMENTAL", [record({ "Code sexe": "" })]);
+    expect(buildExecutifIdentity(row!, false).civility).toBeNull();
+  });
+});
+
+describe("formatRegisterName", () => {
+  it("keeps the hyphens the shared RNE normalizer drops", () => {
+    expect(formatRegisterName("CHESNAIS-GIRARD")).toBe("Chesnais-Girard");
+    expect(formatRegisterName("Jean-Léonce")).toBe("Jean-Léonce");
+    expect(formatRegisterName("DE CALAN")).toBe("De Calan");
+  });
+
+  it("gives parsed president rows their hyphenated names", () => {
+    const [row] = parsePresidentRows("DEPARTEMENTAL", [
+      record({ "Nom de l'élu": "LAURENT-PERRIGOT", "Prénom de l'élu": "Jean-Luc" }),
+    ]);
+    expect(`${row!.firstName} ${row!.lastName}`).toBe("Jean-Luc Laurent-Perrigot");
   });
 });

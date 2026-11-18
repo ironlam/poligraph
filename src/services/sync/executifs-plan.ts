@@ -4,6 +4,7 @@ import { getRegionByCode } from "@/config/regions";
 import type { ResolveResult } from "@/lib/identity";
 import { FIRST_NAME_EXACT_LLR } from "@/lib/identity/signals/constants";
 import { functionRank } from "@/lib/territoires/executif";
+import { generateSlug } from "@/lib/utils";
 import { parseConseilRows, type ConseilMembreRow } from "./conseils-parse";
 import { parseFrenchDate } from "./rne-parse";
 
@@ -14,10 +15,31 @@ import { parseFrenchDate } from "./rne-parse";
 
 export type ExecutifNiveau = "DEPARTEMENTAL" | "REGIONAL";
 
-/** A president line of the RNE file. The birth date is read for the resolver, never stored. */
+/**
+ * A president line of the RNE file. The birth date is never written onto an existing profile;
+ * it is stored only on a profile created from this line (see `buildExecutifIdentity`).
+ */
 export interface PresidentRow extends ConseilMembreRow {
   niveau: ExecutifNiveau;
   birthDate: Date | null;
+}
+
+/**
+ * "CHESNAIS-GIRARD" -> "Chesnais-Girard". The shared RNE `normalizeName` turns hyphens into
+ * spaces, which is harmless for matching (the resolver does the same) but wrong on a public
+ * profile created from the line. Accents the register omits are not restored.
+ */
+export function formatRegisterName(raw: string): string {
+  return raw
+    .trim()
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .split("-")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join("-")
+    )
+    .join(" ");
 }
 
 export function parsePresidentRows(
@@ -28,7 +50,15 @@ export function parsePresidentRows(
     if (functionRank(record["Libellé de la fonction"]?.trim() || null) !== 0) return [];
     const [row] = parseConseilRows(niveau, [record]).rows;
     if (!row) return [];
-    return [{ ...row, niveau, birthDate: parseFrenchDate(record["Date de naissance"] ?? "") }];
+    return [
+      {
+        ...row,
+        niveau,
+        firstName: formatRegisterName(record["Prénom de l'élu"]!),
+        lastName: formatRegisterName(record["Nom de l'élu"]!),
+        birthDate: parseFrenchDate(record["Date de naissance"] ?? ""),
+      },
+    ];
   });
 }
 
@@ -108,6 +138,33 @@ export function buildExecutifMandate(row: PresidentRow): ExecutifMandateData | n
     constituency: region.name,
     departmentCode: region.departmentCodes.length === 1 ? region.departmentCodes[0]! : null,
     startDate,
+  };
+}
+
+export interface ExecutifIdentity {
+  slug: string;
+  civility: string | null;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  birthDate: Date | null;
+}
+
+/**
+ * Civil status of a profile created for a president with no profile (SANS_FICHE), from the
+ * register line only, as `createMaire` does for mayors. `slugTaken` adds the territory code, the
+ * way a mayor's slug takes the INSEE code.
+ */
+export function buildExecutifIdentity(row: PresidentRow, slugTaken: boolean): ExecutifIdentity {
+  const fullName = `${row.firstName} ${row.lastName}`;
+  const baseSlug = generateSlug(fullName);
+  return {
+    slug: slugTaken ? `${baseSlug}-${generateSlug(row.territoryCode)}` : baseSlug,
+    civility: row.gender === "F" ? "Mme" : row.gender === "M" ? "M." : null,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    fullName,
+    birthDate: row.birthDate,
   };
 }
 

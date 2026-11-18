@@ -19,13 +19,13 @@ async function main() {
   console.log(`Présidents lus : ${report.lines.length}`, Object.fromEntries(counts));
 
   for (const l of [...report.lines].sort((a, b) => a.verdict.localeCompare(b.verdict))) {
-    if (l.verdict === "SANS_FICHE") continue;
     console.log(
       `  ${l.verdict.padEnd(9)} ${l.niveau.slice(0, 3)} ${l.territoryCode.padEnd(3)} ${l.name.padEnd(30)} ${(l.slug ?? "").padEnd(28)} ${l.action}`
     );
   }
   const verbe = dryRun ? "à écrire" : "écrits";
   console.log(`Mandats ${verbe} : ${report.mandatesCreated}`);
+  console.log(`Fiches ${dryRun ? "à créer" : "créées"} : ${report.politiciansCreated}`);
   console.log(`Décisions d'identité ${verbe} : ${report.decisionsWritten}`);
   await db.$disconnect();
 }
