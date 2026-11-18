@@ -85,7 +85,7 @@ const allSteps: SyncStep[] = [
     ? [
         {
           name: "Repère des scrutins",
-          group: "votes",
+          group: "votes" as const,
           command: "max(Scrutin.updatedAt)",
           run: () => scrutinWriteGate.capture(),
         },
@@ -111,7 +111,7 @@ const allSteps: SyncStep[] = [
           // "votes" is carried by most readers of the site: purging it when both syncs found
           // nothing new regenerated every profile and listing three times a day for no change.
           name: "Votes cache revalidation",
-          group: "votes",
+          group: "votes" as const,
           command: "POST /api/cron/revalidate (votes), si un scrutin a été écrit",
           run: async () => {
             if (await scrutinWriteGate.scrutinsWritten()) {
@@ -258,7 +258,7 @@ const allSteps: SyncStep[] = [
           // and the homepage: it is purged only when politicians or mandates changed since the
           // last purge, and once a day whatever happened (scripts/lib/politicians-purge-gate.ts).
           name: "Cache revalidation",
-          group: "purge",
+          group: "purge" as const,
           command:
             "POST /api/cron/revalidate (dossiers, stats, factchecks, press, et politicians au besoin)",
           run: async () => {
