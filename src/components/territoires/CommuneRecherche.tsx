@@ -119,11 +119,13 @@ export function CommuneRecherche({
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
-              // Suggestions belong to the previous text until the new ones arrive.
+              // Suggestions belong to the text that produced them: dropped at once, so the
+              // arrow keys or a refocus cannot reopen them while the next answer is pending,
+              // nor after a failed or rate-limited request.
+              setOptions([]);
               setOpen(false);
               setActive(-1);
               setSearched(false);
-              if (e.target.value.trim().length < 2) setOptions([]);
             }}
             onFocus={() => (options.length > 0 || searched) && setOpen(true)}
             onKeyDown={onKeyDown}

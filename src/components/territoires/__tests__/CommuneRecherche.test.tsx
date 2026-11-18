@@ -108,6 +108,31 @@ describe("CommuneRecherche", () => {
     expect(followed()).toEqual([]);
   });
 
+  it("oublie les suggestions d'un texte dès qu'il change, même si la requête suivante échoue", async () => {
+    await type("quim");
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    fetchMock.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) });
+    const input = screen.getByRole("combobox");
+
+    // Before the next answer: nothing left to reopen or to pick.
+    fireEvent.change(input, { target: { value: "bres" } });
+    expect(screen.queryAllByRole("option")).toEqual([]);
+    const followed = clicksOnLinks();
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.focus(input);
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+
+    // After the refused request: still nothing from the previous text.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.queryAllByRole("option")).toEqual([]);
+    expect(followed()).toEqual([]);
+  });
+
   it("dit qu'aucune commune du département ne correspond", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
     await type("zzz");
