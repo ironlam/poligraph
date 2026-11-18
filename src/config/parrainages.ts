@@ -14,8 +14,7 @@ export const SEUIL_DEPARTEMENTS = 30;
 export const PLAFOND_PAR_DEPARTEMENT = SEUIL_PRESENTATIONS / 10;
 
 /** Shown once per page, word for word. */
-export const MENTION_PRESENTATION =
-  "Une présentation n'est pas un soutien politique : la loi demande aux élus de présenter un candidat, pas de se rallier à lui.";
+export const MENTION_PRESENTATION = "Une présentation n'est pas un soutien politique.";
 
 /** Plural label of each mandate group, in the order used by every page. */
 export const MANDAT_GROUPES = {
