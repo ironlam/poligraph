@@ -138,7 +138,7 @@ export default async function PoliticianPage({ params }: PageProps) {
           parliamentaryPath={parliamentaryPath}
         />
 
-        <ParrainagesFiche parrainages={profile.parrainages} />
+        <ParrainagesFiche parrainages={profile.parrainages} recus={profile.parrainagesRecus} />
 
         <aside className="mt-12 p-4 rounded-lg border bg-muted/30">
           <p className="text-sm text-muted-foreground">

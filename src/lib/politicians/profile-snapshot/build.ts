@@ -2,6 +2,7 @@ import {
   readPoliticianDossier,
   readPoliticianIdentity,
   readProfileParrainages,
+  readProfileParrainagesRecus,
   readProfileVoteStats,
   type PoliticianIdentity,
 } from "@/lib/data/politician-profile-reads";
@@ -35,11 +36,13 @@ export async function buildPoliticianProfileDocument(
   const mandateType = resolveProfileMandateType(identity);
   const voteStats = mandateType ? await readProfileVoteStats(identity.id, mandateType) : null;
   const parrainages = await readProfileParrainages(identity.id);
+  const parrainagesRecus = await readProfileParrainagesRecus(identity);
   return {
     identity,
     dossier,
     voteStats,
     mandateType,
     ...(parrainages.length > 0 && { parrainages }),
+    ...(parrainagesRecus.length > 0 && { parrainagesRecus }),
   };
 }
