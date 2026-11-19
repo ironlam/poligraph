@@ -48,6 +48,15 @@ describe("metadata de l'annuaire présidentiel", () => {
     expect(metadata.alternates?.canonical).toBe("/elections/presidentielle-2027/candidats");
   });
 
+  it.each(["recentes", "mesures"])(
+    "passe l'annuaire trié par %s en noindex,follow",
+    async (tri) => {
+      const metadata = await generateMetadata({ searchParams: Promise.resolve({ tri }) });
+
+      expect(metadata.robots).toEqual({ index: false, follow: true });
+    }
+  );
+
   it("n'indexe pas un annuaire vide", async () => {
     mockGetCandidacies.mockResolvedValue([]);
     const metadata = await generateMetadata({ searchParams: Promise.resolve({}) });

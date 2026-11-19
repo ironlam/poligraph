@@ -870,3 +870,93 @@ describe("doctrine : parrainages présidentiels", () => {
     expect(src).toContain("parrainagesSitemapEntries(SITE_URL, slug,");
   });
 });
+
+describe("doctrine : l'annuaire des candidats ne lit ni n'écrit de paramètre hors périmètre", () => {
+  // A new key in the address (a sort, a view) creates a new URL of the same directory. It has to
+  // be declared in PRESIDENTIAL_CANDIDATES_FILTER_KEYS, or that URL is indexable: `tri` shipped
+  // without it in #1400. Comments are stripped so a key named in prose does not count.
+  const code = readFileSync(
+    join(
+      process.cwd(),
+      "src/app/elections/presidentielle-2027/_components/CandidacyFieldBrowser.tsx"
+    ),
+    "utf8"
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+  const keys = [...code.matchAll(/\.(?:get|set|delete)\(\s*"([^"]+)"/g)].map((match) => match[1]);
+
+  it("trouve bien les paramètres du composant", () => {
+    expect(new Set(keys)).toEqual(new Set(["q", "statut", "propositions", "tri"]));
+  });
+
+  it("déclare chacun d'eux dans le périmètre noindex", () => {
+    for (const key of new Set(keys)) {
+      expect(PRESIDENTIAL_CANDIDATES_FILTER_KEYS as readonly string[]).toContain(key);
+    }
+  });
+});
+
+describe("doctrine : un listing ne lit aucun paramètre d'adresse sans verdict d'indexation", () => {
+  // Every key a listing page reads creates URLs of the same listing. Each one must either sit in
+  // the listing's noindex perimeter (listing-filters.ts) or be named here with the reason its
+  // verdict is decided elsewhere in the page. A key added to the page's `searchParams` type
+  // without one of the two fails this test, before the URL can reach the index.
+  const READ_BY_LISTING = [
+    {
+      route: "/affaires",
+      page: "src/app/affaires/page.tsx",
+      keys: AFFAIRES_LISTING_FILTER_KEYS,
+      // page: hasActiveListingFilter() pagination. mode: `hasNonDefaultMode`.
+      decidedInPage: ["page", "mode"],
+    },
+    {
+      route: "/politiques",
+      page: "src/app/politiques/page.tsx",
+      keys: POLITIQUES_LISTING_FILTER_KEYS,
+      // conviction, financing: `hasConvictionFilter`. sort: `hasNonDefaultSort`.
+      decidedInPage: ["page", "conviction", "financing", "sort"],
+    },
+    {
+      route: "/parlement/votes",
+      page: "src/app/parlement/votes/page.tsx",
+      keys: VOTES_LISTING_FILTER_KEYS,
+      // filter: the bare ?filter=expliques view is indexable on purpose (`isBareExplainedView`).
+      decidedInPage: ["page", "filter"],
+    },
+    {
+      route: "/parlement/dossiers",
+      page: "src/app/parlement/dossiers/page.tsx",
+      keys: DOSSIERS_LISTING_FILTER_KEYS,
+      decidedInPage: ["page"],
+    },
+  ];
+
+  function declaredKeys(file: string): string[] {
+    const code = readFileSync(join(process.cwd(), file), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    const block = code.match(/searchParams\??:\s*Promise<\{([\s\S]*?)\}>/)?.[1];
+    // An untyped `Record<string, …>` would hide every key from this guard.
+    if (block === undefined) throw new Error(`${file} : searchParams sans clés déclarées`);
+    return [...block.matchAll(/(\w+)\??:/g)].map((match) => match[1]!);
+  }
+
+  it.each(READ_BY_LISTING)(
+    "$route : chaque paramètre lu est hors index ou décidé dans la page",
+    ({ page, keys, decidedInPage }) => {
+      const declared = declaredKeys(page);
+      expect(declared.length).toBeGreaterThan(0);
+      const known = new Set<string>([...keys, ...decidedInPage]);
+      expect(declared.filter((key) => !known.has(key))).toEqual([]);
+    }
+  );
+
+  it.each(READ_BY_LISTING)(
+    "$route : la liste des exceptions ne nomme que des paramètres encore lus",
+    ({ page, decidedInPage }) => {
+      const declared = new Set(declaredKeys(page));
+      expect(decidedInPage.filter((key) => !declared.has(key))).toEqual([]);
+    }
+  );
+});

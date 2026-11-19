@@ -66,4 +66,22 @@ describe("MobileTabBar", () => {
     const { container } = renderBar();
     expect(container).toBeEmptyDOMElement();
   });
+
+  it("sets the presidential tab apart by a filled pill and a bold label, and only that tab", () => {
+    renderBar();
+    const nav = screen.getByRole("navigation", { name: "Navigation rapide" });
+    const pills = nav.querySelectorAll("a .bg-brand");
+    expect(pills).toHaveLength(1);
+
+    const tab = screen.getByRole("link", { name: "Présidentielle 2027" });
+    expect(tab).toContainElement(pills[0] as HTMLElement);
+    expect(tab.querySelector("span.font-bold")).toHaveTextContent("2027");
+
+    // The flag is decoration: it must not change the tab's spoken name.
+    const flags = screen.getAllByTestId("tab-flag");
+    expect(flags).toHaveLength(1);
+    expect(tab).toContainElement(flags[0] as HTMLElement);
+    expect(flags[0]).toHaveAttribute("aria-hidden", "true");
+    expect(tab).toHaveAccessibleName("Présidentielle 2027");
+  });
 });

@@ -7,11 +7,17 @@ import type { HubCandidacy } from "@/lib/data/hub";
 import {
   CANDIDACY_FILTERS,
   CANDIDACY_FILTER_LABELS,
+  CANDIDACY_SORTS,
+  CANDIDACY_SORT_NOTES,
+  CANDIDACY_SORT_LABELS,
   matchesCandidacyFilter,
   matchesCandidacyQuery,
   matchesPublishedProposals,
   parseCandidacyFilter,
+  parseCandidacySort,
+  sortCandidacies,
   type CandidacyFilter,
+  type CandidacySort,
 } from "@/lib/presidentielle/candidacy-filters";
 import { CandidacyDirectoryLink } from "./CandidacyDirectoryLink";
 
@@ -34,6 +40,7 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
   const [query, setQuery] = useState(urlQuery);
   const [status, setStatus] = useState<CandidacyFilter>(urlStatus);
   const [publishedOnly, setPublishedOnly] = useState(urlPublishedOnly);
+  const [sort, setSort] = useState<CandidacySort>(parseCandidacySort(searchParams.get("tri")));
   // Below sm the status pills and the checkbox are folded behind one button, so the first
   // candidates show without scrolling. From sm up they are always visible.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -46,11 +53,14 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
       candidacies.filter((candidacy) => matchesCandidacyFilter(candidacy, key)).length,
     ])
   ) as Record<CandidacyFilter, number>;
-  const visible = candidacies.filter(
-    (candidacy) =>
-      matchesCandidacyFilter(candidacy, status) &&
-      matchesPublishedProposals(candidacy, publishedOnly) &&
-      matchesCandidacyQuery(candidacy, query)
+  const visible = sortCandidacies(
+    candidacies.filter(
+      (candidacy) =>
+        matchesCandidacyFilter(candidacy, status) &&
+        matchesPublishedProposals(candidacy, publishedOnly) &&
+        matchesCandidacyQuery(candidacy, query)
+    ),
+    sort
   );
   const hasActiveFilters = status !== "toutes" || publishedOnly || query.trim() !== "";
   const foldedFilterCount = Number(status !== "toutes") + Number(publishedOnly);
@@ -66,6 +76,10 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
     (next: { statut: CandidacyFilter; q: string; publishedOnly: boolean }) => {
       lastWrittenQuery.current = next.q.trim();
       const params = new URLSearchParams(searchParams.toString());
+      // The order is written by `selectSort`, outside of this snapshot: carry it over.
+      const tri = new URLSearchParams(window.location.search).get("tri");
+      if (tri === null) params.delete("tri");
+      else params.set("tri", tri);
       if (next.statut === "toutes") params.delete("statut");
       else params.set("statut", next.statut);
       if (next.q.trim() === "") params.delete("q");
@@ -101,6 +115,17 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
     cancelPendingQuerySync();
     setPublishedOnly(nextPublishedOnly);
     writeUrl({ statut: status, q: query, publishedOnly: nextPublishedOnly });
+  }
+
+  function selectSort(nextSort: CandidacySort) {
+    setSort(nextSort);
+    // Written straight to the address: the order is not a filter, so it stays out of `writeUrl`
+    // and survives "Réinitialiser les filtres".
+    const params = new URLSearchParams(window.location.search);
+    if (nextSort === "alphabetique") params.delete("tri");
+    else params.set("tri", nextSort);
+    const value = params.toString();
+    window.history.replaceState(null, "", value === "" ? pathname : `${pathname}?${value}`);
   }
 
   function resetFilters() {
@@ -195,10 +220,28 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 sm:min-h-11">
-        <p aria-live="polite" className="text-sm font-medium text-muted-foreground-strong">
+        <p
+          aria-live="polite"
+          className="min-w-0 flex-1 text-sm font-medium text-muted-foreground-strong max-sm:text-xs"
+        >
           {visible.length}{" "}
           {visible.length === 1 ? "personnalité affichée" : "personnalités affichées"}
         </p>
+        <label className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground-strong">
+          <span className="max-sm:sr-only">Trier</span>
+          <select
+            value={sort}
+            onChange={(event) => selectSort(parseCandidacySort(event.target.value))}
+            aria-label="Trier les candidatures"
+            className="min-h-11 rounded-xl border border-border bg-background px-2 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {CANDIDACY_SORTS.map((key) => (
+              <option key={key} value={key}>
+                {CANDIDACY_SORT_LABELS[key]}
+              </option>
+            ))}
+          </select>
+        </label>
         {hasActiveFilters && (
           <button
             type="button"
@@ -209,6 +252,12 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
           </button>
         )}
       </div>
+
+      {CANDIDACY_SORT_NOTES[sort] && (
+        <p className="text-xs leading-relaxed text-muted-foreground-strong">
+          {CANDIDACY_SORT_NOTES[sort]}
+        </p>
+      )}
 
       {visible.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">

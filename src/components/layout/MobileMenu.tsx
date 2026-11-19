@@ -7,35 +7,11 @@ import { usePathname } from "next/navigation";
 import { useCommandPalette } from "@/components/search";
 import { MobileThemeToggle } from "@/components/theme/MobileThemeToggle";
 import { PageShareButton } from "@/components/ui/PageShareButton";
-import {
-  FOLLOW_LINKS,
-  NAV_ELECTIONS,
-  NAV_MENU_GROUPS,
-  filterNavGroups,
-  type NavGroup,
-} from "@/config/navigation";
-import {
-  Vote,
-  Landmark,
-  MapPin,
-  Search,
-  X,
-  ChevronRight,
-  Heart,
-  Compass,
-  MessageSquareWarning,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { FOLLOW_LINKS, NAV_MENU_GROUPS, filterNavGroups, type NavGroup } from "@/config/navigation";
+import { Vote, Search, X, ChevronRight, Heart, Compass, MessageSquareWarning } from "lucide-react";
 import { Logo } from "./Logo";
 import { SocialIcon } from "./SocialIcon";
 import { useMobileMenu } from "./MobileMenuProvider";
-
-// Icons of the elections block, the only entries of the menu that carry one.
-const ICON_MAP: Record<string, LucideIcon> = {
-  vote: Vote,
-  landmark: Landmark,
-  mapPin: MapPin,
-};
 
 const GROUP_TITLE_CLASS = "mb-2 text-[13px] font-bold text-muted-foreground-strong";
 
@@ -49,17 +25,9 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
 
 interface MobileMenuProps {
   enabledFlags: string[];
-  /** Slugs of the NAV_ELECTIONS whose ballot has been held, resolved server-side */
-  pastElectionSlugs: string[];
-  /** Slug of the election put forward (ELECTION_SPOTLIGHT), already validated server-side */
-  spotlightSlug?: string | null;
 }
 
-export function MobileMenu({
-  enabledFlags,
-  pastElectionSlugs,
-  spotlightSlug = null,
-}: MobileMenuProps) {
+export function MobileMenu({ enabledFlags }: MobileMenuProps) {
   // Opened from the bottom tab bar, which sits outside of the header this component renders in.
   const { isOpen, setIsOpen, triggerRef } = useMobileMenu();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -74,17 +42,6 @@ export function MobileMenu({
   const groups = filterNavGroups(NAV_MENU_GROUPS, flagSet);
   const primaryGroups = groups.slice(0, -1);
   const toolGroups = groups.slice(-1);
-  // The election put forward first, then upcoming, then held ones, each keeping its NAV_ELECTIONS
-  // order. The spotlight slug only reorders: an election hidden by its own flag stays hidden.
-  const pastSlugs = new Set(pastElectionSlugs);
-  const filteredElections = NAV_ELECTIONS.filter(
-    (item) => !item.featureFlag || flagSet.has(item.featureFlag)
-  ).sort(
-    (a, b) =>
-      Number(b.slug === spotlightSlug) - Number(a.slug === spotlightSlug) ||
-      Number(pastSlugs.has(a.slug)) - Number(pastSlugs.has(b.slug))
-  );
-
   const openSearchScreen = () => {
     // The menu steps aside rather than stacking under the search screen; leaving that screen
     // without choosing a result brings it back.
@@ -263,58 +220,35 @@ export function MobileMenu({
 
               {primaryGroups.map(renderGroup)}
 
-              {/* Upcoming elections first, past ones last */}
-              {filteredElections.length > 0 && (
-                <section aria-labelledby="mobile-menu-elections" className="mt-6">
-                  <h2 id="mobile-menu-elections" className={GROUP_TITLE_CLASS}>
-                    Élections
-                  </h2>
-                  <ul className="space-y-1">
-                    {filteredElections.map((item) => {
-                      const Icon = item.icon ? ICON_MAP[item.icon] : null;
-                      const isActive =
-                        pathname === item.href || pathname.startsWith(item.href + "/");
-                      const isPast = pastSlugs.has(item.slug);
-                      const isSpotlight = item.slug === spotlightSlug;
-                      return (
-                        <li key={item.href}>
-                          <Link
-                            href={item.href}
-                            onClick={close}
-                            aria-current={isActive ? "page" : undefined}
-                            className={`flex items-center justify-between gap-2 min-h-12 px-4 py-2.5 rounded-xl text-base font-display font-bold transition-colors ${
-                              isSpotlight
-                                ? "border-2 border-primary bg-primary/5 text-primary hover:bg-primary/10"
-                                : isPast
-                                  ? "text-foreground hover:bg-muted"
-                                  : "border border-primary/40 text-primary hover:bg-primary/5"
-                            }`}
-                          >
-                            <span className="flex items-center gap-3 min-w-0">
-                              {Icon && <Icon className="h-5 w-5 shrink-0" />}
-                              {item.label}
-                              {/* A past election links to its results: the badge says what is
-                                  behind the link rather than that it is over. In light, a red
-                                  tint under red text measures 3.86:1 at 12px, below AA: the
-                                  badge is outlined there instead (4.99:1). */}
-                              <span
-                                className={`shrink-0 whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full ${
-                                  isPast
-                                    ? "border border-brand-on-surface/40 text-brand-on-surface dark:border-transparent dark:bg-brand/15"
-                                    : "bg-primary/15 text-primary"
-                                }`}
-                              >
-                                {isPast ? "Résultats" : "À venir"}
-                              </span>
-                            </span>
-                            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              )}
+              {/* One entry to the elections page: the campaign in progress has its own tab in the
+                  bottom bar, and listing three elections here aged with every ballot. */}
+              <section aria-labelledby="mobile-menu-elections" className="mt-6">
+                <h2 id="mobile-menu-elections" className={GROUP_TITLE_CLASS}>
+                  Élections
+                </h2>
+                <Link
+                  href="/elections"
+                  onClick={close}
+                  aria-current={pathname === "/elections" ? "page" : undefined}
+                  className="flex min-h-12 items-center justify-between gap-3 rounded-xl border bg-card px-3 py-2 text-foreground transition-colors hover:bg-muted"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <Vote className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block font-display text-[15px] font-bold leading-tight">
+                        Toutes les élections
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        Présidentielle, sénatoriales, municipales
+                      </span>
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="h-5 w-5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </Link>
+              </section>
 
               <div className="mt-6">{toolGroups.map(renderGroup)}</div>
 

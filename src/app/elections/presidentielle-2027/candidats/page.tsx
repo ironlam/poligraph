@@ -8,6 +8,7 @@ import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { PRESIDENTIAL_CANDIDATES_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { hasActiveListingFilter } from "@/lib/seo/listing-robots";
 import { HubCandidacyField } from "../_components/HubCandidacyField";
+import { HubParrainagesEntry } from "../_components/HubPrimaryPaths";
 import { PresidentialHubNav } from "../_components/PresidentialHubNav";
 
 export const revalidate = 86400;
@@ -85,14 +86,17 @@ export default async function PresidentialCandidatesPage() {
             short sentence so the list starts on the first screen. */}
         <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground max-sm:hidden">
           Cette liste de suivi n&apos;est pas un substitut à la liste officielle publiée par le
-          Conseil constitutionnel. Chaque statut est sourcé et l&apos;ordre reste alphabétique, sans
-          classement.
+          Conseil constitutionnel. Chaque statut est sourcé. L&apos;ordre par défaut est
+          alphabétique, sans classement.
         </p>
         <p className="text-xs text-muted-foreground sm:hidden">
-          Liste de suivi, pas la liste officielle du Conseil constitutionnel. Ordre alphabétique.
+          Liste de suivi, pas la liste officielle du Conseil constitutionnel.
         </p>
       </header>
       <HubCandidacyField candidacies={candidacies} />
+      {/* The sponsorships are read candidate by candidate: this list is where a reader looks for
+          them, and until now only the hub home linked to that page. */}
+      <HubParrainagesEntry />
     </main>
   );
 }

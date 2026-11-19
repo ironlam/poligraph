@@ -99,9 +99,13 @@ export default async function PresidentialHubPage() {
       <RubriqueBandeau labelledBy="hub-title" className="relative">
         <HexPattern className="pointer-events-none absolute inset-0 text-white opacity-[0.06]" />
         <div className="relative space-y-3 sm:space-y-6">
-          <BandeauFilAriane
-            items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
-          />
+          {/* From sm up: on a phone the lone "Élections" link pushed the title down. The other
+              elections are one tap away in the menu, and linked at the foot of this page. */}
+          <div className="max-sm:hidden">
+            <BandeauFilAriane
+              items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
+            />
+          </div>
           <header className="max-w-3xl space-y-3">
             <BandeauSurtitre>Présidentielle 2027</BandeauSurtitre>
             <h1
@@ -211,6 +215,16 @@ export default async function PresidentialHubPage() {
           lastReviewedAt={context.lastReviewedAt}
           calendarLink={calendarLink}
         />
+
+        <p className="text-sm text-muted-foreground">
+          Sénatoriales, municipales, scrutins précédents :{" "}
+          <Link
+            href="/elections"
+            className="inline-flex min-h-11 items-center font-semibold text-primary underline underline-offset-4 hover:no-underline"
+          >
+            toutes les élections
+          </Link>
+        </p>
       </div>
     </>
   );
