@@ -250,6 +250,8 @@ export interface TabNavItem {
   icon: TabIcon;
   /** Path prefix that lights the tab: a tab stands for its whole section, not for one page */
   match: string;
+  /** Sets the tab apart from the other three: the election put forward while its campaign runs */
+  highlight?: boolean;
 }
 
 // Bottom tab bar, below `lg`. Four links to existing pages; the menu button is added by the
@@ -265,6 +267,7 @@ export const NAV_TABS: TabNavItem[] = [
     ariaLabel: "Présidentielle 2027",
     icon: "vote",
     match: "/elections/presidentielle-2027",
+    highlight: true,
   },
 ];
 

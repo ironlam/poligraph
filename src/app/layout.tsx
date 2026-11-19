@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { MobileMenuProvider } from "@/components/layout/MobileMenuProvider";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { BackToTop } from "@/components/layout/BackToTop";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { WebSiteJsonLd } from "@/components/seo/JsonLd";
 import { ChatWidget } from "@/components/chat/ChatWidget";
@@ -163,6 +164,7 @@ export default async function RootLayout({
                 </main>
                 <Footer />
                 <MobileTabBar />
+                <BackToTop raised={chatEnabled} />
               </MobileMenuProvider>
               <CommandPalette />
               {chatEnabled && <ChatWidget />}

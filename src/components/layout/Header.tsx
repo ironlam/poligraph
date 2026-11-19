@@ -16,7 +16,6 @@ import {
   SearchCheck,
 } from "lucide-react";
 import { getEnabledFlags } from "@/lib/feature-flags";
-import { getPastElectionSlugs } from "@/lib/data/elections";
 import { getElectionSpotlight } from "@/lib/data/election-spotlight";
 import type { LucideIcon } from "lucide-react";
 
@@ -33,11 +32,7 @@ const PRIMARY_ICONS: Record<string, LucideIcon> = {
 };
 
 export async function Header() {
-  const [enabledFlags, pastElectionSlugs, spotlight] = await Promise.all([
-    getEnabledFlags(),
-    getPastElectionSlugs(),
-    getElectionSpotlight(),
-  ]);
+  const [enabledFlags, spotlight] = await Promise.all([getEnabledFlags(), getElectionSpotlight()]);
 
   const filteredPrimary = filterNavItems(NAV_PRIMARY, enabledFlags).filter(
     (item) => !item.mobileOnly
@@ -131,11 +126,7 @@ export async function Header() {
           </nav>
 
           {/* Mobile navigation */}
-          <MobileMenu
-            enabledFlags={[...enabledFlags]}
-            pastElectionSlugs={pastElectionSlugs}
-            spotlightSlug={spotlight?.slug ?? null}
-          />
+          <MobileMenu enabledFlags={[...enabledFlags]} />
         </div>
       </div>
     </header>

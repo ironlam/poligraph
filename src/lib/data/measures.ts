@@ -738,6 +738,8 @@ export type PublicCandidacyMeasureRollup = {
   themesCoveredCount: number;
   primarySourceMeasureCount: number;
   programmeMeasureCount: number;
+  /** When the latest of these measures was published or last revised. */
+  lastPublishedAt: Date | null;
 };
 
 export async function getPublicMeasureRollupsByElection(
@@ -749,6 +751,7 @@ export async function getPublicMeasureRollupsByElection(
     themesCoveredCount: number;
     primarySourceMeasureCount: number;
     programmeMeasureCount: number;
+    lastPublishedAt: Date | null;
   };
 
   // This is deliberately one row per candidacy, not one row per measure. The joins below mirror
@@ -768,7 +771,8 @@ export async function getPublicMeasureRollupsByElection(
       ))::int AS "primarySourceMeasureCount",
       COUNT(*) FILTER (
         WHERE pe."publicationStatus" = 'PUBLISHED' AND pe."electionId" = ${electionId}
-      )::int AS "programmeMeasureCount"
+      )::int AS "programmeMeasureCount",
+      MAX(r."publishedAt") AS "lastPublishedAt"
     FROM "Measure" m
     JOIN "MeasureRevision" r ON r."id" = m."publishedRevisionId"
     JOIN "Candidacy" c ON c."id" = m."candidacyId"
@@ -799,6 +803,7 @@ export async function getPublicMeasureRollupsByElection(
         themesCoveredCount: Number(row.themesCoveredCount),
         primarySourceMeasureCount: Number(row.primarySourceMeasureCount),
         programmeMeasureCount: Number(row.programmeMeasureCount),
+        lastPublishedAt: row.lastPublishedAt,
       },
     ])
   );

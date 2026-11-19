@@ -15,7 +15,7 @@ vi.mock("@/components/ui/PageShareButton", () => ({ PageShareButton: () => null 
 function openMenu() {
   render(
     <MobileMenuProvider>
-      <MobileMenu enabledFlags={[]} pastElectionSlugs={[]} />
+      <MobileMenu enabledFlags={[]} />
       <MobileTabBar />
     </MobileMenuProvider>
   );
@@ -43,5 +43,19 @@ describe("MobileMenu : suivre Poligraph", () => {
     const menu = openMenu();
 
     expect(menu.queryByRole("link", { name: /github/i })).toBeNull();
+  });
+});
+
+describe("MobileMenu : élections", () => {
+  it("renvoie vers la page des élections au lieu d'en lister trois", () => {
+    const menu = openMenu();
+
+    expect(menu.getByRole("link", { name: /toutes les élections/i })).toHaveAttribute(
+      "href",
+      "/elections"
+    );
+    expect(menu.queryByRole("link", { name: /sénatoriales 2026/i })).toBeNull();
+    expect(menu.queryByRole("link", { name: /municipales 2026/i })).toBeNull();
+    expect(menu.queryByText("À venir")).toBeNull();
   });
 });
