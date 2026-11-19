@@ -334,6 +334,7 @@ export function MobileMenu({
                           rel="noopener noreferrer"
                           onClick={close}
                           aria-label={`${link.label} (s'ouvre dans un nouvel onglet)`}
+                          title={link.label}
                           className={`flex min-h-12 items-center rounded-xl border bg-card text-foreground transition-colors hover:bg-muted ${
                             isChannel ? "gap-3 px-3 py-2" : "w-12 justify-center"
                           }`}
