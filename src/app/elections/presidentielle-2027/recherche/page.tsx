@@ -137,13 +137,16 @@ export default async function PresidentialSearchPage({
 
   return (
     <main className="container mx-auto px-4 pb-12 pt-4">
-      <Breadcrumb
-        items={[
-          { label: "Élections", href: "/elections" },
-          { label: "Présidentielle 2027", href: "/elections/presidentielle-2027" },
-          { label: subtopicFilter?.label ?? "Recherche" },
-        ]}
-      />
+      {/* From sm up: on a phone the back link right below already leads to the hub or the theme. The breadcrumb JSON-LD is emitted at every width. */}
+      <div className="max-sm:hidden">
+        <Breadcrumb
+          items={[
+            { label: "Élections", href: "/elections" },
+            { label: "Présidentielle 2027", href: "/elections/presidentielle-2027" },
+            { label: subtopicFilter?.label ?? "Recherche" },
+          ]}
+        />
+      </div>
       <div className="mx-auto max-w-4xl">
         <Link
           href={

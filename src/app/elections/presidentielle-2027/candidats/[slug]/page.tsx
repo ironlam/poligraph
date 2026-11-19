@@ -210,13 +210,16 @@ export default async function CandidateFichePage({ params }: PageProps) {
           page needs room to clear it. The extra padding goes away at `2xl`, where that bar becomes
           the vertical one on the left. */}
       <div className="container mx-auto space-y-8 px-4 pb-24 pt-4 2xl:pb-8">
-        <Breadcrumb
-          items={[
-            { label: "Élections", href: "/elections" },
-            { label: "Présidentielle 2027", href: `/elections/${candidacy.electionSlug}` },
-            { label: politician.fullName },
-          ]}
-        />
+        {/* From sm up: on a phone the sticky bar right above is the way back to the list. The breadcrumb JSON-LD is emitted at every width. */}
+        <div className="max-sm:hidden">
+          <Breadcrumb
+            items={[
+              { label: "Élections", href: "/elections" },
+              { label: "Présidentielle 2027", href: `/elections/${candidacy.electionSlug}` },
+              { label: politician.fullName },
+            ]}
+          />
+        </div>
 
         <header className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-5 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)_6rem]">
           <div aria-hidden="true">
