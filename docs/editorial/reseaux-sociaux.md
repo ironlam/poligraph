@@ -219,20 +219,20 @@ Quand un terme désignant des personnes est nécessaire, il vit dans une phrase,
 
 ## 12. Du site vers la chaîne YouTube
 
-Le site invite à suivre la chaîne `@poligraph_fr`. C'est un appel posé en bordure de page, pas une
-publicité, et il suit ses propres règles. Le « sans publicité » de `/soutenir` vaut pour le site :
-la chaîne est monétisée, et la page le dit.
+Le site renvoie vers la chaîne `@poligraph_fr` par un lien, comme vers les autres comptes. Il n'y a
+plus de bandeau d'appel à l'abonnement dans les pages : il repoussait le contenu, surtout sur
+téléphone. Le « sans publicité » de `/soutenir` vaut pour le site : la chaîne est monétisée, et la
+page le dit.
 
-**Où l'appel apparaît.** Le bandeau (`YoutubeBanner`) figure sur l'accueil, le dossier présidentielle
-2027 et les pages de mesure. Sur la page d'un scrutin, il cède la place à la vidéo quand elle existe.
-Il n'apparaît jamais à côté d'une affaire judiciaire, sur `/soutenir` ni sur les pages juridiques :
-une demande d'abonnement n'a rien à faire là où le lecteur lit une procédure ou ce que devient sa
-donnée. Pour l'étendre à une page, on ajoute le composant dans cette page, pas dans le layout
-partagé.
+**Où les liens apparaissent.** Trois endroits, tous alimentés par `SOCIAL_LINKS`
+(`src/config/navigation.ts`) : le pied de page, le groupe « Suivre Poligraph » du menu mobile, et les
+logos à droite du titre de l'accueil à partir de `lg`. Ajouter un compte, c'est ajouter une ligne à
+cette liste. Sur la page d'un scrutin, la vidéo s'affiche quand elle existe ; sinon la page ne dit
+rien de la chaîne.
 
-**Ce que le texte dit.** Il énonce ce que l'abonnement, le like et le commentaire apportent au projet.
-Il ne promet aucun résultat, n'emprunte pas les formules d'un influenceur et ne cite pas
-l'algorithme.
+**Ce que le lien dit.** Le nom du réseau, et pour YouTube ce qu'on y trouve (« Un vote expliqué en
+une minute »). Pas de demande d'abonnement, de like ou de commentaire dans l'interface, pas de
+formule d'influenceur.
 
 **Rien ne part avant le clic.** Le lecteur ne crée l'iframe `youtube-nocookie.com` qu'après un clic
 sur « Lire la vidéo », et n'affiche aucune image tirée de YouTube. Un changement qui ferait contacter
@@ -248,7 +248,7 @@ YouTube plus tôt modifie aussi la page de confidentialité et la directive `fra
 3. Ajouter une ligne à `SCRUTIN_VIDEOS` dans `src/config/youtube.ts` : le slug en clé, l'identifiant
    de la vidéo en valeur (11 caractères, jamais l'URL), avec un commentaire d'une ligne.
 4. Lancer `npx vitest run src/config/youtube.test.ts`, qui refuse un identifiant mal formé.
-5. Passer par une PR. Sans déploiement manuel depuis le dashboard Vercel, la page garde le bandeau.
+5. Passer par une PR. Sans déploiement manuel depuis le dashboard Vercel, la page reste sans vidéo.
 
 Les pages de mesure n'ont pas encore de table équivalente. On la crée sur le même modèle le jour où
 une vidéo s'y rattache. Quand un déploiement par vidéo devient pesant, la suite prévue est un champ

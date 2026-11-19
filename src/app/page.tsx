@@ -10,7 +10,9 @@ import { HomeIntentGrid } from "@/components/home/HomeIntentGrid";
 import { WeekFeed } from "@/components/home/WeekFeed";
 import { TrustStrip } from "@/components/home/TrustStrip";
 import { SupportCampaign } from "@/components/home/SupportCampaign";
-import { YoutubeBanner } from "@/components/youtube/YoutubeBanner";
+import { deriveElectionBannerState } from "@/lib/elections/banner-state";
+import { daysUntil } from "@/lib/elections/countdown";
+import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 
 export const revalidate = 300;
 
@@ -32,23 +34,38 @@ export default async function HomePage() {
     getEnabledFlags(),
   ]);
 
+  // Far from the vote, the presidential card of the grid is the only reminder and carries the
+  // countdown. The banner comes back from the last month on, when it has something the card
+  // cannot say: the registration deadline, the day of the vote, the results.
+  const bannerState =
+    featuredElection &&
+    deriveElectionBannerState({
+      round1Date: featuredElection.round1Date,
+      round2Date: featuredElection.round2Date,
+      now,
+      round1Scores: featuredElection.round1Scores,
+      winner: featuredElection.winner,
+    });
+  const showBanner = featuredElection && bannerState && bannerState.kind !== "FAR";
+  const daysToPresidentialRound1 =
+    featuredElection?.slug === PRESIDENTIELLE_2027_SLUG && featuredElection.round1Date
+      ? daysUntil(featuredElection.round1Date, now)
+      : null;
+
   return (
-    <div className="container mx-auto px-4 py-8 space-y-10">
+    <div className="container mx-auto space-y-5 px-4 py-4 sm:space-y-10 sm:py-8">
       <HomeHero />
 
-      {/* The banner derives its own temporal state: a day count computed here was the duplication
-          that kept the other four states invisible from this page. */}
-      {featuredElection && <ElectionBanner election={featuredElection} now={now} />}
+      {showBanner && <ElectionBanner election={featuredElection} now={now} />}
 
-      <HomeIntentGrid enabledFlags={enabledFlags} />
-
-      {/* After the intents, not before: the banner promotes the channel, the grid answers the
-          visit. */}
-      <YoutubeBanner />
-
-      <KPIStrip kpis={kpis} />
+      <HomeIntentGrid
+        enabledFlags={enabledFlags}
+        daysToPresidentialRound1={daysToPresidentialRound1}
+      />
 
       <WeekFeed recap={weeklyRecap} />
+
+      <KPIStrip kpis={kpis} />
 
       <SupportCampaign />
 

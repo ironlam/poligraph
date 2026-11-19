@@ -15,9 +15,4 @@ describe("page confidentialité : YouTube", () => {
     const recipients = html.slice(html.indexOf("Destinataires et prestataires"));
     expect(recipients).toMatch(/YouTube \(Google\)/);
   });
-
-  it("précise que la fermeture du bandeau reste dans le navigateur", () => {
-    expect(html).toMatch(/bandeau/i);
-    expect(html).toMatch(/stockage local/i);
-  });
 });

@@ -157,11 +157,6 @@ export default function ConfidentialitePage() {
               YouTube. Le lecteur utilise le domaine youtube-nocookie.com : YouTube (Google) traite
               ensuite les données de lecture selon ses propres conditions.
             </p>
-            <p>
-              Le bandeau qui invite à s&apos;abonner à la chaîne retient sa fermeture dans le
-              stockage local du navigateur de l&apos;utilisateur. Cette information reste sur son
-              appareil et n&apos;est transmise à personne.
-            </p>
           </div>
         </section>
 

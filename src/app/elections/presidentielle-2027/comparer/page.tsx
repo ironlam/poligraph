@@ -77,26 +77,35 @@ export default async function PresidentialComparisonPage({
 
   return (
     <main className="container mx-auto px-4 pb-16 pt-4">
-      <Breadcrumb
-        items={[
-          { label: "Élections", href: "/elections" },
-          { label: "Présidentielle 2027", href: `/elections/${ELECTION_SLUG}` },
-          { label: "Comparer" },
-        ]}
-      />
+      {/* From sm up: on a phone the hub tabs right below are the way back, and the lone back link
+          pushed the page down. The breadcrumb JSON-LD is emitted at every width. */}
+      <div className="max-sm:hidden">
+        <Breadcrumb
+          items={[
+            { label: "Élections", href: "/elections" },
+            { label: "Présidentielle 2027", href: `/elections/${ELECTION_SLUG}` },
+            { label: "Comparer" },
+          ]}
+        />
+      </div>
       <PresidentialHubNav active="compare" />
 
-      <div className="mt-8 space-y-8">
+      <div className="mt-4 space-y-4 sm:mt-8 sm:space-y-8">
         <header className="max-w-3xl">
-          <p className="text-sm font-bold uppercase tracking-widest text-brand">
+          {/* From sm up: on a phone the hub navigation right above already says it. */}
+          <p className="text-sm font-bold uppercase tracking-widest text-brand max-sm:hidden">
             Présidentielle 2027
           </p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">
+          <h1 className="font-display text-xl font-extrabold leading-tight tracking-tight sm:mt-2 sm:text-3xl md:text-5xl">
             Comparer les mesures des candidats
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground-strong">
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground-strong max-sm:hidden">
             Choisissez deux ou trois candidats et une thématique. Poligraph place leurs mesures
             publiées côte à côte, sans note ni classement.
+          </p>
+          {/* The form below asks for the candidates and the theme: only the promise is kept. */}
+          <p className="mt-1 text-xs text-muted-foreground-strong sm:hidden">
+            Mesures publiées côte à côte, sans note ni classement.
           </p>
         </header>
 

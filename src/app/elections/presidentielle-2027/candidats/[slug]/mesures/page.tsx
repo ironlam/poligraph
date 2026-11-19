@@ -148,14 +148,17 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
 
   return (
     <main className="pb-16">
-      <Breadcrumb
-        items={[
-          { label: "Élections", href: "/elections" },
-          { label: "Présidentielle 2027", href: `/elections/${ELECTION_SLUG}` },
-          { label: politician.fullName, href: `/elections/${ELECTION_SLUG}/candidats/${slug}` },
-          { label: "Mesures" },
-        ]}
-      />
+      {/* From sm up: on a phone the "Retour à la fiche" link right below is the way back. The breadcrumb JSON-LD is emitted at every width. */}
+      <div className="max-sm:hidden">
+        <Breadcrumb
+          items={[
+            { label: "Élections", href: "/elections" },
+            { label: "Présidentielle 2027", href: `/elections/${ELECTION_SLUG}` },
+            { label: politician.fullName, href: `/elections/${ELECTION_SLUG}/candidats/${slug}` },
+            { label: "Mesures" },
+          ]}
+        />
+      </div>
 
       <div className="container mx-auto max-w-5xl space-y-8 px-4 pt-3">
         <header className="max-w-3xl">

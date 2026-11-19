@@ -30,11 +30,13 @@ export function CandidacyDirectoryLink({
   onNavigate?: () => void;
 }) {
   return (
+    // Below sm: a smaller portrait and no chevron, so the status and the measure count share one
+    // line and three candidacies fit on a phone screen instead of two.
     <Link
       href={`/elections/presidentielle-2027/candidats/${candidacy.politicianSlug}`}
       prefetch={false}
       onClick={onNavigate}
-      className="group grid h-full min-h-24 grid-cols-[3.5rem_minmax(0,1fr)_1.25rem] items-center gap-3 rounded-2xl border border-border bg-card p-3 transition-colors hover:border-primary hover:bg-muted/40 active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none"
+      className="group grid h-full grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-border bg-card p-2.5 sm:min-h-24 sm:grid-cols-[3.5rem_minmax(0,1fr)_1.25rem] sm:p-3 transition-colors hover:border-primary hover:bg-muted/40 active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none"
     >
       <span aria-hidden="true" className="shrink-0">
         <PoliticianAvatar
@@ -42,7 +44,7 @@ export function CandidacyDirectoryLink({
           blobPhotoUrl={candidacy.blobPhotoUrl}
           fullName={candidacy.candidateName}
           size="md"
-          className="h-14 w-14"
+          className="h-11 w-11 sm:h-14 sm:w-14"
         />
       </span>
       <span className="min-w-0 flex-1">
@@ -60,7 +62,7 @@ export function CandidacyDirectoryLink({
             <span>{candidacy.partyLabel}</span>
           </span>
         )}
-        <span className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="mt-1 flex flex-wrap items-center gap-x-1.5 sm:mt-2 sm:gap-y-1.5">
           <CandidacyStatusBadge
             status={candidacy.status}
             withdrewReason={candidacy.withdrewReason}
@@ -72,7 +74,7 @@ export function CandidacyDirectoryLink({
       </span>
       <ChevronRight
         aria-hidden="true"
-        className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+        className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none max-sm:hidden"
       />
     </Link>
   );

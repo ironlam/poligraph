@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ReportLink } from "@/components/feedback/ReportLink";
 import { FOOTER_SECTIONS, DATA_SOURCES, RSS_FEEDS, SOCIAL_LINKS } from "@/config/navigation";
-import { ExternalLink, Instagram, Github, Rss } from "lucide-react";
+import { ExternalLink, Rss } from "lucide-react";
+import { SocialIcon } from "./SocialIcon";
 import { HexPattern } from "@/components/ui/HexPattern";
 import { getEnabledFlags } from "@/lib/feature-flags";
 
@@ -168,27 +169,4 @@ export async function Footer() {
       </div>
     </footer>
   );
-}
-
-function SocialIcon({ icon }: { icon: "x" | "bluesky" | "instagram" | "github" }) {
-  const cls = "w-5 h-5";
-  switch (icon) {
-    case "x":
-      return (
-        <svg viewBox="0 0 24 24" fill="currentColor" className={cls} aria-hidden="true">
-          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-        </svg>
-      );
-    case "bluesky":
-      return (
-        <svg viewBox="0 0 360 320" fill="currentColor" className={cls} aria-hidden="true">
-          <path d="M180 141.964C163.699 110.262 119.308 51.1817 78.0347 22.044C38.4971-5.86834 23.414-1.03207 13.526 3.43594C2.08093 8.60755 0 26.1785 0 36.5164C0 46.8542 5.66748 121.272 9.36416 133.694C21.1014 178.38 53.7537 190.958 83.8013 186.269C78.04 187.065 46.4735 192.304 23.3596 225.469C-5.33722 266.626 52.2181 312.597 80.5765 278.729C100.076 255.206 117.158 225.469 126.354 209.867C130.017 203.593 132.968 198.757 134.544 196.049C138.036 190.147 157.11 155.42 180 141.964Z" />
-          <path d="M180 141.964C196.301 110.262 240.692 51.1817 281.965 22.044C321.503-5.86834 336.586-1.03207 346.474 3.43594C357.919 8.60755 360 26.1785 360 36.5164C360 46.8542 354.333 121.272 350.636 133.694C338.899 178.38 306.246 190.958 276.199 186.269C281.96 187.065 313.527 192.304 336.64 225.469C365.337 266.626 307.782 312.597 279.424 278.729C259.924 255.206 242.842 225.469 233.646 209.867C229.983 203.593 227.032 198.757 225.456 196.049C221.964 190.147 202.89 155.42 180 141.964Z" />
-        </svg>
-      );
-    case "instagram":
-      return <Instagram className={cls} aria-hidden="true" />;
-    case "github":
-      return <Github className={cls} aria-hidden="true" />;
-  }
 }

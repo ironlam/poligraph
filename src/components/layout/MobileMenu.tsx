@@ -8,6 +8,7 @@ import { useCommandPalette } from "@/components/search";
 import { MobileThemeToggle } from "@/components/theme/MobileThemeToggle";
 import { PageShareButton } from "@/components/ui/PageShareButton";
 import {
+  FOLLOW_LINKS,
   NAV_ELECTIONS,
   NAV_MENU_GROUPS,
   filterNavGroups,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Logo } from "./Logo";
+import { SocialIcon } from "./SocialIcon";
 import { useMobileMenu } from "./MobileMenuProvider";
 
 // Icons of the elections block, the only entries of the menu that carry one.
@@ -315,6 +317,56 @@ export function MobileMenu({
               )}
 
               <div className="mt-6">{toolGroups.map(renderGroup)}</div>
+
+              {/* The channel gets a full row and a sentence, the other accounts a 48px square. */}
+              <section aria-labelledby="mobile-menu-follow" className="mt-6">
+                <h2 id="mobile-menu-follow" className={GROUP_TITLE_CLASS}>
+                  Suivre Poligraph
+                </h2>
+                <ul className="flex flex-wrap gap-2">
+                  {FOLLOW_LINKS.map((link) => {
+                    const isChannel = link.icon === "youtube";
+                    return (
+                      <li key={link.href} className={isChannel ? "w-full" : undefined}>
+                        <a
+                          href={link.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={close}
+                          aria-label={`${link.label} (s'ouvre dans un nouvel onglet)`}
+                          title={link.label}
+                          className={`flex min-h-12 items-center rounded-xl border bg-card text-foreground transition-colors hover:bg-muted ${
+                            isChannel ? "gap-3 px-3 py-2" : "w-12 justify-center"
+                          }`}
+                        >
+                          <SocialIcon
+                            icon={link.icon}
+                            className={
+                              isChannel ? "h-6 w-6 shrink-0 text-brand-on-surface" : "h-5 w-5"
+                            }
+                          />
+                          {isChannel && (
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-display text-[15px] font-bold leading-tight">
+                                YouTube
+                              </span>
+                              <span className="block text-xs text-muted-foreground">
+                                Un vote expliqué en une minute
+                              </span>
+                            </span>
+                          )}
+                          {isChannel && (
+                            <ChevronRight
+                              className="h-5 w-5 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
 
               <Link
                 href="/signaler"
