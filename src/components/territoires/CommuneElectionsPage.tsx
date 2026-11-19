@@ -6,21 +6,21 @@ import { formatPct } from "@/lib/territoires/commune-display";
 import {
   decidingTour,
   SCRUTIN_TYPE_LABELS,
-  SCRUTIN_TYPE_PARAMS,
   type CommuneScrutin,
   type ScrutinType,
 } from "@/lib/territoires/commune-elections";
 import {
   TERRITOIRES_DONNEES_PATH,
   TERRITOIRES_PATH,
-  territoireCommuneElectionsPath,
   territoireCommunePath,
 } from "@/lib/territoires/paths";
 import { formatDate } from "@/lib/utils";
 
 /**
  * Dedicated elections page of a commune (#1052; kit ElectionsHistorique.html and its mobile
- * version). Server components only: the filter is a set of links, the detail a native `<details>`.
+ * version). Server components only: the types are anchors on one page, the detail a native
+ * `<details>`. There is deliberately no `?type=` filter: reading the query string made the page
+ * uncacheable, and every address of every commune was then rendered on each visit.
  */
 
 const LINK = "underline underline-offset-2 hover:text-primary";
@@ -66,14 +66,6 @@ export function CommuneElectionsBandeau({ inseeCode, name }: { inseeCode: string
   );
 }
 
-/** Reads the `type` query value; anything unknown means "all". */
-export function scrutinTypeFromParam(value: string | undefined): ScrutinType | null {
-  const found = (Object.keys(SCRUTIN_TYPE_PARAMS) as ScrutinType[]).find(
-    (t) => SCRUTIN_TYPE_PARAMS[t] === value
-  );
-  return found ?? null;
-}
-
 function years(scrutins: CommuneScrutin[]): string {
   const ys = scrutins.map((s) => s.date?.slice(0, 4)).filter((y): y is string => !!y);
   if (ys.length === 0) return "";
@@ -82,49 +74,22 @@ function years(scrutins: CommuneScrutin[]): string {
   return min === max ? ` en ${min}` : ` entre ${min} et ${max}`;
 }
 
-function Filters({
-  inseeCode,
-  name,
-  scrutins,
-  active,
-}: {
-  inseeCode: string;
-  name: string;
-  scrutins: CommuneScrutin[];
-  active: ScrutinType | null;
-}) {
-  const base = territoireCommuneElectionsPath(inseeCode, name);
+/** Jump links to each type of ballot. Shown only when the page has more than one type. */
+function TypeLinks({ scrutins }: { scrutins: CommuneScrutin[] }) {
   const types = (Object.keys(SCRUTIN_TYPE_LABELS) as ScrutinType[]).filter((t) =>
     scrutins.some((s) => s.type === t)
   );
-  const items = [
-    { href: base, label: "Tous", count: scrutins.length, current: active === null },
-    ...types.map((t) => ({
-      href: `${base}?type=${SCRUTIN_TYPE_PARAMS[t]}`,
-      label: SCRUTIN_TYPE_LABELS[t],
-      count: scrutins.filter((s) => s.type === t).length,
-      current: active === t,
-    })),
-  ];
+  if (types.length < 2) return null;
   const chip =
-    "inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+    "inline-flex min-h-11 items-center rounded-full border border-primary/30 bg-card px-4 text-sm font-medium text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
   return (
-    <nav aria-label="Filtrer par type de scrutin" className="mt-4">
+    <nav aria-label="Aller à un type de scrutin" className="mt-4">
       <ul className="flex flex-wrap gap-2">
-        {items.map((i) => (
-          <li key={i.label}>
-            <Link
-              href={i.href}
-              prefetch={false}
-              aria-current={i.current ? "page" : undefined}
-              className={`${chip} ${
-                i.current
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-primary/30 bg-card text-primary hover:bg-primary/5"
-              }`}
-            >
-              {`${i.label} (${i.count})`}
-            </Link>
+        {types.map((t) => (
+          <li key={t}>
+            <a href={`#type-${t}`} className={chip}>
+              {`${SCRUTIN_TYPE_LABELS[t]} (${scrutins.filter((s) => s.type === t).length})`}
+            </a>
           </li>
         ))}
       </ul>
@@ -193,17 +158,10 @@ function ComparisonTable({ type, scrutins }: { type: ScrutinType; scrutins: Comm
   );
 }
 
-export function CommuneElectionsSections({
-  data,
-  active,
-}: {
-  data: CommuneElections;
-  active: ScrutinType | null;
-}) {
+export function CommuneElectionsSections({ data }: { data: CommuneElections }) {
   const { commune, scrutins } = data;
-  const shown = active ? scrutins.filter((s) => s.type === active) : scrutins;
   const types = (Object.keys(SCRUTIN_TYPE_LABELS) as ScrutinType[]).filter((t) =>
-    shown.some((s) => s.type === t)
+    scrutins.some((s) => s.type === t)
   );
   const n = scrutins.length;
   return (
@@ -214,21 +172,16 @@ export function CommuneElectionsSections({
         data.gouv.fr, avec la source de chaque scrutin indiquée dans son détail, sans étiquette ni
         lecture politique.
       </p>
-      <Filters
-        inseeCode={commune.inseeCode}
-        name={commune.name}
-        scrutins={scrutins}
-        active={active}
-      />
+      <TypeLinks scrutins={scrutins} />
 
       <div className="mt-6 space-y-8">
         {types.map((type) => {
-          const group = shown.filter((s) => s.type === type);
+          const group = scrutins.filter((s) => s.type === type);
           return (
             <section key={type} aria-labelledby={`type-${type}`}>
               <h2
                 id={`type-${type}`}
-                className="font-display text-xl font-bold text-primary md:sr-only"
+                className="scroll-mt-24 font-display text-xl font-bold text-primary md:sr-only"
               >
                 {SCRUTIN_TYPE_LABELS[type]}
               </h2>
@@ -236,7 +189,7 @@ export function CommuneElectionsSections({
               <ul className="mt-3 space-y-2">
                 {group.map((s) => (
                   <li key={s.slug}>
-                    <ScrutinLine scrutin={s} defaultOpen={s === shown[0]} />
+                    <ScrutinLine scrutin={s} defaultOpen={s === scrutins[0]} />
                   </li>
                 ))}
               </ul>
@@ -248,7 +201,12 @@ export function CommuneElectionsSections({
       <p className="mt-8 max-w-3xl text-sm text-muted-foreground">
         Les scrutins absents de cette page ne sont pas importés au niveau de la commune : ils sont
         non établis, jamais comptés comme zéro.{" "}
-        <a href={`/api/v1/territoires/communes/${commune.inseeCode}`} className={`${TAP} ${LINK}`}>
+        {/* nofollow: crawlers followed this link from every commune, one API call each. */}
+        <a
+          href={`/api/v1/territoires/communes/${commune.inseeCode}`}
+          rel="nofollow"
+          className={`${TAP} ${LINK}`}
+        >
           Données de la commune (JSON)
         </a>{" "}
         <Link href={TERRITOIRES_DONNEES_PATH} prefetch={false} className={`${TAP} ${LINK}`}>
