@@ -106,7 +106,7 @@ export default async function PresidentialHubPage() {
             <BandeauSurtitre>Présidentielle 2027</BandeauSurtitre>
             <h1
               id="hub-title"
-              className="font-display text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl md:text-5xl"
+              className="font-display text-xl font-extrabold leading-tight tracking-tight sm:text-3xl md:text-5xl"
             >
               Présidentielle 2027 : programmes et mesures
             </h1>

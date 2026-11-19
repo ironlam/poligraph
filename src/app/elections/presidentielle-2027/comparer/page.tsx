@@ -96,7 +96,7 @@ export default async function PresidentialComparisonPage({
           <p className="text-sm font-bold uppercase tracking-widest text-brand max-sm:hidden">
             Présidentielle 2027
           </p>
-          <h1 className="font-display text-2xl font-extrabold leading-tight tracking-tight sm:mt-2 sm:text-3xl md:text-5xl">
+          <h1 className="font-display text-xl font-extrabold leading-tight tracking-tight sm:mt-2 sm:text-3xl md:text-5xl">
             Comparer les mesures des candidats
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground-strong max-sm:hidden">

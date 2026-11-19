@@ -60,7 +60,7 @@ export default async function ThemesIndexPage() {
 
       <div className="mt-4 space-y-4 sm:mt-8 sm:space-y-6">
         <header className="max-w-3xl space-y-2">
-          <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl md:text-4xl">
+          <h1 className="font-display text-xl font-extrabold tracking-tight sm:text-3xl md:text-4xl">
             Programmes par thème
           </h1>
           {/* From sm up: on a phone the list starts right under the title, and the row itself

@@ -78,7 +78,7 @@ export default async function PresidentialCandidatesPage() {
         <p className="hidden text-xs font-bold uppercase tracking-widest text-brand sm:block">
           Présidentielle 2027
         </p>
-        <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl md:text-5xl">
+        <h1 className="font-display text-xl font-extrabold tracking-tight sm:text-3xl md:text-5xl">
           Candidatures à la présidentielle 2027
         </h1>
         {/* The caveat is a matter of method and stays at every width; a phone gets it in one
