@@ -33,7 +33,9 @@ export const VOTES_LISTING_FILTER_KEYS = [
 
 export const DOSSIERS_LISTING_FILTER_KEYS = ["status", "theme", "sort"] as const;
 
-export const PRESIDENTIAL_CANDIDATES_FILTER_KEYS = ["q", "statut", "propositions"] as const;
+// `tri` is an order, not a filter, and it belongs here all the same: a sorted URL is the same
+// directory in another order, so it stays noindex,follow like any other variant.
+export const PRESIDENTIAL_CANDIDATES_FILTER_KEYS = ["q", "statut", "propositions", "tri"] as const;
 
 /**
  * /politiques/gouvernements: search and presidency filters. `annee` (former year filter) is no

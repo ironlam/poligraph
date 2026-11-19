@@ -870,3 +870,29 @@ describe("doctrine : parrainages présidentiels", () => {
     expect(src).toContain("parrainagesSitemapEntries(SITE_URL, slug,");
   });
 });
+
+describe("doctrine : l'annuaire des candidats ne lit ni n'écrit de paramètre hors périmètre", () => {
+  // A new key in the address (a sort, a view) creates a new URL of the same directory. It has to
+  // be declared in PRESIDENTIAL_CANDIDATES_FILTER_KEYS, or that URL is indexable: `tri` shipped
+  // without it in #1400. Comments are stripped so a key named in prose does not count.
+  const code = readFileSync(
+    join(
+      process.cwd(),
+      "src/app/elections/presidentielle-2027/_components/CandidacyFieldBrowser.tsx"
+    ),
+    "utf8"
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+  const keys = [...code.matchAll(/\.(?:get|set|delete)\(\s*"([^"]+)"/g)].map((match) => match[1]);
+
+  it("trouve bien les paramètres du composant", () => {
+    expect(new Set(keys)).toEqual(new Set(["q", "statut", "propositions", "tri"]));
+  });
+
+  it("déclare chacun d'eux dans le périmètre noindex", () => {
+    for (const key of new Set(keys)) {
+      expect(PRESIDENTIAL_CANDIDATES_FILTER_KEYS as readonly string[]).toContain(key);
+    }
+  });
+});
