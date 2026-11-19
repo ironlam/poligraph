@@ -92,9 +92,10 @@ describe("HistoricalGroupPositions : décompte présenté", () => {
     }
     // Version mobile : les quatre décomptes sont écrits.
     const list = screen.getByRole("list", { name: "Votes par groupe" });
-    expect(list.textContent).toMatch(/Pour 21 · Contre 2 · Abstentions 1 · Non-votants 3/);
+    const counts = [...list.querySelectorAll("[data-count]")].map((item) => item.textContent);
+    expect(counts).toEqual(["Pour21", "Contre2", "Abstentions1", "Non-votants3"]);
     // The hyphen of « Non-votants » must not be a line break on a narrow screen.
-    expect(within(list).getByText("Non-votants 3")).toHaveClass("whitespace-nowrap");
+    expect(list.querySelector('[data-count="non-votants"]')).toHaveClass("whitespace-nowrap");
   });
 
   it("n'affiche aucune position majoritaire", () => {
