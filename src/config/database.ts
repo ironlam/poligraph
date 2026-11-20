@@ -109,6 +109,23 @@ export function resolveConnectionTimeout(isWebRuntime: boolean): number {
 export const POOL_IDLE_TIMEOUT_MS = 2_000;
 
 /**
+ * Waits before asking the pooler again after it refused a new connection (client ceiling reached,
+ * or Postgres not reached in time). One entry per retry, so three retries after the first attempt.
+ *
+ * On 2026-11-16 a burst started 267 instances within a minute, each with its own pool, and the
+ * pooler refused past its 400 clients: every refused render became a 500, all inside that minute.
+ * Idle connections close after POOL_IDLE_TIMEOUT_MS, so slots free up within seconds. The waits add
+ * up to 2.3 s at most, and each one is shortened by a random share so that instances refused
+ * together do not come back together. The connection timeout bounds the retries as a whole: none
+ * starts once that much time has passed since the first attempt (see ObservedPool).
+ *
+ * Not measured: whether 2.3 s would have been enough on that day. The list is short on purpose,
+ * because on Vercel waiting is billed, and a saturation that lasts should fail rather than hold
+ * every instance up.
+ */
+export const POOLER_REFUSAL_RETRY_DELAYS_MS: readonly number[] = [200, 600, 1_500];
+
+/**
  * Backends Supavisor opens toward Postgres for this user+db, read from the Supabase dashboard on
  * 2026-09-22 (Small compute). Shared by every process, so it is the ceiling that actually binds.
  */
