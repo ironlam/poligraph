@@ -100,6 +100,16 @@ Unité : une PR de moins de 400 lignes avec ses tests.
   (12 présidents reliés sur 118).
 - Prochain lot : P, parrainages sur la liste 2022.
 
+### État au 20 novembre 2026
+
+- Lot P, étape 2022 : en production (PR #1366 à #1382, #1388 à #1390). 13 427 présentations, 64
+  candidats, totaux identiques au fichier. 9 177 communes résolues sur 9 180 maires et maires
+  délégués. 3 781 élus reliés à une fiche, aucun conseiller départemental ou régional.
+- Indexation : tableau de bord, 110 pages département et 17 pages candidat (seuil de 100
+  présentations) au sitemap ; page 2027 d'attente et page de méthode en `noindex,follow`.
+- Fil : 68 219 événements en base (PR #1394). Fiches des présidents de conseil : PR #1395.
+- Prochain lot : C, comptes de la collectivité (OFGL), pages de méthode d'abord (D28).
+
 ### Parrainages, liste 2022 (vérifiée le 17 novembre 2026)
 
 Jeu « Parrainages des candidats à l'élection présidentielle française de 2022 », Conseil
