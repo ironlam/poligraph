@@ -72,28 +72,56 @@ export class ObservedPool extends Pool {
   // connection, so trying again cannot run a statement twice.
   override connect: Pool["connect"] = ((...args: unknown[]) => {
     const callback = args[0];
-    const delays = this.refusalRetryDelaysMs;
+    const startedAt = Date.now();
 
     if (typeof callback === "function") {
       const invoke = callback as Invocation;
       const attempt = (retries: number): unknown =>
-        (this.acquire as Invocation)(function (this: unknown, ...callbackArgs: unknown[]) {
-          const wait = refusalRetryDelay(callbackArgs[0], retries, delays);
-          if (wait === null) return invoke.apply(this, callbackArgs);
-          setTimeout(() => attempt(retries + 1), wait);
+        (this.acquire as Invocation)((...callbackArgs: unknown[]) => {
+          const wait = this.refusalRetryWait(callbackArgs[0], retries, startedAt);
+          if (wait === null) return invoke(...callbackArgs);
+          setTimeout(() => {
+            // Closed while waiting: hand back the refusal rather than an error about the closing.
+            if (this.ending) invoke(...callbackArgs);
+            else attempt(retries + 1);
+          }, wait);
         });
       return attempt(0);
     }
 
     const attempt = (retries: number): Promise<unknown> =>
       ((this.acquire as Invocation)() as Promise<unknown>).catch(async (error: unknown) => {
-        const wait = refusalRetryDelay(error, retries, delays);
+        const wait = this.refusalRetryWait(error, retries, startedAt);
         if (wait === null) throw error;
         await new Promise((resolve) => setTimeout(resolve, wait));
+        if (this.ending) throw error;
         return attempt(retries + 1);
       });
     return attempt(0);
   }) as Pool["connect"];
+
+  /**
+   * The wait before the next attempt, or null when the error should reach the caller as it is.
+   *
+   * `connectionTimeoutMillis` restarts with every attempt, so the retries get a budget of their
+   * own: no new attempt starts once the time spent since the first one, wait included, reaches
+   * that timeout. The call as a whole therefore lasts at most twice the timeout, not once per
+   * attempt.
+   */
+  private refusalRetryWait(error: unknown, retries: number, startedAt: number): number | null {
+    const delay = this.refusalRetryDelaysMs[retries];
+    if (delay === undefined || this.ending || !isPoolerRefusal(error)) return null;
+
+    const wait = Math.round(delay * (0.5 + Math.random() / 2));
+    const budget = this.options.connectionTimeoutMillis;
+    if (budget && Date.now() - startedAt + wait >= budget) return null;
+
+    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs, Sentry breadcrumb)
+    console.warn(
+      `[pg-pool] refus du pooler, nouvelle tentative ${retries + 1}/${this.refusalRetryDelaysMs.length} dans ${wait}ms`
+    );
+    return wait;
+  }
 
   // Pool.query acquires through this public callback API. A queued acquisition otherwise runs
   // under the releasing operation's context. Bind even the empty/unsampled context to prevent leaks.
@@ -132,22 +160,6 @@ export class ObservedPool extends Pool {
       }
     );
   }) as Pool["connect"];
-}
-
-/** The wait before the next attempt, or null when the error should reach the caller as it is. */
-function refusalRetryDelay(
-  error: unknown,
-  retries: number,
-  delaysMs: readonly number[]
-): number | null {
-  const delay = delaysMs[retries];
-  if (delay === undefined || !isPoolerRefusal(error)) return null;
-  const wait = Math.round(delay * (0.5 + Math.random() / 2));
-  // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs, Sentry breadcrumb)
-  console.warn(
-    `[pg-pool] refus du pooler, nouvelle tentative ${retries + 1}/${delaysMs.length} dans ${wait}ms`
-  );
-  return wait;
 }
 
 /** Exported so the threshold and the reported line can be asserted without a database. */

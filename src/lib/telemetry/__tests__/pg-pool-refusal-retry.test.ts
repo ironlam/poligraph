@@ -31,7 +31,7 @@ const ACCEPT = Buffer.from([0x52, 0, 0, 0, 8, 0, 0, 0, 0, 0x5a, 0, 0, 0, 5, 0x49
  * Speaks just enough of the PostgreSQL startup exchange to answer the way the pooler does: the
  * first `refusals` connections get an error at startup, the following ones are accepted.
  */
-async function startPooler(refusals: Refusal[]) {
+async function startPooler(refusals: Refusal[], answerAfterMs = 0) {
   const sockets = new Set<Socket>();
   let attempts = 0;
   const server: Server = createServer((socket) => {
@@ -40,8 +40,10 @@ async function startPooler(refusals: Refusal[]) {
     socket.on("error", () => {});
     socket.once("data", () => {
       const refusal = refusals[attempts++];
-      if (refusal) socket.end(errorResponse(refusal));
-      else socket.write(ACCEPT);
+      setTimeout(() => {
+        if (refusal) socket.end(errorResponse(refusal));
+        else socket.write(ACCEPT);
+      }, answerAfterMs);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -58,10 +60,21 @@ async function startPooler(refusals: Refusal[]) {
 let pooler: Awaited<ReturnType<typeof startPooler>> | undefined;
 let pool: ObservedPool | undefined;
 
-async function setup(refusals: Refusal[], retryDelaysMs = [5, 5, 5]) {
-  pooler = await startPooler(refusals);
+async function setup(
+  refusals: Refusal[],
+  { retryDelaysMs = [5, 5, 5], answerAfterMs = 0, connectionTimeoutMillis = 0 } = {}
+) {
+  pooler = await startPooler(refusals, answerAfterMs);
   pool = new ObservedPool(
-    { host: "127.0.0.1", port: pooler.port, user: "u", database: "d", ssl: false, max: 2 },
+    {
+      host: "127.0.0.1",
+      port: pooler.port,
+      user: "u",
+      database: "d",
+      ssl: false,
+      max: 2,
+      connectionTimeoutMillis,
+    },
     retryDelaysMs
   );
   // A client dropped by the fake server at teardown must not surface as an unhandled error.
@@ -94,16 +107,24 @@ describe("ObservedPool face à un refus du pooler", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const { pool, pooler } = await setup([BACKEND_TIMEOUT]);
 
-    const outcome = await new Promise<{ error: unknown; released: boolean }>((resolve) => {
-      pool.connect((error, client, done) => {
+    const calls: unknown[] = [];
+    await new Promise<void>((resolve) => {
+      const returned = pool.connect((error, client, done) => {
+        calls.push(error);
+        expect(client).toBeDefined();
         done();
-        resolve({ error, released: client !== undefined });
+        resolve();
       });
+      expect(returned).toBeUndefined();
     });
+    // Leave room for a second, unwanted call of the callback.
+    await new Promise((resolve) => setTimeout(resolve, 30));
 
-    expect(outcome.error).toBeFalsy();
-    expect(outcome.released).toBe(true);
+    expect(calls).toEqual([undefined]);
     expect(pooler.attempts()).toBe(2);
+    // Released for real: the client is back in the pool and nobody is waiting for it.
+    expect(pool.idleCount).toBe(1);
+    expect(pool.waitingCount).toBe(0);
   });
 
   it("rend l'erreur d'origine quand le pooler refuse jusqu'au bout", async () => {
@@ -113,6 +134,34 @@ describe("ObservedPool face à un refus du pooler", () => {
     await expect(pool.connect()).rejects.toThrow("EMAXCONN");
     // One first attempt, then one per configured delay, and no more.
     expect(pooler.attempts()).toBe(4);
+  });
+
+  it("ne relance plus une fois le délai de connexion écoulé", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Each refusal takes 200 ms to arrive and the budget is 300 ms: the first leaves room for a
+    // retry, the second arrives past the budget, and the two remaining retries must not start.
+    const { pool, pooler } = await setup([EMAXCONN, EMAXCONN, EMAXCONN, EMAXCONN], {
+      answerAfterMs: 200,
+      connectionTimeoutMillis: 300,
+    });
+
+    await expect(pool.connect()).rejects.toThrow("EMAXCONN");
+    expect(pooler.attempts()).toBe(2);
+  });
+
+  it("rend le refus sans réessayer quand le pool est fermé pendant l'attente", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { pool, pooler } = await setup([EMAXCONN, EMAXCONN], { retryDelaysMs: [200] });
+
+    const acquisition = pool.connect();
+    const settled = expect(acquisition).rejects.toThrow("EMAXCONN");
+    await vi.waitFor(() => expect(pooler.attempts()).toBe(1));
+    // Let the refusal reach the pool, which then starts waiting, and close during that wait.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await pool.end();
+
+    await settled;
+    expect(pooler.attempts()).toBe(1);
   });
 
   it("ne réessaie pas une erreur qui n'est pas un refus du pooler", async () => {
@@ -135,11 +184,16 @@ describe("isPoolerRefusal", () => {
     ).toBe(true);
   });
 
-  it("laisse passer le reste, y compris un autre 08006", () => {
-    expect(isPoolerRefusal(new Error("timeout exceeded when trying to connect"))).toBe(false);
-    expect(isPoolerRefusal(Object.assign(new Error("connection failure"), { code: "08006" }))).toBe(
-      false
-    );
+  it("laisse passer le reste, y compris un 08006 du pooler pour un autre motif", () => {
+    const refusal = (message: string, code?: string) => Object.assign(new Error(message), { code });
+    expect(isPoolerRefusal(refusal("timeout exceeded when trying to connect"))).toBe(false);
+    expect(isPoolerRefusal(refusal("connection failure", "08006"))).toBe(false);
+    expect(
+      isPoolerRefusal(refusal("Failed to connect to database: {:error, :econnrefused}", "08006"))
+    ).toBe(false);
+    // The word alone is not enough: the pooler sends it with its own SQLSTATE.
+    expect(isPoolerRefusal(refusal("EMAXCONN", "28P01"))).toBe(false);
+    expect(isPoolerRefusal(refusal(EMAXCONN.message))).toBe(false);
     expect(isPoolerRefusal(undefined)).toBe(false);
   });
 });

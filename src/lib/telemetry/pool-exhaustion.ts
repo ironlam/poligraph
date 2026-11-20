@@ -30,20 +30,23 @@ export function isPoolExhaustedError(error: unknown): boolean {
   return false;
 }
 
-/** Supavisor failing to reach Postgres for a new client: SQLSTATE 08006 with this message. */
-const BACKEND_UNREACHABLE_CODE = "08006";
-const BACKEND_UNREACHABLE_MESSAGE = "Failed to connect to database";
+/** SQLSTATE the pooler sends with EMAXCONN. */
+const POOL_EXHAUSTED_SQLSTATE = "XX000";
+/** The pooler giving up on reaching Postgres for a new client: SQLSTATE 08006 with this message. */
+const BACKEND_TIMEOUT_SQLSTATE = "08006";
+const BACKEND_TIMEOUT_MESSAGE = "Failed to connect to database: {:error, :timeout}";
 
 /**
  * A refusal by the pooler that a later attempt can outlive: its client ceiling is reached, or it
- * could not reach Postgres in time. Read on the pg error itself, before the driver adapter wraps it.
- * Any other 08006 is left alone: only the pooler's own message is known to be transient.
+ * did not reach Postgres in time. Read on the pg error itself, before the driver adapter wraps it.
+ * Both are matched on code and message together, exactly as production reported them: a refusal
+ * with another reason may be permanent, and asking again would only delay the failure.
  */
 export function isPoolerRefusal(error: unknown): boolean {
   const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
   if (typeof message !== "string") return false;
-  if (message.includes(POOL_EXHAUSTED_CODE)) return true;
-  return code === BACKEND_UNREACHABLE_CODE && message.includes(BACKEND_UNREACHABLE_MESSAGE);
+  if (code === POOL_EXHAUSTED_SQLSTATE) return message.includes(POOL_EXHAUSTED_CODE);
+  return code === BACKEND_TIMEOUT_SQLSTATE && message.includes(BACKEND_TIMEOUT_MESSAGE);
 }
 
 /** Opens at most once per interval. `now` is injectable so the window is testable without waiting. */

@@ -115,8 +115,9 @@ export const POOL_IDLE_TIMEOUT_MS = 2_000;
  * On 2026-11-16 a burst started 267 instances within a minute, each with its own pool, and the
  * pooler refused past its 400 clients: every refused render became a 500, all inside that minute.
  * Idle connections close after POOL_IDLE_TIMEOUT_MS, so slots free up within seconds. The waits add
- * up to 2.3 s at most, well inside WEB_CONNECTION_TIMEOUT_MS, and each one is shortened by a random
- * share so that instances refused together do not come back together.
+ * up to 2.3 s at most, and each one is shortened by a random share so that instances refused
+ * together do not come back together. The connection timeout bounds the retries as a whole: none
+ * starts once that much time has passed since the first attempt (see ObservedPool).
  *
  * Not measured: whether 2.3 s would have been enough on that day. The list is short on purpose,
  * because on Vercel waiting is billed, and a saturation that lasts should fail rather than hold
