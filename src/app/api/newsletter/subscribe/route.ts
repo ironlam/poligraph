@@ -4,6 +4,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withValidation } from "@/lib/security/validate";
 import { subscribeSchema } from "@/lib/security/schemas/newsletter";
 import { upsertSubscriber } from "@/lib/newsletter/subscribe";
+import { describeMailjetError } from "@/lib/email/mailjet-error";
 
 export const POST = withPublicRoute(
   withValidation(subscribeSchema, async (_req, _ctx, body) => {
@@ -52,7 +53,7 @@ export const POST = withPublicRoute(
           text: renderConfirmDoiText({ confirmUrl }),
         });
       } catch (error) {
-        console.error("[Newsletter] Confirmation email error:", error);
+        console.error("[Newsletter] Confirmation email error:", describeMailjetError(error));
         return NextResponse.json(
           {
             error:
