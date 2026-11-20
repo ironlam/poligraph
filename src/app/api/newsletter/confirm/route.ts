@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { db } from "@/lib/db";
 import { inngest } from "@/inngest/client";
+import { describeMailjetError } from "@/lib/email/mailjet-error";
 
 export const GET = withPublicRoute(async (request: NextRequest) => {
   const url = new URL(request.url);
@@ -31,7 +32,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
       const { subscribeToNewsletter } = await import("@/lib/email/mailjet");
       await subscribeToNewsletter(subscriber.email);
     } catch (e) {
-      console.error("[Newsletter] Mailjet list-add after confirm error:", e);
+      console.error("[Newsletter] Mailjet list-add after confirm error:", describeMailjetError(e));
     }
 
     await inngest.send({

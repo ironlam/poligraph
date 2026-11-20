@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { db } from "@/lib/db";
+import { describeMailjetError } from "@/lib/email/mailjet-error";
 
 export const GET = withPublicRoute(async (request: NextRequest) => {
   const url = new URL(request.url);
@@ -25,7 +26,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     const { removeFromList } = await import("@/lib/email/mailjet");
     await removeFromList(subscriber.email);
   } catch (e) {
-    console.error("[Newsletter] Mailjet remove error", e);
+    console.error("[Newsletter] Mailjet remove error", describeMailjetError(e));
   }
 
   return NextResponse.redirect(new URL("/recap?unsubscribed=1", url));

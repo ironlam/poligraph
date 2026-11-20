@@ -1,6 +1,7 @@
 import type { Jsonify } from "inngest/types";
 import { inngest } from "../client";
 import { computeWeeklyConcordance } from "@/lib/newsletter/concordance";
+import { describeMailjetError } from "@/lib/email/mailjet-error";
 import type { PersonalDeputyContext } from "@/lib/email/render-recap";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
@@ -336,7 +337,7 @@ export const sendNewsletter = inngest.createFunction(
           failedEmails.push(...slice.map((m) => m.to));
           console.error(
             `[Newsletter] Batch ${Math.floor(i / BATCH_SIZE)} failed for ${slice.length} recipients`,
-            e
+            describeMailjetError(e)
           );
         }
       }
