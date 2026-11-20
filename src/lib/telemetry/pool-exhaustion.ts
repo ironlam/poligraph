@@ -30,6 +30,22 @@ export function isPoolExhaustedError(error: unknown): boolean {
   return false;
 }
 
+/** Supavisor failing to reach Postgres for a new client: SQLSTATE 08006 with this message. */
+const BACKEND_UNREACHABLE_CODE = "08006";
+const BACKEND_UNREACHABLE_MESSAGE = "Failed to connect to database";
+
+/**
+ * A refusal by the pooler that a later attempt can outlive: its client ceiling is reached, or it
+ * could not reach Postgres in time. Read on the pg error itself, before the driver adapter wraps it.
+ * Any other 08006 is left alone: only the pooler's own message is known to be transient.
+ */
+export function isPoolerRefusal(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
+  if (typeof message !== "string") return false;
+  if (message.includes(POOL_EXHAUSTED_CODE)) return true;
+  return code === BACKEND_UNREACHABLE_CODE && message.includes(BACKEND_UNREACHABLE_MESSAGE);
+}
+
 /** Opens at most once per interval. `now` is injectable so the window is testable without waiting. */
 export function createReportGate(intervalMs: number, now: () => number = Date.now) {
   let lastOpenedAt = Number.NEGATIVE_INFINITY;

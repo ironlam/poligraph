@@ -8,7 +8,8 @@ import {
   startLoopLagProbe,
   type AcquisitionSample,
 } from "./pool-acquisition";
-import { createReportGate } from "./pool-exhaustion";
+import { POOLER_REFUSAL_RETRY_DELAYS_MS } from "@/config/database";
+import { createReportGate, isPoolerRefusal } from "./pool-exhaustion";
 
 /** How often one process may send a slow acquisition to Sentry. */
 export const SLOW_ACQUISITION_REPORT_INTERVAL_MS = 10 * 60_000;
@@ -59,16 +60,47 @@ class ObservedClient extends Client {
 }
 
 export class ObservedPool extends Pool {
-  constructor(config: PoolConfig) {
+  constructor(
+    config: PoolConfig,
+    private readonly refusalRetryDelaysMs: readonly number[] = POOLER_REFUSAL_RETRY_DELAYS_MS
+  ) {
     super({ ...config, Client: ObservedClient });
   }
+
+  // A refusal by the pooler is transient (see POOLER_REFUSAL_RETRY_DELAYS_MS): ask again a few
+  // times before letting the error reach the caller. Nothing has been sent on a refused
+  // connection, so trying again cannot run a statement twice.
+  override connect: Pool["connect"] = ((...args: unknown[]) => {
+    const callback = args[0];
+    const delays = this.refusalRetryDelaysMs;
+
+    if (typeof callback === "function") {
+      const invoke = callback as Invocation;
+      const attempt = (retries: number): unknown =>
+        (this.acquire as Invocation)(function (this: unknown, ...callbackArgs: unknown[]) {
+          const wait = refusalRetryDelay(callbackArgs[0], retries, delays);
+          if (wait === null) return invoke.apply(this, callbackArgs);
+          setTimeout(() => attempt(retries + 1), wait);
+        });
+      return attempt(0);
+    }
+
+    const attempt = (retries: number): Promise<unknown> =>
+      ((this.acquire as Invocation)() as Promise<unknown>).catch(async (error: unknown) => {
+        const wait = refusalRetryDelay(error, retries, delays);
+        if (wait === null) throw error;
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        return attempt(retries + 1);
+      });
+    return attempt(0);
+  }) as Pool["connect"];
 
   // Pool.query acquires through this public callback API. A queued acquisition otherwise runs
   // under the releasing operation's context. Bind even the empty/unsampled context to prevent leaks.
   //
   // The timing wrapper goes inside the binding, not around it, so the whole call still runs in the
   // caller's context rather than the releasing operation's.
-  override connect: Pool["connect"] = ((...args: unknown[]) => {
+  private acquire: Pool["connect"] = ((...args: unknown[]) => {
     const startedAt = Date.now();
     // Read before the acquisition, because that is what decides which pg-pool branch runs: a full
     // pool queues the caller, a pool with room opens a new connection.
@@ -100,6 +132,22 @@ export class ObservedPool extends Pool {
       }
     );
   }) as Pool["connect"];
+}
+
+/** The wait before the next attempt, or null when the error should reach the caller as it is. */
+function refusalRetryDelay(
+  error: unknown,
+  retries: number,
+  delaysMs: readonly number[]
+): number | null {
+  const delay = delaysMs[retries];
+  if (delay === undefined || !isPoolerRefusal(error)) return null;
+  const wait = Math.round(delay * (0.5 + Math.random() / 2));
+  // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs, Sentry breadcrumb)
+  console.warn(
+    `[pg-pool] refus du pooler, nouvelle tentative ${retries + 1}/${delaysMs.length} dans ${wait}ms`
+  );
+  return wait;
 }
 
 /** Exported so the threshold and the reported line can be asserted without a database. */
