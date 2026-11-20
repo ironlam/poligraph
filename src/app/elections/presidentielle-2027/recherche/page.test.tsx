@@ -181,6 +181,14 @@ describe("page complète de recherche présidentielle", () => {
       "/elections/presidentielle-2027/themes/sante"
     );
 
+    // A subtopic belongs to one theme, already named in the header: the candidate leads the group.
+    expect(screen.queryByRole("heading", { level: 3, name: "Santé" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: /Camille Rivière/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Camille Rivière" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/candidats/camille-riviere"
+    );
+
     const measureLink = screen.getByRole("link", { name: "Ouvrir des centres de santé" });
     const newSearch = screen.getByRole("search");
     expect(

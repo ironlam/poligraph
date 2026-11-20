@@ -65,6 +65,82 @@ function CorpusSearchForm({ query, compact = false }: { query: string; compact?:
   );
 }
 
+type CorpusMeasure = NonNullable<
+  Awaited<ReturnType<typeof searchPresidentialCorpus>>
+>["measures"][number];
+
+/**
+ * The candidate leads and the measure reads as body text: with dozens of measures per subtopic,
+ * a bold large measure filled the phone screen and hid who proposes what.
+ */
+function CandidateMeasureGroups({
+  candidates,
+  level,
+}: {
+  candidates: Map<string, CorpusMeasure[]>;
+  level: 3 | 4;
+}) {
+  const Heading = level === 3 ? "h3" : "h4";
+  return (
+    <div className="space-y-6">
+      {[...candidates].map(([candidate, measures]) => {
+        const candidateSlug = measures[0]?.candidateSlug;
+        return (
+          <div key={candidate}>
+            <Heading className="flex items-baseline justify-between gap-3 border-b border-border pb-2">
+              {candidateSlug ? (
+                <Link
+                  href={`/elections/presidentielle-2027/candidats/${candidateSlug}`}
+                  prefetch={false}
+                  className="text-lg font-bold text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  {candidate}
+                </Link>
+              ) : (
+                <span className="text-lg font-bold">{candidate}</span>
+              )}
+              <span className="shrink-0 text-sm font-normal text-muted-foreground">
+                {measures.length} mesure{measures.length > 1 ? "s" : ""}
+              </span>
+            </Heading>
+            <ul className="mt-3 space-y-2">
+              {measures.map((measure) => {
+                const source = measure.sourceLabel
+                  ? MEASURE_SOURCE_KIND_LABELS[measure.sourceLabel]
+                  : "Source de la mesure";
+                return (
+                  <li key={measure.id}>
+                    <article className="rounded-xl border border-border bg-card px-4 py-3">
+                      <Link
+                        href={measure.url}
+                        prefetch={false}
+                        className="block max-w-[75ch] text-base font-medium leading-7 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      >
+                        {measure.text}
+                      </Link>
+                      {measure.sourceUrl && (
+                        <a
+                          href={measure.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${source}, ouvrir dans un nouvel onglet`}
+                          className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline underline-offset-2"
+                        >
+                          {source}
+                        </a>
+                      )}
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default async function PresidentialSearchPage({
   searchParams,
 }: {
@@ -304,53 +380,22 @@ export default async function PresidentialSearchPage({
                   Mesures
                 </h2>
                 <div className="mt-5 space-y-8">
-                  {[...measuresByThemeAndCandidate].map(([theme, candidates]) => (
-                    <section key={theme} aria-labelledby={`theme-${theme}`}>
-                      <h3 id={`theme-${theme}`} className="text-xl font-bold">
-                        {THEME_CATEGORY_LABELS[theme]}
-                      </h3>
-                      <div className="mt-4 space-y-6">
-                        {[...candidates].map(([candidate, measures]) => (
-                          <div key={candidate}>
-                            <h4 className="font-bold text-muted-foreground">{candidate}</h4>
-                            <ul className="mt-2 space-y-3">
-                              {measures.map((measure) => {
-                                const source = measure.sourceLabel
-                                  ? MEASURE_SOURCE_KIND_LABELS[measure.sourceLabel]
-                                  : "Source de la mesure";
-                                return (
-                                  <li key={measure.id}>
-                                    <article className="rounded-2xl border border-border bg-card p-5">
-                                      <Link
-                                        href={measure.url}
-                                        prefetch={false}
-                                        className="inline-flex min-h-11 items-center text-lg font-bold leading-relaxed hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                                      >
-                                        {measure.text}
-                                      </Link>
-                                      {measure.sourceUrl && (
-                                        <p className="mt-3 text-sm">
-                                          <a
-                                            href={measure.sourceUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            aria-label={`${source}, ouvrir dans un nouvel onglet`}
-                                            className="inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-2"
-                                          >
-                                            {source}
-                                          </a>
-                                        </p>
-                                      )}
-                                    </article>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
+                  {[...measuresByThemeAndCandidate].map(([theme, candidates]) =>
+                    isSubtopicBrowse ? (
+                      // The header already names the single theme of a subtopic: repeating it
+                      // here pushed the candidate name, the one comparison key, to third rank.
+                      <CandidateMeasureGroups key={theme} candidates={candidates} level={3} />
+                    ) : (
+                      <section key={theme} aria-labelledby={`theme-${theme}`}>
+                        <h3 id={`theme-${theme}`} className="text-xl font-bold">
+                          {THEME_CATEGORY_LABELS[theme]}
+                        </h3>
+                        <div className="mt-4">
+                          <CandidateMeasureGroups candidates={candidates} level={4} />
+                        </div>
+                      </section>
+                    )
+                  )}
                 </div>
               </section>
             )}
