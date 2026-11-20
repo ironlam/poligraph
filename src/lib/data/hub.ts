@@ -1,8 +1,13 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { MeasureSourceKind, ThemeCategory } from "@/generated/prisma";
-import { MEASURE_SOURCE_KIND_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels";
+import {
+  CANDIDACY_STATUS_LABELS,
+  MEASURE_SOURCE_KIND_LABELS,
+  THEME_CATEGORY_LABELS,
+} from "@/config/labels";
 import { db } from "@/lib/db";
+import { isPrimaryDefeat } from "@/lib/presidentielle/candidacy-outcome";
 import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
 import { themeToSlug } from "@/lib/theme-utils";
 import { observeRead } from "@/lib/telemetry/read-operations";
@@ -11,6 +16,7 @@ import {
   getPublicPresidentialCandidacyField,
   type PublicPresidentialCandidacyFieldEntry,
 } from "./presidential-candidacy-field";
+import { PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE } from "./presidential-candidacy-policy";
 import { loadThemesIndex } from "./themes-index";
 import type { FeaturedSubtopic } from "./themes-index";
 import { loadPresidentialReaderGuideSummaries } from "./presidential-reader-guides";
@@ -191,7 +197,7 @@ async function getHubMeasureContextCached(
   return loadHubMeasureContext(electionId, electionSlug);
 }
 
-/** How many recent measures the hub shows. */
+/** How many recent updates the hub shows. */
 export const HUB_LATEST_MEASURES_LIMIT = 4;
 
 /**
@@ -202,6 +208,7 @@ export const HUB_LATEST_MEASURES_LIMIT = 4;
  * carries the full citation.
  */
 export type HubLatestMeasure = {
+  candidacyId: string;
   slug: string;
   text: string;
   publishedAt: Date;
@@ -274,7 +281,9 @@ async function queryHubLatestMeasures(electionId: string): Promise<HubLatestMeas
     const revision = row.publishedRevision;
     if (revision === null || revision.publishedAt === null || row.candidacy === null) continue;
     const politician = row.candidacy.politician;
+    if (row.candidacyId === null) continue;
     latest.push({
+      candidacyId: row.candidacyId,
       slug: row.slug,
       text: revision.text,
       publishedAt: revision.publishedAt,
@@ -291,28 +300,135 @@ async function queryHubLatestMeasures(electionId: string): Promise<HubLatestMeas
   return latest;
 }
 
-/** Plain async, integration-testable. Pages call `getHubLatestMeasures`, which caches this. */
-export async function loadHubLatestMeasures(electionId: string) {
-  return observeRead("presidential.hub.latest", () => queryHubLatestMeasures(electionId));
+/**
+ * A change of status the hub reports: a candidacy announced, made official, or ended. A move
+ * between "pressentie" and "évoquée" is a degree of sourcing, not news, and stays out.
+ */
+export type HubStatusChange = {
+  candidacyId: string;
+  candidateName: string;
+  politicianSlug: string;
+  photoUrl: string | null;
+  blobPhotoUrl: string | null;
+  /** The site's own wording, primary defeat included: never "retirée" for a lost primary. */
+  statusLabel: string;
+  changedAt: Date;
+  sourceLabel: string;
+  sourceHost: string | null;
+};
+
+export type HubLatestUpdate =
+  | ({ kind: "measure" } & HubLatestMeasure)
+  | ({ kind: "status" } & HubStatusChange);
+
+async function queryHubStatusChanges(electionId: string): Promise<HubStatusChange[]> {
+  const rows = await db.candidacy.findMany({
+    where: {
+      electionId,
+      ...PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE,
+      status: { in: ["DECLARE", "OFFICIAL", "RETIRE"] },
+      statusChangedAt: { not: null },
+    },
+    orderBy: [{ statusChangedAt: "desc" }, { id: "asc" }],
+    // A literal, which is all the read-bounds guard can prove. Above the block's limit on
+    // purpose: the merge below slices to it.
+    take: 10,
+    select: {
+      id: true,
+      candidateName: true,
+      status: true,
+      statusChangedAt: true,
+      sourceUrl: true,
+      sourceLabel: true,
+      presidentialData: { select: { withdrewReason: true } },
+      politician: { select: { slug: true, photoUrl: true, blobPhotoUrl: true } },
+    },
+  });
+  return rows.flatMap((row) => {
+    if (
+      row.politician === null ||
+      row.status === null ||
+      row.statusChangedAt === null ||
+      row.sourceUrl === null ||
+      row.sourceLabel === null
+    ) {
+      return [];
+    }
+    return [
+      {
+        candidacyId: row.id,
+        candidateName: row.candidateName,
+        politicianSlug: row.politician.slug,
+        photoUrl: row.politician.photoUrl,
+        blobPhotoUrl: row.politician.blobPhotoUrl,
+        statusLabel: isPrimaryDefeat(row.status, row.presidentialData?.withdrewReason)
+          ? "Non retenue à la primaire"
+          : CANDIDACY_STATUS_LABELS[row.status],
+        changedAt: row.statusChangedAt,
+        sourceLabel: row.sourceLabel,
+        sourceHost: sourceHost(row.sourceUrl),
+      },
+    ];
+  });
 }
 
-export async function getHubLatestMeasures(electionSlug: string): Promise<HubLatestMeasure[]> {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function updateDate(update: HubLatestUpdate): number {
+  return (update.kind === "status" ? update.changedAt : update.publishedAt).getTime();
+}
+
+/**
+ * One row per candidacy, newest first. When a candidacy has both, its change of status is the
+ * row shown unless a measure was published more than a day after it: a declaration followed the
+ * same afternoon by a batch of measures is still, for the reader, the declaration.
+ */
+export function mergeHubLatestUpdates(
+  measures: HubLatestMeasure[],
+  statusChanges: HubStatusChange[]
+): HubLatestUpdate[] {
+  const byCandidacy = new Map<string, HubLatestUpdate>();
+  for (const measure of measures)
+    byCandidacy.set(measure.candidacyId, { kind: "measure", ...measure });
+  for (const change of statusChanges) {
+    const measure = byCandidacy.get(change.candidacyId);
+    if (measure !== undefined && updateDate(measure) - change.changedAt.getTime() > DAY_MS)
+      continue;
+    byCandidacy.set(change.candidacyId, { kind: "status", ...change });
+  }
+  return [...byCandidacy.values()]
+    .sort((a, b) => updateDate(b) - updateDate(a))
+    .slice(0, HUB_LATEST_MEASURES_LIMIT);
+}
+
+/** Plain async, integration-testable. Pages call `getHubLatestUpdates`, which caches this. */
+export async function loadHubLatestUpdates(electionId: string): Promise<HubLatestUpdate[]> {
+  return observeRead("presidential.hub.latest", async () => {
+    const [measures, statusChanges] = await Promise.all([
+      queryHubLatestMeasures(electionId),
+      queryHubStatusChanges(electionId),
+    ]);
+    return mergeHubLatestUpdates(measures, statusChanges);
+  });
+}
+
+export async function getHubLatestUpdates(electionSlug: string): Promise<HubLatestUpdate[]> {
   const election = await db.election.findUnique({
     where: { slug: electionSlug },
     select: { id: true },
   });
   if (election === null) return [];
-  return getHubLatestMeasuresCached(election.id);
+  return getHubLatestUpdatesCached(election.id);
 }
 
 /**
- * Same tags as the measure context: publishing a measure or a candidacy extension refreshes the
+ * Same tags as the measure context: publishing a measure or changing a candidacy refreshes the
  * block on demand. No short profile, which would re-block the hub's 24 h ISR (AGENTS.md §5).
  */
-async function getHubLatestMeasuresCached(electionId: string): Promise<HubLatestMeasure[]> {
+async function getHubLatestUpdatesCached(electionId: string): Promise<HubLatestUpdate[]> {
   "use cache";
   cacheTag(`election-measures:${electionId}`);
   cacheTag(`election-candidacies:${electionId}`);
   cacheLife("synced");
-  return loadHubLatestMeasures(electionId);
+  return loadHubLatestUpdates(electionId);
 }

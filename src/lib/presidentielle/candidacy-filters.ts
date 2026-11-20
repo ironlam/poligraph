@@ -8,7 +8,8 @@ import type { CandidacyStatus } from "@/generated/prisma";
  * shown, and it deserves a test that does not have to render a list to make its point.
  *
  * The default order is the one the section announces, by surname. Two other orders are offered:
- * by latest publication, which says when we last wrote about a candidacy, and by published
+ * by latest update, which says when we last wrote about a candidacy (a measure published or
+ * revised, or a change of status such as a declaration or a withdrawal), and by published
  * measures. The second was long refused, because it ranks candidacies by the volume of OUR
  * extraction and can read as a leaderboard of programme quality. It was accepted on 2026-11-19 on
  * one condition, which the label and `CANDIDACY_SORT_NOTES` carry: the reader is told that the
@@ -154,16 +155,25 @@ export function parseCandidacySort(raw: string | null): CandidacySort {
 
 /**
  * `candidacies` arrives by surname and that order is kept as is, and as the tie-break: candidacies
- * with nothing published yet close the two other orders, still by surname.
+ * with nothing published yet, and no change of status on record, close the two other orders, still
+ * by surname.
  */
 export function sortCandidacies<
-  T extends { lastMeasurePublishedAt?: Date | null; measureCount: number },
+  T extends {
+    lastMeasurePublishedAt?: Date | null;
+    statusChangedAt?: Date | null;
+    measureCount: number;
+  },
 >(candidacies: readonly T[], sort: CandidacySort): T[] {
   if (sort === "alphabetique") return [...candidacies];
   const rank =
     sort === "mesures"
       ? (candidacy: T) => candidacy.measureCount
-      : (candidacy: T) => candidacy.lastMeasurePublishedAt?.getTime() ?? -Infinity;
+      : (candidacy: T) =>
+          Math.max(
+            candidacy.lastMeasurePublishedAt?.getTime() ?? -Infinity,
+            candidacy.statusChangedAt?.getTime() ?? -Infinity
+          );
   return candidacies
     .map((candidacy, index) => ({ candidacy, index }))
     .sort((a, b) => rank(b.candidacy) - rank(a.candidacy) || a.index - b.index)
