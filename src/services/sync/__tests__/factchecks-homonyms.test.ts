@@ -14,6 +14,10 @@ vi.mock("@/lib/db", () => ({
     },
   },
 }));
+// The theme classifier calls Mistral: never from a test.
+vi.mock("@/services/classify-theme", () => ({
+  classifyFactCheckTheme: vi.fn().mockResolvedValue({ status: "theme", theme: "SANTE" }),
+}));
 vi.mock("@/lib/api", () => ({
   searchClaims: h.searchClaims,
   mapTextualRating: () => "FALSE",
@@ -83,7 +87,12 @@ describe("syncFactchecks et les homonymes", () => {
 
     const stats = await syncFactchecks({ politician: "exemple", limit: 1 });
 
-    const mentions = h.factCheckCreate.mock.calls[0]![0].data.mentions.create;
+    const data = h.factCheckCreate.mock.calls[0]![0].data;
+    // A new fact-check is classified on creation.
+    expect(data.theme).toBe("SANTE");
+    expect(data.themeClassifiedAt).toBeInstanceOf(Date);
+    expect(stats.themesClassified).toBe(1);
+    const mentions = data.mentions.create;
     expect(mentions).toEqual([
       { politicianId: "ministre", matchedName: "Camille Exemple", isClaimant: true },
     ]);

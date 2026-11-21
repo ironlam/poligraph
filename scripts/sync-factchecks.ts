@@ -160,6 +160,8 @@ Environment:
         factChecksCreated: stats.factChecksCreated,
         factChecksSkipped: stats.factChecksSkipped,
         mentionsCreated: stats.mentionsCreated,
+        themesClassified: stats.themesClassified,
+        themeErrors: stats.themeErrors,
         apiErrors: stats.apiErrors,
       },
       errors: stats.errors,

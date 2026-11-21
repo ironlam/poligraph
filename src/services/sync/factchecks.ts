@@ -6,6 +6,11 @@
  */
 
 import { db } from "@/lib/db";
+import {
+  classifyFactCheckTheme,
+  type FactCheckThemeInput,
+  type ThemeCategoryValue,
+} from "@/services/classify-theme";
 import { DataSource } from "@/generated/prisma";
 import { searchClaims, mapTextualRating, fetchPageTitle } from "@/lib/api";
 import { FACTCHECK_RATE_LIMIT_MS } from "@/config/rate-limits";
@@ -120,6 +125,10 @@ export interface FactcheckSyncStats {
   mentionsBlocked: number;
   /** Matches dropped because several published politicians share the matched full name. */
   homonymsSkipped: number;
+  /** New fact-checks given a theme, or classified as having none. */
+  themesClassified: number;
+  /** New fact-checks left unclassified (model failure or answer off the list), for the backfill. */
+  themeErrors: number;
   apiErrors: number;
   errors: string[];
 }
@@ -133,6 +142,34 @@ async function generateUniqueFactCheckSlug(date: Date | null, title: string): Pr
   return generateUniqueSlug(baseSlug, (s) =>
     db.factCheck.findUnique({ where: { slug: s } }).then(Boolean)
   );
+}
+
+/**
+ * Theme fields of a fact-check created by the sync. A failure or an answer off the list leaves the
+ * fact-check unclassified (no `themeClassifiedAt`): the backfill script picks it up later, and the
+ * sync never stops on a classification. The forced rewrite never calls this, so a theme validated
+ * in the admin is never overwritten.
+ */
+export async function classifyNewFactCheck(
+  input: FactCheckThemeInput,
+  stats: Pick<FactcheckSyncStats, "themesClassified" | "themeErrors">
+): Promise<{ theme?: ThemeCategoryValue | null; themeClassifiedAt?: Date }> {
+  try {
+    const result = await classifyFactCheckTheme(input);
+    if (result.status === "invalid") {
+      stats.themeErrors++;
+      return {};
+    }
+    stats.themesClassified++;
+    return {
+      theme: result.status === "theme" ? result.theme : null,
+      themeClassifiedAt: new Date(),
+    };
+  } catch (error) {
+    console.warn(`[factchecks] theme classification failed: ${error}`);
+    stats.themeErrors++;
+    return {};
+  }
 }
 
 type MentionMatch = { politicianId: string; matchedName: string };
@@ -262,6 +299,8 @@ export async function syncFactchecks(
     mentionsCreated: 0,
     mentionsBlocked: 0,
     homonymsSkipped: 0,
+    themesClassified: 0,
+    themeErrors: 0,
     apiErrors: 0,
     errors: [],
   };
@@ -515,8 +554,13 @@ export async function syncFactchecks(
                 // profile, so it is recomputed too.
                 for (const m of previous) previouslyMentionedIds.add(m.politicianId);
               } else {
+                const themeFields = await classifyNewFactCheck(
+                  { title, claimText: claim.text, verdict: review.textualRating },
+                  stats
+                );
                 const written = await db.factCheck.create({
                   data: {
+                    ...themeFields,
                     slug: await generateUniqueFactCheckSlug(reviewDate, title),
                     claimText: claim.text,
                     claimant: claim.claimant || null,
