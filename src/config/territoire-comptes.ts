@@ -122,3 +122,54 @@ export function compteRepereSource(scale: RepereTerritoryKind) {
     methodSlug: null,
   };
 }
+
+/**
+ * Departments whose accounts are not filed under their own code, keyed by the SIREN of the
+ * accounting entity (read in the OFGL departments dataset on 2026-11-22). From 2018 to 2020 the
+ * Bas-Rhin and the Haut-Rhin are both coded "67A"; from 2021 the Collectivité européenne d'Alsace
+ * holds the accounts of both. The Métropole de Lyon ("691", SIREN 200046977) is no Poligraph
+ * department: its rows are reported, not written.
+ */
+export const COMPTES_DEP_BY_SIREN: Readonly<Record<string, readonly string[]>> = {
+  "226700011": ["67"],
+  "226800019": ["68"],
+  "200094332": ["67", "68"],
+};
+
+/** Name shown when the accounts are those of a collectivity other than the territory itself. */
+export const COMPTES_SCOPE_LABELS: Readonly<Record<string, string>> = {
+  "200094332": "Collectivité européenne d'Alsace",
+  "217500016": "Ville de Paris",
+};
+
+/** Why a territory has no accounts row; never shown as a zero. */
+export type CompteAbsenceReason =
+  | "COMPTE_NON_PUBLIE"
+  | "COLLECTIVITE_UNIQUE"
+  | "COMPTES_AU_DEPARTEMENT"
+  | "ARRONDISSEMENT_SANS_COMPTE"
+  | "HORS_PERIMETRE_OFGL"
+  | "POPULATION_NULLE"
+  | "VALEUR_NEGATIVE_SOURCE";
+
+/** Territories with no accounts of their own at a scale, and why (read on 2026-11-22). */
+export const COMPTES_ABSENCES: Readonly<
+  Record<RepereTerritoryKind, Readonly<Record<string, CompteAbsenceReason>>>
+> = {
+  COM: {},
+  // Corse, Martinique and Guyane: one collectivity, filed in the regions dataset.
+  DEP: {
+    "2A": "COLLECTIVITE_UNIQUE",
+    "2B": "COLLECTIVITE_UNIQUE",
+    "972": "COLLECTIVITE_UNIQUE",
+    "973": "COLLECTIVITE_UNIQUE",
+  },
+  // Mayotte: a department that also holds the powers of a region, filed in the departments dataset.
+  REG: { "06": "COMPTES_AU_DEPARTEMENT" },
+};
+
+/** Arrondissements of Paris, Lyon and Marseille: their spending sits in the city's accounts. */
+export const ARRONDISSEMENT_PLM = /^(751(0[1-9]|1[0-9]|20)|6938[1-9]|132(0[1-9]|1[0-6]))$/;
+
+/** Overseas collectivities outside the OFGL datasets: Saint-Pierre-et-Miquelon, Saint-Barthélemy, Saint-Martin and the Pacific (975, 977, 978, 98x). */
+export const HORS_PERIMETRE_OFGL = /^(97[578]|98)/;
