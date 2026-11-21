@@ -2973,6 +2973,8 @@ enum RepereScopeKind {
   UDI
   STATION
   DEPARTEMENT
+  /// The accounting entity of a collectivity, identified by its SIREN (Territoires v2, lot C).
+  COLLECTIVITE
 }
 
 /// A missing figure is a state, never a zero.
