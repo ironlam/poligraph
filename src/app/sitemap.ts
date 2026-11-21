@@ -49,6 +49,7 @@ import {
 } from "@/lib/api/public-contract";
 import {
   FACTCHECK_MIN_CONTEXT_BLOCKS,
+  FACTCHECK_POLITICIAN_MIN_CLAIMS,
   FACTCHECK_RECORD_MIN_TOTAL,
 } from "@/lib/seo/factcheck-robots";
 import { PARTICIPATION_POSITIONS } from "@/lib/data/factcheck-context";
@@ -1094,7 +1095,8 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
 // exactly one claimant on a published profile, then at least FACTCHECK_MIN_CONTEXT_BLOCKS of
 // these blocks: a record of FACTCHECK_RECORD_MIN_TOTAL public fact-checks or more, a sourced 2027
 // candidacy, a vote on the (UTC) day of the claim, a current party. Keep both in sync. The other
-// fact-checks are noindex,follow on the page and stay out of this list.
+// fact-checks are noindex,follow on the page and stay out of this list. The shard also lists the
+// indexable landing pages /factchecks/politique/[slug] (priority 0.6).
 async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache";
   cacheTag(...SITEMAP_SHARD_TAGS[6]);
@@ -1145,10 +1147,34 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
     ORDER BY fc."publishedAt" DESC
   `);
 
-  return factChecks.map((fc) => ({
-    url: `${SITE_URL}/factchecks/${fc.slug}`,
-    lastModified: fc.updatedAt,
-    changeFrequency: "monthly" as const,
-    priority: 0.5,
-  }));
+  // The landing pages /factchecks/politique/[slug], mirroring isIndexableFactCheckPolitician():
+  // a published politician who is the claimant of at least FACTCHECK_POLITICIAN_MIN_CLAIMS public
+  // fact-checks with a slug, counted as the page counts them.
+  const politicians = await db.$queryRaw<Array<{ slug: string; lastModified: Date }>>(Prisma.sql`
+    SELECT p."slug", max(fc."updatedAt") AS "lastModified"
+    FROM "Politician" p
+    JOIN "FactCheckMention" m ON m."politicianId" = p."id" AND m."isClaimant"
+    JOIN "FactCheck" fc ON fc."id" = m."factCheckId"
+    WHERE p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+      AND ${getPublicFactCheckSqlWhere("fc")}
+      AND fc."slug" IS NOT NULL
+    GROUP BY p."id", p."slug"
+    HAVING count(DISTINCT fc."id") >= ${FACTCHECK_POLITICIAN_MIN_CLAIMS}
+    ORDER BY p."slug"
+  `);
+
+  return [
+    ...politicians.map((p) => ({
+      url: `${SITE_URL}/factchecks/politique/${p.slug}`,
+      lastModified: p.lastModified,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+    ...factChecks.map((fc) => ({
+      url: `${SITE_URL}/factchecks/${fc.slug}`,
+      lastModified: fc.updatedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
+    })),
+  ];
 }

@@ -186,7 +186,7 @@ export async function RecordBlock({ context }: ContextProps) {
           </ul>
         </div>
       )}
-      <Link href={`/factchecks?politician=${author.slug}&directOnly=1`} className={linkClass}>
+      <Link href={`/factchecks/politique/${author.slug}`} className={linkClass}>
         Voir ses {record.total.toLocaleString("fr-FR")} déclaration
         {record.total > 1 ? "s" : ""} vérifiée{record.total > 1 ? "s" : ""}
       </Link>

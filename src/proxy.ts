@@ -12,6 +12,7 @@ import {
 import { getUpstashCredentials } from "@/lib/ratelimit/upstash-credentials";
 import { recordApiCall } from "@/lib/api/usage-stats";
 import { buildVotesListingRedirect } from "@/lib/parlement-votes-redirect";
+import { buildFactchecksPoliticianRedirect } from "@/lib/factchecks-politician-redirect";
 import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/auth-token";
 import { getLegacyMeasureId } from "@/lib/presidentielle/measure-route";
 import { departementCommunesRewritePath } from "@/lib/territoires/departement-communes";
@@ -379,6 +380,14 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     const target = buildVotesListingRedirect(request.nextUrl.searchParams);
     if (target) {
       return NextResponse.redirect(new URL(target, request.url), 308);
+    }
+  }
+
+  // The per-politician view of the fact-check listing moved to its own page (HTTP 301).
+  if (pathname === "/factchecks") {
+    const target = buildFactchecksPoliticianRedirect(request.nextUrl.searchParams);
+    if (target) {
+      return NextResponse.redirect(new URL(target, request.url), 301);
     }
   }
 

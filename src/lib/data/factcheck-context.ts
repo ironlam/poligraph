@@ -263,7 +263,9 @@ function dayRange(day: string): { gte: Date; lt: Date } {
 // Queries
 // ---------------------------------------------------------------------------
 
-async function queryAuthor(slug: string): Promise<{ id: string; identity: AuthorIdentity } | null> {
+export async function queryAuthor(
+  slug: string
+): Promise<{ id: string; identity: AuthorIdentity } | null> {
   const base = await getPoliticianFactcheckContext(slug);
   if (!base) return null;
 
@@ -336,7 +338,7 @@ async function queryRecord(
 }
 
 /** Same three conditions as the candidate fiche: no sourced status, no fiche, no block. */
-async function queryCandidacy(politicianId: string): Promise<AuthorCandidacy | null> {
+export async function queryCandidacy(politicianId: string): Promise<AuthorCandidacy | null> {
   const row = await db.candidacy.findFirst({
     where: {
       politicianId,

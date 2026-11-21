@@ -128,10 +128,19 @@ export interface FactcheckSyncStats {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Segments of /factchecks/ that are routes, not fact-checks: a fact-check slug equal to one of them
+ * would be unreachable. A title with no date ("Politique") could produce one.
+ */
+export const RESERVED_FACTCHECK_SLUGS: ReadonlySet<string> = new Set(["politique"]);
+
 async function generateUniqueFactCheckSlug(date: Date | null, title: string): Promise<string> {
   const baseSlug = generateDateSlug(date, title);
-  return generateUniqueSlug(baseSlug, (s) =>
-    db.factCheck.findUnique({ where: { slug: s } }).then(Boolean)
+  return generateUniqueSlug(
+    baseSlug,
+    async (s) =>
+      RESERVED_FACTCHECK_SLUGS.has(s) ||
+      Boolean(await db.factCheck.findUnique({ where: { slug: s } }))
   );
 }
 
