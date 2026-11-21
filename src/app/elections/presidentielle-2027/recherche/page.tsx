@@ -87,12 +87,12 @@ function CandidateMeasureGroups({
         const candidateSlug = measures[0]?.candidateSlug;
         return (
           <div key={candidate}>
-            <Heading className="flex items-baseline justify-between gap-3 border-b border-border pb-2">
+            <Heading className="flex items-center justify-between gap-3 border-b border-border pb-1">
               {candidateSlug ? (
                 <Link
                   href={`/elections/presidentielle-2027/candidats/${candidateSlug}`}
                   prefetch={false}
-                  className="text-lg font-bold text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  className="inline-flex min-h-11 items-center text-lg font-bold text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
                   {candidate}
                 </Link>
@@ -114,7 +114,7 @@ function CandidateMeasureGroups({
                       <Link
                         href={measure.url}
                         prefetch={false}
-                        className="block max-w-[75ch] text-base font-medium leading-7 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        className="flex min-h-11 max-w-[75ch] items-center text-base font-medium leading-7 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                       >
                         {measure.text}
                       </Link>

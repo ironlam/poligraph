@@ -190,6 +190,9 @@ describe("page complète de recherche présidentielle", () => {
     );
 
     const measureLink = screen.getByRole("link", { name: "Ouvrir des centres de santé" });
+    // The smaller type must not shrink the tap area below the 44 px minimum (AGENTS.md).
+    expect(measureLink).toHaveClass("min-h-11");
+    expect(screen.getByRole("link", { name: "Camille Rivière" })).toHaveClass("min-h-11");
     const newSearch = screen.getByRole("search");
     expect(
       screen.getByRole("searchbox", { name: /mesure, un thème ou un candidat/ })
