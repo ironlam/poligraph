@@ -144,7 +144,16 @@ export function createOfglClient(options: OfglClientOptions = {}) {
     }
     const rows = [...first.results];
     for (let offset = OFGL_PAGE_SIZE; offset < first.totalCount; offset += OFGL_PAGE_SIZE) {
-      rows.push(...(await page(datasetId, query, offset)).results);
+      const next = await page(datasetId, query, offset);
+      // A total that moves between pages means rows shifted under the offsets: some may be read
+      // twice or skipped while the count still matches, so the read is not trusted.
+      if (next.totalCount !== first.totalCount) {
+        throw new OfglError(
+          "REPONSE",
+          `Total de ${datasetId} passé de ${first.totalCount} à ${next.totalCount} lignes pendant la lecture : relancer l'import.`
+        );
+      }
+      rows.push(...next.results);
     }
     if (rows.length !== first.totalCount) {
       throw new OfglError(

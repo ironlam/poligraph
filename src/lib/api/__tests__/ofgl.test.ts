@@ -62,7 +62,7 @@ describe("client OFGL", () => {
     expect(calls.map((c) => c.searchParams.get("offset"))).toEqual(["0", "100", "200"]);
   });
 
-  it("signale un total qui change pendant la lecture", async () => {
+  it("signale une page plus courte que le total annoncé", async () => {
     stubFetch((url) =>
       json({
         total_count: 150,
@@ -72,6 +72,22 @@ describe("client OFGL", () => {
     await expect(client().records("ofgl-base-regions-consolidee", {})).rejects.toMatchObject({
       kind: "REPONSE",
     });
+  });
+
+  it("refuse une lecture dont le total change d'une page à l'autre", async () => {
+    // First page announces 200, the second 201: both carry 100 rows, so the count alone matches.
+    stubFetch((url) =>
+      json({
+        total_count: url.searchParams.get("offset") === "0" ? 200 : 201,
+        results: Array(100).fill({}),
+      })
+    );
+    const err = (await client()
+      .records("ofgl-base-regions-consolidee", {})
+      .catch((e: unknown) => e)) as OfglError;
+    expect(err).toBeInstanceOf(OfglError);
+    expect(err.kind).toBe("REPONSE");
+    expect(err.message).toMatch(/passé de 200 à 201/);
   });
 
   it("refuse de paginer au-delà de la fenêtre de l'API et renvoie vers l'export", async () => {
