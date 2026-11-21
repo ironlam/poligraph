@@ -1,0 +1,26 @@
+{
+  "source": "https://data.ofgl.fr/api/explore/v2.1/catalog/datasets/methodologie-ofgl-definitions-agregats-financiers/records",
+  "readAt": "2026-11-21",
+  "results": [
+    {
+      "agregat": "Dépenses d'équipement",
+      "commentaire": "Les dépenses d'équipement constituent un sous-poste des dépenses d'investissement hors remboursements d'emprunts. Elles correspondent aux opérations d'investissement réalisées sur le patrimoine propre de la collectivité."
+    },
+    {
+      "agregat": "Dépenses de fonctionnement",
+      "commentaire": "Les dépenses de fonctionnement comprennent l'ensemble des dépenses récurrentes de la collectivité, nécessaires au fonctionnement de ses services et à la mise en œuvre de ses compétences, ainsi que les charges financières et les dépenses exceptionnelles qui ne modifient pas son patrimoine."
+    },
+    {
+      "agregat": "Encours de dette",
+      "commentaire": "L'encours de dette correspond au stock de dette due par la collectivité au 31 décembre de l'exercice. Il inclut essentiellement les dettes bancaires et assimilées, mais également les dépôts et cautionnements reçus, ainsi que d'autres opérations assimilées à de la dette."
+    },
+    {
+      "agregat": "Epargne brute",
+      "commentaire": "L'épargne brute correspond à la différence entre les recettes et les dépenses de fonctionnement de l'année. Elle constitue l'épargne dégagée par le fonctionnement de la collectivité. Cette épargne finance prioritairement le remboursement du capital de la dette et, le cas échéant, les investissements de la collectivité."
+    },
+    {
+      "agregat": "Frais de personnel",
+      "commentaire": "Les frais de personnel constituent l'un des postes des dépenses de fonctionnement. Ils correspondent au paiement du traitement des agents de la collectivité, ainsi que des charges afférentes."
+    }
+  ]
+}

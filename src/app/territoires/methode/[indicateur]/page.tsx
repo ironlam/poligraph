@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import {
   methodeSources,
   repereMethode,
+  REPERE_FAMILLE_DU,
   REPERE_METHODES,
   repereMethodePath,
 } from "@/config/territoire-methodes";
@@ -29,7 +30,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const m = repereMethode(indicateur);
   if (!m) return { title: "Méthode introuvable", robots: { index: false, follow: true } };
   const title = `Méthode : ${m.title}`;
-  const description = `Ce que montre le chiffre « ${m.title} » du territoire en chiffres, sa source, son calcul et ses limites.`;
+  const description = `Ce que montre le chiffre « ${m.title} » ${REPERE_FAMILLE_DU[m.famille ?? "CHIFFRES"]}, sa source, son calcul et ses limites.`;
   return {
     title,
     description,
@@ -71,6 +72,29 @@ export default async function MethodePage({ params }: PageProps) {
       <Rubrique title="Ce que montre le chiffre">
         <p>{m.montre}</p>
       </Rubrique>
+
+      {m.definition && (
+        <Rubrique title="Définition officielle">
+          <figure>
+            <blockquote className="border-l-4 border-primary/40 pl-4 italic">
+              <p>{m.definition.texte}</p>
+            </blockquote>
+            <figcaption className="mt-2">
+              {m.definition.producteur},{" "}
+              <a
+                href={m.definition.documentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2"
+              >
+                {m.definition.documentTitle}
+                <span className="sr-only"> (nouvel onglet)</span>
+              </a>
+              , lue le {formatDateFrUTC(m.definition.lueLe)}.
+            </figcaption>
+          </figure>
+        </Rubrique>
+      )}
 
       <Rubrique title="Source et licence">
         <ul className="space-y-3">

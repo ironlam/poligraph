@@ -45,7 +45,8 @@ describe("sitemap : rubrique Territoires", () => {
     expect(urls).toContain("/territoires/communes/paris-75056");
     expect(urls).toContain("/territoires/communes/ajaccio-2A004");
     expect(urls).toContain("/territoires/donnees");
-    expect(urls).toHaveLength(2 + 4 + 18 + 2);
+    expect(urls).toContain("/territoires/methode/epargne-brute");
+    expect(urls).toHaveLength(2 + 9 + 18 + 2);
   });
 
   it("date chaque commune du dernier changement du mandat de son maire", async () => {
@@ -88,7 +89,7 @@ describe("sitemap : rubrique Territoires", () => {
   it("garde l'entrée, la page des données et les régions sans aucune commune indexable", async () => {
     h.queryRaw.mockResolvedValueOnce([]);
     const urls = (await shard5()).map((e) => path(e.url));
-    expect(urls).toHaveLength(2 + 4 + 18);
+    expect(urls).toHaveLength(2 + 9 + 18);
     expect(urls.some((u) => u.startsWith("/territoires/communes/"))).toBe(false);
   });
 
