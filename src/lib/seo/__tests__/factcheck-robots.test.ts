@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   FACTCHECK_MIN_CONTEXT_BLOCKS,
+  FACTCHECK_POLITICIAN_MIN_CLAIMS,
   FACTCHECK_RECORD_MIN_TOTAL,
   countFactCheckContextBlocks,
   factCheckRobotsMetadata,
   isIndexableFactCheck,
+  isIndexableFactCheckPolitician,
   type FactCheckIndexSignals,
 } from "../factcheck-robots";
 
@@ -65,5 +67,13 @@ describe("factCheckRobotsMetadata", () => {
 
   it("sort de l'index sans bloquer les liens", () => {
     expect(factCheckRobotsMetadata(false)).toEqual({ robots: { index: false, follow: true } });
+  });
+});
+
+describe("isIndexableFactCheckPolitician", () => {
+  it("indexe la page d'une personnalité à partir de trois déclarations", () => {
+    expect(isIndexableFactCheckPolitician(FACTCHECK_POLITICIAN_MIN_CLAIMS)).toBe(true);
+    expect(isIndexableFactCheckPolitician(FACTCHECK_POLITICIAN_MIN_CLAIMS - 1)).toBe(false);
+    expect(FACTCHECK_POLITICIAN_MIN_CLAIMS).toBe(3);
   });
 });
