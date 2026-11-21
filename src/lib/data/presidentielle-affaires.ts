@@ -80,9 +80,10 @@ const ORDER_BY: Record<PresidentialAffairsSort, Prisma.Sql> = {
     COALESCE(a."startDate", a."factsDate", a."createdAt") DESC, a."id" DESC`,
 };
 
-function presidentialAffairSqlWhere(electionId: string): Prisma.Sql {
-  return Prisma.sql`${getPublishedAffairSqlWhere("a")}
-      AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+// The published-affair predicate stays inline in each statement: the attribution guard checks that
+// every raw read of "Affair" carries it at the call site.
+function trackedCandidateSqlWhere(electionId: string): Prisma.Sql {
+  return Prisma.sql`p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
       AND EXISTS (
         SELECT 1
         FROM "Candidacy" c
@@ -142,7 +143,8 @@ async function getPresidentialAffairCandidatesCached(
     SELECT p."id", p."slug", p."fullName", COUNT(a."id")::int AS "count"
     FROM "Affair" a
     INNER JOIN "Politician" p ON p."id" = a."politicianId"
-    WHERE ${presidentialAffairSqlWhere(electionId)}
+    WHERE ${getPublishedAffairSqlWhere("a")}
+      AND ${trackedCandidateSqlWhere(electionId)}
     GROUP BY p."id", p."slug", p."fullName", p."lastName", p."firstName"
     ORDER BY p."lastName" ASC, p."firstName" ASC, p."id" ASC
   `);
@@ -179,7 +181,8 @@ async function getPresidentialAffairsCached(
     SELECT a."id"
     FROM "Affair" a
     INNER JOIN "Politician" p ON p."id" = a."politicianId"
-    WHERE ${presidentialAffairSqlWhere(electionId)}
+    WHERE ${getPublishedAffairSqlWhere("a")}
+      AND ${trackedCandidateSqlWhere(electionId)}
       ${politicianId ? Prisma.sql`AND p."id" = ${politicianId}` : Prisma.empty}
     ORDER BY ${ORDER_BY[tri]}
     LIMIT ${AFFAIRS_PAGE_SIZE}
