@@ -563,10 +563,14 @@ export async function syncFactchecks(
                 // profile, so it is recomputed too.
                 for (const m of previous) previouslyMentionedIds.add(m.politicianId);
               } else {
-                const themeFields = await classifyNewFactCheck(
-                  { title, claimText: claim.text, verdict: review.textualRating },
-                  stats
-                );
+                // Only allowed sources are classified (AGENTS.md): the others stay drafts.
+                const themeFields =
+                  getPublicationStatusForSource(source) === "PUBLISHED"
+                    ? await classifyNewFactCheck(
+                        { title, claimText: claim.text, verdict: review.textualRating },
+                        stats
+                      )
+                    : {};
                 const written = await db.factCheck.create({
                   data: {
                     ...themeFields,

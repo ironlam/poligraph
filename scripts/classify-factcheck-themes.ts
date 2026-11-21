@@ -9,8 +9,9 @@
  *
  * Only fact-checks with no `themeClassifiedAt` and no `themeReviewedAt` are read, and the write
  * repeats both conditions: a theme validated in the admin is never overwritten, and a second run
- * does not ask the model again about what it already classified. Public fact-checks come first,
- * most recent first. One call at a time.
+ * does not ask the model again about what it already classified. Only sources of
+ * FACTCHECK_ALLOWED_SOURCES are read (AGENTS.md): public fact-checks first, then the drafts of
+ * those sources, most recent first. One call at a time.
  *
  * Requires MISTRAL_API_KEY (Anthropic as fallback). Writes to the database `.env` points at, which
  * is production: apply prisma/migrations/manual/2026-11-22-factcheck-theme.sql first.
@@ -20,6 +21,7 @@ import "dotenv/config";
 import { writeFileSync } from "node:fs";
 import { db } from "../src/lib/db";
 import { getPublicFactCheckWhere } from "../src/lib/api/public-contract";
+import { FACTCHECK_ALLOWED_SOURCES } from "../src/config/labels";
 import { classifyFactCheckTheme } from "../src/services/classify-theme";
 
 function readArg(name: string): string | undefined {
@@ -46,7 +48,11 @@ async function main() {
   const rest =
     limit === undefined || publicRows.length < limit
       ? await db.factCheck.findMany({
-          where: { ...unclassified, id: { notIn: publicRows.map((r) => r.id) } },
+          where: {
+            ...unclassified,
+            source: { in: [...FACTCHECK_ALLOWED_SOURCES] },
+            id: { notIn: publicRows.map((r) => r.id) },
+          },
           select,
           orderBy: { publishedAt: "desc" },
           take: limit === undefined ? undefined : limit - publicRows.length,
