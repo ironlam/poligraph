@@ -108,7 +108,7 @@ model Politician {
   participation             PoliticianParticipation? // Pre-computed participation stats
   profileSnapshot           PoliticianProfileSnapshot? // Pre-computed politician profile document
   identityDecisions         IdentityDecision[] // Identity resolution audit trail
-  affairPoliticianDecisions AffairPoliticianDecision[] @relation("AffairDecisionPolitician")
+  affairPoliticianDecisions AffairPoliticianDecision[]     @relation("AffairDecisionPolitician")
   newsletterEditions        NewsletterEdition[] // Weeks featured as "politician of the week"
   dossierAuthors            DossierAuthor[] // Dossiers authored/initiated by this politician
   measures                  Measure[] // Programme measures attributed to this politician (lot 1)
@@ -1357,17 +1357,17 @@ model ChangelogEntry {
 // ============================================
 
 model Scrutin {
-  id          String   @id @default(cuid())
-  externalId  String   @unique // ID NosDéputés/NosSénateurs (ex: "VTANR5L17V1234" ou "2024-63")
-  slug        String?  @unique // SEO-friendly URL slug (e.g., "2025-01-15-projet-loi-finances")
-  publicId    String?  @unique // "SC-000542" — stable public identifier (poligraphId, see /docs/api)
-  title       String   @db.Text
-  description String?  @db.Text
+  id                String   @id @default(cuid())
+  externalId        String   @unique // ID NosDéputés/NosSénateurs (ex: "VTANR5L17V1234" ou "2024-63")
+  slug              String?  @unique // SEO-friendly URL slug (e.g., "2025-01-15-projet-loi-finances")
+  publicId          String?  @unique // "SC-000542" — stable public identifier (poligraphId, see /docs/api)
+  title             String   @db.Text
+  description       String?  @db.Text
   officialSeanceRef String? // Official AN meeting UID, never inferred from a date
-  votingDate  DateTime
-  sequence    Int      @default(0) // numéro final de l'externalId : départage les scrutins d'un même jour
-  legislature Int
-  chamber     Chamber  @default(AN) // AN = Assemblée Nationale, SENAT = Sénat
+  votingDate        DateTime
+  sequence          Int      @default(0) // numéro final de l'externalId : départage les scrutins d'un même jour
+  legislature       Int
+  chamber           Chamber  @default(AN) // AN = Assemblée Nationale, SENAT = Sénat
 
   // Global results
   votesFor     Int
@@ -1395,7 +1395,7 @@ model Scrutin {
   votesHash String?
 
   // Official AN voting procedure and independent historical group snapshot (#564).
-  officialDossierRef             String?
+  officialDossierRef            String?
   codeTypeVote                  String?
   libelleTypeVote               String?
   officialGroupsHash            String?
@@ -1412,12 +1412,12 @@ model Scrutin {
   dossierLegislatif     LegislativeDossier?         @relation(fields: [dossierLegislatifId], references: [id])
 
   // Parlement-riche reverse relations
-  importance        ScrutinImportance?
-  groupPositions    ScrutinGroupPosition[]
-  analysis          ScrutinAnalysis?
+  importance         ScrutinImportance?
+  groupPositions     ScrutinGroupPosition[]
+  analysis           ScrutinAnalysis?
   impactRegeneration ImpactRegenerationLog?
-  measureVoteLinks  MeasureVoteLink[]
-  debateTranscripts DebateTranscript[]
+  measureVoteLinks   MeasureVoteLink[]
+  debateTranscripts  DebateTranscript[]
 
   // Policy-title feature
   policyTitle    ScrutinPolicyTitle?
@@ -1572,10 +1572,10 @@ model ScrutinAnalysis {
   argumentsAgainst String             @db.Text
   sourceType       AnalysisSourceType
   modelVersion     String
-  sourceUrl String?
-  commonDiscussion Boolean @default(false)
-  evidence Json? // Exact input passage, source hash, paragraph citations and prompt version
-  reasons Json? // Public: reasons of each side { v, for[], against[] }, speakers and exact quotes (never read from evidence)
+  sourceUrl        String?
+  commonDiscussion Boolean            @default(false)
+  evidence         Json? // Exact input passage, source hash, paragraph citations and prompt version
+  reasons          Json? // Public: reasons of each side { v, for[], against[] }, speakers and exact quotes (never read from evidence)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
@@ -1583,24 +1583,24 @@ model ScrutinAnalysis {
 }
 
 model DebateTranscript {
-  id          String    @id @default(cuid())
-  scrutinId   String?
-  scrutin     Scrutin?  @relation(fields: [scrutinId], references: [id], onDelete: SetNull)
-  seanceRef   String
-  date        DateTime
+  id            String    @id @default(cuid())
+  scrutinId     String?
+  scrutin       Scrutin?  @relation(fields: [scrutinId], references: [id], onDelete: SetNull)
+  seanceRef     String
+  date          DateTime
   // Séance start timestamp parsed from AN <dateSeance> (YYYYMMDDHHmmss). Enables
   // ordering same-day sittings; votes carry no time so it is metadata, not a join key.
-  startTime   DateTime?
+  startTime     DateTime?
   // Sitting order within the day, from AN <numSeanceJour> (Unique -> 1, else the int).
-  seanceOrder Int?
-  paragraphs Json? // Ordered Syceron paragraphs with source IDs and amendment metadata
-  sourceHash String? // SHA-256 of the source XML
+  seanceOrder   Int?
+  paragraphs    Json? // Ordered Syceron paragraphs with source IDs and amendment metadata
+  sourceHash    String? // SHA-256 of the source XML
   parserVersion Int?
   // Full séance text. Load explicitly only for diagnostics, never by default.
-  content     String    @db.Text
-  sourceUrl   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  content       String    @db.Text
+  sourceUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([scrutinId])
   @@index([seanceRef])
@@ -1718,17 +1718,17 @@ enum DossierOrigin {
 }
 
 model LegislativeDossier {
-  id         String         @id @default(cuid())
-  externalId String         @unique // DLR5L17N12345
-  slug       String?        @unique // SEO-friendly URL slug (e.g., "2024-12-03-reforme-retraites")
-  previousSlugs String[]    @default([]) // anciens slugs, redirigés en 301 vers le slug courant
-  publicId   String?        @unique // "DO-000542" — stable public identifier (poligraphId, see /docs/api)
-  title      String         @db.Text
-  shortTitle String? // Titre court pour affichage
-  number     String? // PJL 1234, PPL 5678
-  status     DossierStatus
-  category   String? // Budget, Santé, Économie... (procedure type)
-  theme      ThemeCategory? // Subject theme (AI-classified)
+  id            String         @id @default(cuid())
+  externalId    String         @unique // DLR5L17N12345
+  slug          String?        @unique // SEO-friendly URL slug (e.g., "2024-12-03-reforme-retraites")
+  previousSlugs String[]       @default([]) // anciens slugs, redirigés en 301 vers le slug courant
+  publicId      String?        @unique // "DO-000542" — stable public identifier (poligraphId, see /docs/api)
+  title         String         @db.Text
+  shortTitle    String? // Titre court pour affichage
+  number        String? // PJL 1234, PPL 5678
+  status        DossierStatus
+  category      String? // Budget, Santé, Économie... (procedure type)
+  theme         ThemeCategory? // Subject theme (AI-classified)
 
   filingDate      DateTime?
   examinationDate DateTime?
@@ -1754,10 +1754,10 @@ model LegislativeDossier {
   originSourceUrl   String?
   originFetchedAt   DateTime?
 
-  amendments Amendment[]
-  scrutins   Scrutin[]
-  authors    DossierAuthor[]
-  aliases    LegislativeDossierAlias[]
+  amendments   Amendment[]
+  scrutins     Scrutin[]
+  authors      DossierAuthor[]
+  aliases      LegislativeDossierAlias[]
   measureLinks MeasureDossierLink[]
 
   createdAt DateTime @default(now())
@@ -2379,9 +2379,12 @@ model Candidacy {
   partyLabel      String?
 
   // Pre-campaign editorial status (used for présidentielle 2027 and future open elections)
-  status      CandidacyStatus?
-  sourceUrl   String?
-  sourceLabel String?
+  status          CandidacyStatus?
+  sourceUrl       String?
+  sourceLabel     String?
+  // When `status` last took a different value. Null for a status never changed since its import.
+  // Not `updatedAt`, which also moves on a source or label correction.
+  statusChangedAt DateTime?
 
   // Candidate entity (lightweight, for local elections)
   candidate   Candidate? @relation(fields: [candidateId], references: [id])
@@ -3890,8 +3893,8 @@ model Measure {
   precedingMeasureId String?
   followingMeasures  Measure[] @relation("MeasureLineage")
 
-  revisions MeasureRevision[] @relation("MeasureRevisions")
-  voteLinks MeasureVoteLink[] @relation("MeasureVoteLinks")
+  revisions    MeasureRevision[]    @relation("MeasureRevisions")
+  voteLinks    MeasureVoteLink[]    @relation("MeasureVoteLinks")
   dossierLinks MeasureDossierLink[] @relation("MeasureDossierLinks")
 
   latestRevision      MeasureRevision? @relation("MeasureLatest", fields: [latestRevisionId], references: [id], onDelete: SetNull)
@@ -4150,17 +4153,17 @@ model MeasureSource {
   measureRevision   MeasureRevision @relation(fields: [measureRevisionId], references: [id], onDelete: Cascade)
   measureRevisionId String
 
-  sourceKind  MeasureSourceKind
-  tier        SourceTier
-  url         String
-  page        String?
+  sourceKind     MeasureSourceKind
+  tier           SourceTier
+  url            String
+  page           String?
   // Where the passage starts in an audio-visual source, in seconds. `page` stays free text for
   // documents; a video source carries this instead so the public link can jump to the passage.
   startAtSeconds Int?
   // Short verbatim passage of a written source (programme, proposals), 100 to 520 characters, set by
   // setSourceExcerpt() after a mechanical check against the document. Null for speeches, press and video.
-  excerpt String? @db.Text
-  publishedAt DateTime
+  excerpt        String?           @db.Text
+  publishedAt    DateTime
 
   createdAt DateTime @default(now())
 
@@ -4774,15 +4777,15 @@ model ScrutinOrganPosition {
 /// Retour d'un visiteur via /signaler. Table privée : jamais exposée par une page ou une API
 /// publique. `contactEmail` est effacé quand le retour est clos.
 model VisitorFeedback {
-  id             String           @id @default(cuid())
-  category       FeedbackCategory
-  message        String
+  id           String           @id @default(cuid())
+  category     FeedbackCategory
+  message      String
   /// Chemin relatif de la page d'origine, sans paramètres de requête.
-  pagePath       String?
-  contactEmail   String?
-  status         FeedbackStatus   @default(NEW)
-  createdAt      DateTime         @default(now())
-  resolvedAt     DateTime?
+  pagePath     String?
+  contactEmail String?
+  status       FeedbackStatus   @default(NEW)
+  createdAt    DateTime         @default(now())
+  resolvedAt   DateTime?
 
   @@index([status, createdAt])
 }

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/RubriqueBandeau";
 import { AddToCalendar } from "@/components/elections/AddToCalendar";
 import { CollectionPageJsonLd, EventJsonLd } from "@/components/seo/JsonLd";
-import { getHubCandidacyField, getHubLatestMeasures, getHubMeasureContext } from "@/lib/data/hub";
+import { getHubCandidacyField, getHubLatestUpdates, getHubMeasureContext } from "@/lib/data/hub";
 import { getHubPress, type HubPressArticle } from "@/lib/data/hub-press";
 import { PRESIDENTIELLE_2027_SLUG, THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { daysUntil } from "@/lib/elections/countdown";
@@ -21,7 +21,7 @@ import { HubParrainagesEntry, HubPrimaryPaths } from "./_components/HubPrimaryPa
 import { DaysUntilBadge } from "./_components/DaysUntilBadge";
 import { HubClosedState } from "./_components/HubClosedState";
 import { HubCorpusState } from "./_components/HubCorpusState";
-import { HubLatestMeasures } from "./_components/HubLatestMeasures";
+import { HubLatestUpdates } from "./_components/HubLatestUpdates";
 import { HubPress } from "./_components/HubPress";
 import { HubComparisonLauncher } from "./_components/HubComparisonLauncher";
 import { HubSubjects } from "./_components/HubSubjects";
@@ -49,10 +49,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PresidentialHubPage() {
-  const [field, context, latestMeasures, programmesEnabled, pressEnabled] = await Promise.all([
+  const [field, context, latestUpdates, programmesEnabled, pressEnabled] = await Promise.all([
     getHubCandidacyField(PRESIDENTIELLE_2027_SLUG),
     getHubMeasureContext(PRESIDENTIELLE_2027_SLUG),
-    getHubLatestMeasures(PRESIDENTIELLE_2027_SLUG),
+    getHubLatestUpdates(PRESIDENTIELLE_2027_SLUG),
     isFeatureEnabled("PROGRAMMES_ENABLED"),
     // Editorial switch: press-to-candidate links are automatic, the team opens the block once
     // it trusts them (created and toggled in /admin/feature-toggles; absent means off).
@@ -63,7 +63,7 @@ export default async function PresidentialHubPage() {
   let press: HubPressArticle[] = [];
   if (pressEnabled) press = await getHubPress(PRESIDENTIELLE_2027_SLUG);
   let activityLayout = "grid gap-8";
-  if (latestMeasures.length > 0 && press.length > 0) {
+  if (latestUpdates.length > 0 && press.length > 0) {
     activityLayout = "grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]";
   }
 
@@ -140,7 +140,7 @@ export default async function PresidentialHubPage() {
         <PresidentialHubNav active="overview" />
 
         <div className={activityLayout}>
-          <HubLatestMeasures measures={latestMeasures} lastReviewedAt={context.lastReviewedAt} />
+          <HubLatestUpdates updates={latestUpdates} lastReviewedAt={context.lastReviewedAt} />
           <HubPress articles={press} />
         </div>
 
