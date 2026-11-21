@@ -1,10 +1,17 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ classify: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/services/classify-theme", () => ({ classifyFactCheckTheme: mocks.classify }));
 
-import { classifyNewFactCheck, keepOneHomonym, planForcedMentions } from "../factchecks";
+import {
+  RESERVED_FACTCHECK_SLUGS,
+  classifyNewFactCheck,
+  keepOneHomonym,
+  planForcedMentions,
+} from "../factchecks";
 
 const POLITICIANS = [
   { id: "ministre", normalizedFullName: "philippe baptiste" },
@@ -88,6 +95,18 @@ describe("planForcedMentions", () => {
       updates: [],
       creates: wanted,
     });
+  });
+});
+
+describe("RESERVED_FACTCHECK_SLUGS", () => {
+  it("réserve chaque route statique de /factchecks/, pour qu'aucun slug ne la masque", () => {
+    const routes = readdirSync(join(process.cwd(), "src/app/factchecks"), { withFileTypes: true })
+      .filter(
+        (entry) => entry.isDirectory() && !entry.name.startsWith("[") && !entry.name.startsWith("_")
+      )
+      .map((entry) => entry.name);
+    expect(routes).toContain("politique");
+    for (const route of routes) expect(RESERVED_FACTCHECK_SLUGS.has(route)).toBe(true);
   });
 });
 

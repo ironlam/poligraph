@@ -492,6 +492,12 @@ describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => 
     expect(factChecksShard).toContain(name);
   });
 
+  it("lists the politician landing pages from the shared threshold", () => {
+    expect(factChecksShard).toContain("/factchecks/politique/");
+    expect(factChecksShard).toContain("FACTCHECK_POLITICIAN_MIN_CLAIMS");
+    expect(factChecksShard).toContain('m."isClaimant"');
+  });
+
   it("keeps a single claimant as the precondition", () => {
     expect(factChecksShard).toContain("HAVING count(*) = 1");
   });

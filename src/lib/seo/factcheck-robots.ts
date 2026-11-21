@@ -54,3 +54,14 @@ export function isIndexableFactCheck(signals: FactCheckIndexSignals): boolean {
 export function factCheckRobotsMetadata(indexable: boolean): Pick<Metadata, "robots"> {
   return indexable ? {} : { robots: NOINDEX_FOLLOW };
 }
+
+/**
+ * The landing page of a politician's fact-checks, /factchecks/politique/[slug], is indexable from
+ * this many claims attributed to them. Same threshold for every person and every party. Mirrored
+ * in SQL by the fact-check sitemap shard.
+ */
+export const FACTCHECK_POLITICIAN_MIN_CLAIMS = 3;
+
+export function isIndexableFactCheckPolitician(claimedCount: number): boolean {
+  return claimedCount >= FACTCHECK_POLITICIAN_MIN_CLAIMS;
+}

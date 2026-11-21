@@ -636,6 +636,8 @@ interface CollectionPageJsonLdProps {
     name: string;
     url: string;
   };
+  /** Schema type of `about`: an organization (default) or a person. */
+  aboutType?: "Organization" | "Person";
 }
 
 export function DatasetJsonLd({
@@ -692,6 +694,7 @@ export function CollectionPageJsonLd({
   numberOfItems,
   dateModified,
   about,
+  aboutType = "Organization",
 }: CollectionPageJsonLdProps) {
   const jsonLd = {
     "@context": "https://schema.org",
@@ -708,7 +711,7 @@ export function CollectionPageJsonLd({
     }),
     ...(about && {
       about: {
-        "@type": "Organization",
+        "@type": aboutType,
         name: about.name,
         url: about.url,
       },

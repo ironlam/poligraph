@@ -168,7 +168,7 @@ export function FactChecksTab({ mentions, politicianSlug }: FactChecksTabProps) 
           </p>
         </div>
         <Link
-          href={`/factchecks?politician=${politicianSlug}&directOnly=1`}
+          href={`/factchecks/politique/${politicianSlug}`}
           className="text-sm text-primary hover:underline"
         >
           Voir tout →
