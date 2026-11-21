@@ -141,6 +141,10 @@ const PARTY_SURFACES = [
   "src/app/elections/presidentielle-2027/themes/page.tsx",
   "src/app/factchecks/[slug]/page.tsx",
   "src/app/factchecks/page.tsx",
+  // A politician's fact-check landing page: the current party of a published politician, read
+  // through the fact-check context reader (queryAuthor). The preview image draws no party.
+  "src/app/factchecks/politique/[slug]/opengraph-image.tsx",
+  "src/app/factchecks/politique/[slug]/page.tsx",
   "src/app/page.tsx",
   "src/app/parlement/dossiers/[slug]/page.tsx",
   "src/app/parlement/dossiers/page.tsx",
@@ -216,6 +220,8 @@ const FACTCHECK_SURFACES = [
   "src/app/factchecks/[slug]/opengraph-image.tsx",
   "src/app/factchecks/[slug]/page.tsx",
   "src/app/factchecks/page.tsx",
+  "src/app/factchecks/politique/[slug]/opengraph-image.tsx",
+  "src/app/factchecks/politique/[slug]/page.tsx",
   "src/app/page.tsx",
   "src/app/politiques/[slug]/page.tsx",
   "src/app/politiques/[slug]/relations/page.tsx",
