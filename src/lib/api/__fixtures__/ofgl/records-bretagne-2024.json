@@ -1,0 +1,60 @@
+{
+  "total_count": 5,
+  "results": [
+    {
+      "exer": "2024",
+      "reg_code": "53",
+      "siren": "233500016",
+      "categ": "REG",
+      "lbudg": "REG BRETAGNE",
+      "agregat": "Dépenses d'équipement",
+      "montant": 194910471.41,
+      "euros_par_habitant": 55.967857801037916,
+      "ptot": 3482543
+    },
+    {
+      "exer": "2024",
+      "reg_code": "53",
+      "siren": "233500016",
+      "categ": "REG",
+      "lbudg": "REG BRETAGNE",
+      "agregat": "Dépenses de fonctionnement",
+      "montant": 1077786344.35,
+      "euros_par_habitant": 309.4825661449119,
+      "ptot": 3482543
+    },
+    {
+      "exer": "2024",
+      "reg_code": "53",
+      "siren": "233500016",
+      "categ": "REG",
+      "lbudg": "REG BRETAGNE",
+      "agregat": "Encours de dette",
+      "montant": 1570377998.73,
+      "euros_par_habitant": 450.9285308838972,
+      "ptot": 3482543
+    },
+    {
+      "exer": "2024",
+      "reg_code": "53",
+      "siren": "233500016",
+      "categ": "REG",
+      "lbudg": "REG BRETAGNE",
+      "agregat": "Epargne brute",
+      "montant": 273059990.95,
+      "euros_par_habitant": 78.40821806076767,
+      "ptot": 3482543
+    },
+    {
+      "exer": "2024",
+      "reg_code": "53",
+      "siren": "233500016",
+      "categ": "REG",
+      "lbudg": "REG BRETAGNE",
+      "agregat": "Frais de personnel",
+      "montant": 201022979.72,
+      "euros_par_habitant": 57.723043109589746,
+      "ptot": 3482543
+    }
+  ]
+}
