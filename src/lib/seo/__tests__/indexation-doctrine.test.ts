@@ -318,9 +318,8 @@ describe("doctrine — listing noindex perimeters can't silently shrink", () => 
     },
     {
       route: "/elections/presidentielle-2027/affaires-judiciaires",
-      page: "src/app/elections/presidentielle-2027/affaires-judiciaires/page.tsx",
       keys: PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
-      decidedInPage: ["page"],
+      mandatory: ["candidat", "tri"],
     },
     {
       route: "/parlement/dossiers",
@@ -957,6 +956,12 @@ describe("doctrine : un listing ne lit aucun paramètre d'adresse sans verdict d
       keys: VOTES_LISTING_FILTER_KEYS,
       // filter: the bare ?filter=expliques view is indexable on purpose (`isBareExplainedView`).
       decidedInPage: ["page", "filter"],
+    },
+    {
+      route: "/elections/presidentielle-2027/affaires-judiciaires",
+      page: "src/app/elections/presidentielle-2027/affaires-judiciaires/page.tsx",
+      keys: PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
+      decidedInPage: ["page"],
     },
     {
       route: "/elections/presidentielle-2027/affaires-judiciaires",
