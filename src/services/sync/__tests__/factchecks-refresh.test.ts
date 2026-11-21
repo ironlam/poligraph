@@ -15,24 +15,34 @@ const h = vi.hoisted(() => ({
   requestProfileRefresh: vi.fn(),
 }));
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    factCheck: {
-      findUnique: h.factCheckFindUnique,
-      findFirst: h.factCheckFindFirst,
-      create: h.factCheckCreate,
-      upsert: h.factCheckUpsert,
-    },
+// The forced rewrite goes through the transaction client only: the top-level client exposes no
+// upsert, update or deleteMany, so a write made outside the transaction fails the test.
+vi.mock("@/lib/db", () => {
+  const tx = {
+    factCheck: { upsert: h.factCheckUpsert },
     factCheckMention: {
       findMany: h.mentionFindMany,
-      findUnique: h.mentionFindUnique,
       create: h.mentionCreate,
       update: h.mentionUpdate,
       deleteMany: h.mentionDeleteMany,
     },
     auditLog: { findMany: h.auditLogFindMany },
-  },
-}));
+  };
+  return {
+    db: {
+      factCheck: {
+        findUnique: h.factCheckFindUnique,
+        findFirst: h.factCheckFindFirst,
+        create: h.factCheckCreate,
+      },
+      factCheckMention: {
+        findUnique: h.mentionFindUnique,
+        create: h.mentionCreate,
+      },
+      $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+    },
+  };
+});
 vi.mock("@/lib/api", () => ({
   searchClaims: h.searchClaims,
   mapTextualRating: () => "FALSE",
@@ -185,6 +195,15 @@ describe("syncFactchecks et les fiches précalculées", () => {
       },
     });
     expect(h.factCheckUpsert.mock.calls[0]![0].update).not.toHaveProperty("mentions");
+  });
+
+  it("avec --force, ne demande aucun recalcul quand la réécriture échoue", async () => {
+    h.mentionCreate.mockRejectedValueOnce(new Error("écriture refusée"));
+
+    const stats = await syncFactchecks({ politician: "exemple", force: true });
+
+    expect(stats.apiErrors).toBe(1);
+    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
   });
 
   it("sans --force, ne lit pas les mentions existantes et ne demande que les fact-checks", async () => {

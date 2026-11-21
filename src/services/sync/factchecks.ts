@@ -224,9 +224,12 @@ export function planForcedMentions(
 }
 
 /** Mentions an admin created or edited: the admin routes write an AuditLog row for each. */
-async function loadManuallyEditedMentionIds(ids: string[]): Promise<Set<string>> {
+async function loadManuallyEditedMentionIds(
+  client: Pick<typeof db, "auditLog">,
+  ids: string[]
+): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const rows = await db.auditLog.findMany({
+  const rows = await client.auditLog.findMany({
     where: { entityType: "FactCheckMention", entityId: { in: ids } },
     select: { entityId: true },
   });
@@ -446,15 +449,10 @@ export async function syncFactchecks(
           } else {
             try {
               if (force) {
-                // Mentions are reconciled one by one after the upsert rather than replaced
-                // wholesale: replacing them erased every admin correction on each forced run.
-                const previous = await db.factCheckMention.findMany({
-                  where: { factCheck: { sourceUrl: review.url } },
-                  select: { id: true, politicianId: true, isClaimant: true },
-                });
-                const manuallyEdited = await loadManuallyEditedMentionIds(
-                  previous.map((m) => m.id)
-                );
+                // Mentions are reconciled one by one rather than replaced wholesale: replacing
+                // them erased every admin correction on each forced run. The upsert and the
+                // reconciliation share one transaction, as the former nested upsert was atomic:
+                // a failure leaves the fact-check and its mentions as they were.
                 const fields = {
                   claimText: claim.text,
                   claimant: claim.claimant || null,
@@ -466,40 +464,52 @@ export async function syncFactchecks(
                   claimDate: claim.claimDate ? new Date(claim.claimDate) : null,
                   languageCode: review.languageCode || null,
                 };
-                const written = await db.factCheck.upsert({
-                  where: { sourceUrl: review.url },
-                  update: fields,
-                  create: {
-                    ...fields,
-                    slug: await generateUniqueFactCheckSlug(reviewDate, title),
-                    sourceUrl: review.url,
-                    publicationStatus: getPublicationStatusForSource(source),
-                  },
-                  select: { id: true },
+                const slug = await generateUniqueFactCheckSlug(reviewDate, title);
+                const { written, previous } = await db.$transaction(async (tx) => {
+                  const previous = await tx.factCheckMention.findMany({
+                    where: { factCheck: { sourceUrl: review.url } },
+                    select: { id: true, politicianId: true, isClaimant: true },
+                  });
+                  const manuallyEdited = await loadManuallyEditedMentionIds(
+                    tx,
+                    previous.map((m) => m.id)
+                  );
+                  const written = await tx.factCheck.upsert({
+                    where: { sourceUrl: review.url },
+                    update: fields,
+                    create: {
+                      ...fields,
+                      slug,
+                      sourceUrl: review.url,
+                      publicationStatus: getPublicationStatusForSource(source),
+                    },
+                    select: { id: true },
+                  });
+                  const plan = planForcedMentions(
+                    previous,
+                    mentions.map((m) => ({
+                      politicianId: m.politicianId,
+                      matchedName: m.matchedName,
+                      isClaimant: claimantIds.has(m.politicianId),
+                    })),
+                    manuallyEdited
+                  );
+                  if (plan.deleteIds.length > 0) {
+                    await tx.factCheckMention.deleteMany({ where: { id: { in: plan.deleteIds } } });
+                  }
+                  for (const update of plan.updates) {
+                    await tx.factCheckMention.update({
+                      where: { id: update.id },
+                      data: { isClaimant: update.isClaimant },
+                    });
+                  }
+                  for (const create of plan.creates) {
+                    await tx.factCheckMention.create({
+                      data: { factCheckId: written.id, ...create },
+                    });
+                  }
+                  return { written, previous };
                 });
-                const plan = planForcedMentions(
-                  previous,
-                  mentions.map((m) => ({
-                    politicianId: m.politicianId,
-                    matchedName: m.matchedName,
-                    isClaimant: claimantIds.has(m.politicianId),
-                  })),
-                  manuallyEdited
-                );
-                if (plan.deleteIds.length > 0) {
-                  await db.factCheckMention.deleteMany({ where: { id: { in: plan.deleteIds } } });
-                }
-                for (const update of plan.updates) {
-                  await db.factCheckMention.update({
-                    where: { id: update.id },
-                    data: { isClaimant: update.isClaimant },
-                  });
-                }
-                for (const create of plan.creates) {
-                  await db.factCheckMention.create({
-                    data: { factCheckId: written.id, ...create },
-                  });
-                }
                 writtenFactCheckIds.add(written.id);
                 // A politician dropped from the mentions still shows the fact-check on a stored
                 // profile, so it is recomputed too.
