@@ -503,6 +503,8 @@ interface ClaimReviewJsonLdProps {
   reviewDate: string;
   source: string;
   sourceUrl: string;
+  /** The politician the claim is attributed to, pointing at their Poligraph profile. */
+  about?: { name: string; url: string } | null;
 }
 
 export function ClaimReviewJsonLd({
@@ -514,6 +516,7 @@ export function ClaimReviewJsonLd({
   reviewDate,
   source,
   sourceUrl,
+  about,
 }: ClaimReviewJsonLdProps) {
   const ratingValue = VERDICT_RATING_VALUE[verdictRating];
 
@@ -522,6 +525,7 @@ export function ClaimReviewJsonLd({
     "@type": "ClaimReview",
     url,
     claimReviewed: claimText,
+    ...(about && { about: { "@type": "Person", name: about.name, url: about.url } }),
     ...(claimant && {
       itemReviewed: {
         "@type": "Claim",
