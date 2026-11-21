@@ -118,6 +118,8 @@ export interface FactcheckSyncStats {
   ownSiteSkipped: number;
   mentionsCreated: number;
   mentionsBlocked: number;
+  /** Matches dropped because several published politicians share the matched full name. */
+  homonymsSkipped: number;
   apiErrors: number;
   errors: string[];
 }
@@ -133,6 +135,40 @@ async function generateUniqueFactCheckSlug(date: Date | null, title: string): Pr
   );
 }
 
+type MentionMatch = { politicianId: string; matchedName: string };
+
+/**
+ * Several published politicians can share a full name (a minister and a village mayor), and a
+ * name match cannot tell them apart. Among matches sharing a normalized full name, keep only the
+ * politician the search was run for, when it is one of them; otherwise drop the whole group. A
+ * missing link is fixable in the admin; a fact-check attributed to the wrong person is a false
+ * statement about them.
+ */
+export function keepOneHomonym(
+  matches: MentionMatch[],
+  politicians: Pick<PoliticianName, "id" | "normalizedFullName">[],
+  preferredId: string
+): { kept: MentionMatch[]; skipped: number } {
+  const nameById = new Map(politicians.map((p) => [p.id, p.normalizedFullName]));
+  const byName = new Map<string, MentionMatch[]>();
+  for (const match of matches) {
+    const name = nameById.get(match.politicianId) ?? match.politicianId;
+    byName.set(name, [...(byName.get(name) ?? []), match]);
+  }
+  const kept: MentionMatch[] = [];
+  let skipped = 0;
+  for (const group of byName.values()) {
+    if (group.length === 1) {
+      kept.push(group[0]!);
+      continue;
+    }
+    const preferred = group.find((m) => m.politicianId === preferredId);
+    if (preferred) kept.push(preferred);
+    skipped += preferred ? group.length - 1 : group.length;
+  }
+  return { kept, skipped };
+}
+
 /**
  * Given a claimant string, return the set of politician IDs that match it.
  * Uses fullNameOnly mode to avoid false positives on short claimant strings
@@ -141,14 +177,60 @@ async function generateUniqueFactCheckSlug(date: Date | null, title: string): Pr
 function computeClaimantIds(
   claimant: string | null | undefined,
   allPoliticians: PoliticianName[],
-  blocklist: MentionBlocklist
-): Set<string> {
-  if (!claimant || !isDirectPoliticianClaim(claimant)) return new Set();
-  return new Set(
-    findMentions(claimant, allPoliticians, { fullNameOnly: true })
-      .filter((m) => !blocklist.isBlocked(m.matchedName, m.politicianId))
-      .map((m) => m.politicianId)
+  blocklist: MentionBlocklist,
+  targetId: string
+): { ids: Set<string>; homonymsSkipped: number } {
+  if (!claimant || !isDirectPoliticianClaim(claimant))
+    return { ids: new Set(), homonymsSkipped: 0 };
+  const matches = findMentions(claimant, allPoliticians, { fullNameOnly: true }).filter(
+    (m) => !blocklist.isBlocked(m.matchedName, m.politicianId)
   );
+  const { kept, skipped } = keepOneHomonym(matches, allPoliticians, targetId);
+  return { ids: new Set(kept.map((m) => m.politicianId)), homonymsSkipped: skipped };
+}
+
+type StoredMention = { id: string; politicianId: string; isClaimant: boolean };
+type WantedMention = { politicianId: string; matchedName: string; isClaimant: boolean };
+
+/**
+ * What a `--force` rewrite does to a fact-check's stored mentions. A mention an admin created or
+ * edited (it has an AuditLog row) is left exactly as it is, whether or not this run matched it.
+ * Any other stored mention is kept with a recomputed `isClaimant` when the run matched it again,
+ * and deleted when it did not. Rows are updated in place, so their ids, which the AuditLog points
+ * at, survive the rewrite.
+ */
+export function planForcedMentions(
+  stored: StoredMention[],
+  wanted: WantedMention[],
+  manuallyEditedIds: Set<string>
+): {
+  deleteIds: string[];
+  updates: { id: string; isClaimant: boolean }[];
+  creates: WantedMention[];
+} {
+  const wantedByPolitician = new Map(wanted.map((w) => [w.politicianId, w]));
+  const storedPoliticians = new Set(stored.map((m) => m.politicianId));
+  const deleteIds: string[] = [];
+  const updates: { id: string; isClaimant: boolean }[] = [];
+  for (const mention of stored) {
+    if (manuallyEditedIds.has(mention.id)) continue;
+    const want = wantedByPolitician.get(mention.politicianId);
+    if (!want) deleteIds.push(mention.id);
+    else if (want.isClaimant !== mention.isClaimant)
+      updates.push({ id: mention.id, isClaimant: want.isClaimant });
+  }
+  const creates = wanted.filter((w) => !storedPoliticians.has(w.politicianId));
+  return { deleteIds, updates, creates };
+}
+
+/** Mentions an admin created or edited: the admin routes write an AuditLog row for each. */
+async function loadManuallyEditedMentionIds(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await db.auditLog.findMany({
+    where: { entityType: "FactCheckMention", entityId: { in: ids } },
+    select: { entityId: true },
+  });
+  return new Set(rows.map((r) => r.entityId));
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +258,7 @@ export async function syncFactchecks(
     ownSiteSkipped: 0,
     mentionsCreated: 0,
     mentionsBlocked: 0,
+    homonymsSkipped: 0,
     apiErrors: 0,
     errors: [],
   };
@@ -276,13 +359,19 @@ export async function syncFactchecks(
           // Find all politician mentions in the claim text + title
           const searchText = `${claim.text} ${review.title} ${claim.claimant || ""}`;
           const rawMentions = findMentions(searchText, allPoliticians);
-          const mentions = rawMentions.filter((m) => {
+          const unblocked = rawMentions.filter((m) => {
             if (blocklist.isBlocked(m.matchedName, m.politicianId)) {
               stats.mentionsBlocked++;
               return false;
             }
             return true;
           });
+          const { kept: mentions, skipped: mentionHomonyms } = keepOneHomonym(
+            unblocked,
+            allPoliticians,
+            target.id
+          );
+          stats.homonymsSkipped += mentionHomonyms;
 
           // If no politician matched, at least link to the target
           if (mentions.length === 0) {
@@ -293,7 +382,14 @@ export async function syncFactchecks(
           }
 
           // Determine which mentioned politicians are the actual claimant
-          const claimantIds = computeClaimantIds(claim.claimant, allPoliticians, blocklist);
+          const claimants = computeClaimantIds(
+            claim.claimant,
+            allPoliticians,
+            blocklist,
+            target.id
+          );
+          const claimantIds = claimants.ids;
+          stats.homonymsSkipped += claimants.homonymsSkipped;
 
           const verdictRating = mapTextualRating(review.textualRating);
           const reviewDate = review.reviewDate ? new Date(review.reviewDate) : new Date();
@@ -350,57 +446,63 @@ export async function syncFactchecks(
           } else {
             try {
               if (force) {
-                // The upsert replaces every mention: a politician dropped from them still shows
-                // the fact-check on a stored profile, so it is recomputed too.
+                // Mentions are reconciled one by one after the upsert rather than replaced
+                // wholesale: replacing them erased every admin correction on each forced run.
                 const previous = await db.factCheckMention.findMany({
                   where: { factCheck: { sourceUrl: review.url } },
-                  select: { politicianId: true },
+                  select: { id: true, politicianId: true, isClaimant: true },
                 });
+                const manuallyEdited = await loadManuallyEditedMentionIds(
+                  previous.map((m) => m.id)
+                );
+                const fields = {
+                  claimText: claim.text,
+                  claimant: claim.claimant || null,
+                  title,
+                  verdict: review.textualRating,
+                  verdictRating,
+                  source,
+                  publishedAt: reviewDate,
+                  claimDate: claim.claimDate ? new Date(claim.claimDate) : null,
+                  languageCode: review.languageCode || null,
+                };
                 const written = await db.factCheck.upsert({
                   where: { sourceUrl: review.url },
-                  update: {
-                    claimText: claim.text,
-                    claimant: claim.claimant || null,
-                    title,
-                    verdict: review.textualRating,
-                    verdictRating,
-                    source,
-                    publishedAt: reviewDate,
-                    claimDate: claim.claimDate ? new Date(claim.claimDate) : null,
-                    languageCode: review.languageCode || null,
-                    mentions: {
-                      deleteMany: {},
-                      create: mentions.map((m) => ({
-                        politicianId: m.politicianId,
-                        matchedName: m.matchedName,
-                        isClaimant: claimantIds.has(m.politicianId),
-                      })),
-                    },
-                  },
+                  update: fields,
                   create: {
+                    ...fields,
                     slug: await generateUniqueFactCheckSlug(reviewDate, title),
-                    claimText: claim.text,
-                    claimant: claim.claimant || null,
-                    title,
-                    verdict: review.textualRating,
-                    verdictRating,
-                    source,
                     sourceUrl: review.url,
-                    publishedAt: reviewDate,
-                    claimDate: claim.claimDate ? new Date(claim.claimDate) : null,
-                    languageCode: review.languageCode || null,
                     publicationStatus: getPublicationStatusForSource(source),
-                    mentions: {
-                      create: mentions.map((m) => ({
-                        politicianId: m.politicianId,
-                        matchedName: m.matchedName,
-                        isClaimant: claimantIds.has(m.politicianId),
-                      })),
-                    },
                   },
                   select: { id: true },
                 });
+                const plan = planForcedMentions(
+                  previous,
+                  mentions.map((m) => ({
+                    politicianId: m.politicianId,
+                    matchedName: m.matchedName,
+                    isClaimant: claimantIds.has(m.politicianId),
+                  })),
+                  manuallyEdited
+                );
+                if (plan.deleteIds.length > 0) {
+                  await db.factCheckMention.deleteMany({ where: { id: { in: plan.deleteIds } } });
+                }
+                for (const update of plan.updates) {
+                  await db.factCheckMention.update({
+                    where: { id: update.id },
+                    data: { isClaimant: update.isClaimant },
+                  });
+                }
+                for (const create of plan.creates) {
+                  await db.factCheckMention.create({
+                    data: { factCheckId: written.id, ...create },
+                  });
+                }
                 writtenFactCheckIds.add(written.id);
+                // A politician dropped from the mentions still shows the fact-check on a stored
+                // profile, so it is recomputed too.
                 for (const m of previous) previouslyMentionedIds.add(m.politicianId);
               } else {
                 const written = await db.factCheck.create({
