@@ -235,13 +235,16 @@ function toSource(source: { sourceKind: MeasureSourceKind; url: string } | undef
   return { kindLabel: MEASURE_SOURCE_KIND_LABELS[source.sourceKind], host: sourceHost(source.url) };
 }
 
-async function queryHubLatestMeasures(electionId: string): Promise<HubLatestMeasure[]> {
-  // One query per candidacy shown, each excluding the candidacies already taken. A fixed scan
-  // of the newest rows fails the day a batch is published for one candidate: they would all be
-  // his, and the block would collapse to a single card.
+async function queryHubLatestMeasures(
+  electionId: string,
+  statusChanges: HubStatusChange[]
+): Promise<HubLatestMeasure[]> {
+  // One query per candidacy, each excluding the candidacies already taken. A fixed scan of the
+  // newest rows fails the day a batch is published for one candidate: they would all be his,
+  // and the block would collapse to a single card.
   const latest: HubLatestMeasure[] = [];
   const taken: string[] = [];
-  while (latest.length < HUB_LATEST_MEASURES_LIMIT) {
+  while (!isHubBlockSettled(latest, statusChanges)) {
     const row = await db.measure.findFirst({
       where: {
         electionId,
@@ -401,13 +404,30 @@ export function mergeHubLatestUpdates(
     .slice(0, HUB_LATEST_MEASURES_LIMIT);
 }
 
+/**
+ * True once no measure still unread can enter the block. Measures are read newest first, so an
+ * unread one is at best as recent as the last one read: the block is settled when it is full
+ * down to that date. Counting measures alone is not enough, because a change of status can take
+ * the place of its candidacy's measure and carry an older date, which frees a slot.
+ */
+function isHubBlockSettled(measures: HubLatestMeasure[], statusChanges: HubStatusChange[]) {
+  const lastRead = measures.at(-1);
+  if (lastRead === undefined) return false;
+  const block = mergeHubLatestUpdates(measures, statusChanges);
+  const lastShown = block.at(-1);
+  return (
+    block.length === HUB_LATEST_MEASURES_LIMIT &&
+    lastShown !== undefined &&
+    updateDate(lastShown) >= lastRead.publishedAt.getTime()
+  );
+}
+
 /** Plain async, integration-testable. Pages call `getHubLatestUpdates`, which caches this. */
 export async function loadHubLatestUpdates(electionId: string): Promise<HubLatestUpdate[]> {
   return observeRead("presidential.hub.latest", async () => {
-    const [measures, statusChanges] = await Promise.all([
-      queryHubLatestMeasures(electionId),
-      queryHubStatusChanges(electionId),
-    ]);
+    // Status changes first: the measure read needs them to know when to stop.
+    const statusChanges = await queryHubStatusChanges(electionId);
+    const measures = await queryHubLatestMeasures(electionId, statusChanges);
     return mergeHubLatestUpdates(measures, statusChanges);
   });
 }
