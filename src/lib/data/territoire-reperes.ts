@@ -27,7 +27,8 @@ export interface RepereSourceRef {
   licenceName: string;
   licenceUrl: string;
   attribution: string;
-  methodSlug: string;
+  /** Null when the source feeds several method pages: the indicator config names its page. */
+  methodSlug: string | null;
   /** ISO timestamp of the import that wrote the row. */
   importedAt: string;
 }
@@ -70,7 +71,7 @@ interface RawRow {
   licenceName: string;
   licenceUrl: string;
   attribution: string;
-  methodSlug: string;
+  methodSlug: string | null;
   importedAt: Date;
 }
 

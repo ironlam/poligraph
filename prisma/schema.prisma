@@ -2992,8 +2992,10 @@ model RepereSource {
   licenceUrl  String
   /// Attribution line the licence requires, shown with every figure of this source.
   attribution String
-  /// Slug of the public method page, /territoires/methode/[methodSlug].
-  methodSlug  String
+  /// Slug of the public method page, /territoires/methode/[methodSlug]. Null when the resource
+  /// feeds several method pages (an OFGL accounts dataset feeds five): each indicator then
+  /// carries its own page in its config.
+  methodSlug  String?
   createdAt   DateTime @default(now())
 
   imports RepereImport[]

@@ -53,7 +53,7 @@ async function loadLots() {
           importedAt: true,
           reviewedBy: true,
           reviewedAt: true,
-          source: { select: { producer: true, methodSlug: true } },
+          source: { select: { producer: true, methodSlug: true, resourceUrl: true } },
         },
       }),
       db.territoireRepere.groupBy({ by: ["importId", "state"], _count: { _all: true } }),
@@ -89,8 +89,8 @@ export default async function AdminReperesPage() {
       {lots.map((lot) => (
         <Card key={lot.id} className="space-y-4 p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-display text-lg font-bold">
-              {lot.source.producer} : {lot.source.methodSlug}
+            <h2 className="min-w-0 font-display text-lg font-bold [overflow-wrap:anywhere]">
+              {lot.source.producer} : {lot.source.methodSlug ?? lot.source.resourceUrl}
             </h2>
             <p className="text-sm font-semibold">{LOT_STATUS_LABELS[lot.status]}</p>
           </div>
