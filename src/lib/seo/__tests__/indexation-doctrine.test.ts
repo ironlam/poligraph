@@ -30,6 +30,7 @@ import {
   VOTES_LISTING_FILTER_KEYS,
   DOSSIERS_LISTING_FILTER_KEYS,
   PRESIDENTIAL_CANDIDATES_FILTER_KEYS,
+  PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
 } from "../listing-filters";
 
 // votes/page.tsx renders <ScrutinsListing>, whose data-layer import chain
@@ -115,7 +116,13 @@ const BARE_VOTE_SOLENNEL: ScrutinIndexSignals = { ...BARE_AMENDMENT, type: "FINA
 
 describe("doctrine — strong surfaces stay indexable", () => {
   it("presidential affairs hub with published content stays indexable", async () => {
-    vi.mocked(getPresidentialAffairs).mockResolvedValue({ affairs: [], total: 1 });
+    vi.mocked(getPresidentialAffairs).mockResolvedValue({
+      affairs: [],
+      total: 1,
+      candidates: [],
+      candidat: null,
+      tri: "recentes",
+    });
     const metadata = await presidentialAffairsGenerateMetadata({});
     expect(metadata.robots).toBeUndefined();
     expect(metadata.alternates?.canonical).toBe(
@@ -248,6 +255,27 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
       NOINDEX_FOLLOW
     );
   });
+  it("presidential affairs filtered by candidate (?candidat)", async () => {
+    vi.mocked(getPresidentialAffairs).mockResolvedValue({
+      affairs: [],
+      total: 3,
+      candidates: [],
+      candidat: null,
+      tri: "recentes",
+    });
+    const metadata = await presidentialAffairsGenerateMetadata({
+      searchParams: Promise.resolve({ candidat: "jean-dupont" }),
+    });
+    expect(metadata.robots).toEqual(NOINDEX_FOLLOW.robots);
+    expect(metadata.alternates?.canonical).toBe(
+      "/elections/presidentielle-2027/affaires-judiciaires"
+    );
+  });
+  it("sorted presidential affairs (?tri)", () => {
+    expect(listingRobots({ tri: "anciennes" }, PRESIDENTIAL_AFFAIRS_FILTER_KEYS)).toEqual(
+      NOINDEX_FOLLOW
+    );
+  });
   it("presidential comparison combinations stay noindex,follow", () => {
     expect(presidentialComparisonMetadata.robots).toEqual({ index: false, follow: true });
     expect(presidentialComparisonMetadata.alternates?.canonical).toBe(
@@ -287,6 +315,11 @@ describe("doctrine — listing noindex perimeters can't silently shrink", () => 
       route: "/parlement/votes",
       keys: VOTES_LISTING_FILTER_KEYS,
       mandatory: ["chamber", "theme", "result", "sort"],
+    },
+    {
+      route: "/elections/presidentielle-2027/affaires-judiciaires",
+      keys: PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
+      mandatory: ["candidat", "tri"],
     },
     {
       route: "/parlement/dossiers",
@@ -923,6 +956,18 @@ describe("doctrine : un listing ne lit aucun paramètre d'adresse sans verdict d
       keys: VOTES_LISTING_FILTER_KEYS,
       // filter: the bare ?filter=expliques view is indexable on purpose (`isBareExplainedView`).
       decidedInPage: ["page", "filter"],
+    },
+    {
+      route: "/elections/presidentielle-2027/affaires-judiciaires",
+      page: "src/app/elections/presidentielle-2027/affaires-judiciaires/page.tsx",
+      keys: PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
+      decidedInPage: ["page"],
+    },
+    {
+      route: "/elections/presidentielle-2027/affaires-judiciaires",
+      page: "src/app/elections/presidentielle-2027/affaires-judiciaires/page.tsx",
+      keys: PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
+      decidedInPage: ["page"],
     },
     {
       route: "/parlement/dossiers",
