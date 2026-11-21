@@ -15,7 +15,8 @@ import { ShareBar } from "@/components/ui/ShareBar";
 import { FactCheckShareSheet } from "@/components/share/FactCheckShareSheet";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
-import { getFactCheckContext } from "@/lib/data/factcheck-context";
+import { factCheckContextInput, getFactCheckContext } from "@/lib/data/factcheck-context";
+import { factCheckRobotsMetadata } from "@/lib/seo/factcheck-robots";
 import { FactCheckPeople, type FactCheckPerson } from "@/components/factchecks/FactCheckPeople";
 import {
   AuthorBlock,
@@ -77,6 +78,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return missingEntityMetadata("Fact-check non trouvé");
   }
 
+  // Same cached call as the page body: the verdict is computed once, in the data layer.
+  const context = await getFactCheckContext(factCheckContextInput({ ...factCheck, slug }));
+
   const ratingLabel = FACTCHECK_RATING_LABELS[factCheck.verdictRating];
   const description = factCheck.claimant
     ? `${ratingLabel} — ${factCheck.claimant} : « ${factCheck.claimText.slice(0, 120)} »`
@@ -86,6 +90,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: factCheck.title,
     description,
     alternates: { canonical: `/factchecks/${slug}` },
+    ...factCheckRobotsMetadata(context.indexable),
     openGraph: openGraph({
       title: `${ratingLabel} — ${factCheck.title}`,
       description,
@@ -119,16 +124,11 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
   });
   const claimants = factCheck.mentions.filter((m) => m.isClaimant).map(toPerson);
   const subjects = factCheck.mentions.filter((m) => !m.isClaimant).map(toPerson);
-  // Context is read for a single identified author only: with several, no block can say whose
-  // record it shows.
-  const author = claimants.length === 1 ? claimants[0]! : null;
+  const contextInput = factCheckContextInput({ ...factCheck, slug });
+  const author = claimants.find((c) => c.slug === contextInput.authorSlug) ?? null;
 
   // Not awaited: each block awaits it inside its own Suspense boundary, so the header streams first.
-  const context = getFactCheckContext({
-    factCheckSlug: slug,
-    authorSlug: author?.slug ?? null,
-    claimDay: factCheck.claimDate ? factCheck.claimDate.toISOString().slice(0, 10) : null,
-  });
+  const context = getFactCheckContext(contextInput);
 
   return (
     <>

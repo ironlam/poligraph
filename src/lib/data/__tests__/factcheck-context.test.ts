@@ -31,6 +31,7 @@ vi.mock("../factchecks", () => ({ getPoliticianFactcheckContext: mocks.baseConte
 
 import {
   EMPTY_FACTCHECK_CONTEXT,
+  factCheckContextInput,
   getFactCheckContext,
   groupClaimDayScrutins,
   queryFactCheckContext,
@@ -283,6 +284,27 @@ describe("queryFactCheckContext", () => {
       personCount: 30,
     });
     expect(ctx.candidacy).toBeNull();
+    // Record, claim day and party: three blocks.
+    expect(ctx.indexable).toBe(true);
+  });
+
+  it("n'indexe pas un auteur sans parti dont le seul fact-check est celui de la page", async () => {
+    mocks.politicianFindFirst.mockResolvedValue(politicianRow(null));
+    mocks.mentionFindMany.mockResolvedValue([
+      {
+        factCheck: {
+          slug: INPUT.factCheckSlug,
+          title: "Seul",
+          verdictRating: "FALSE",
+          source: "AFP Factuel",
+          publishedAt: new Date("2026-10-09"),
+        },
+      },
+    ]);
+    mocks.voteFindMany.mockResolvedValue([]);
+    const ctx = await queryFactCheckContext(INPUT);
+    expect(ctx.record?.total).toBe(1);
+    expect(ctx.indexable).toBe(false);
   });
 
   it("n'a pas de bloc parti pour un auteur sans parti", async () => {
@@ -331,6 +353,31 @@ describe("queryFactCheckContext", () => {
     mocks.mentionFindMany.mockResolvedValue([]);
     const ctx = await queryFactCheckContext(INPUT);
     expect(ctx.record).toBeNull();
+  });
+});
+
+describe("factCheckContextInput", () => {
+  const mention = (slug: string, isClaimant: boolean) => ({ isClaimant, politician: { slug } });
+
+  it("retient l'auteur unique et le jour UTC de la déclaration", () => {
+    expect(
+      factCheckContextInput({
+        slug: "fc",
+        claimDate: new Date("2026-10-09T22:30:00.000Z"),
+        mentions: [mention("panot", true), mention("attal", false)],
+      })
+    ).toEqual({ factCheckSlug: "fc", authorSlug: "panot", claimDay: "2026-10-09" });
+  });
+
+  it("ne retient aucun auteur quand il y en a plusieurs ou aucun", () => {
+    const base = { slug: "fc", claimDate: null };
+    expect(
+      factCheckContextInput({ ...base, mentions: [mention("a", true), mention("b", true)] })
+        .authorSlug
+    ).toBeNull();
+    expect(
+      factCheckContextInput({ ...base, mentions: [mention("a", false)] }).authorSlug
+    ).toBeNull();
   });
 });
 
