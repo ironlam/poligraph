@@ -375,7 +375,7 @@ export function RecapView({ weekStart, data }: RecapViewProps) {
                         {data.factChecks.topPoliticians.map((p) => (
                           <Link
                             key={p.slug}
-                            href={`/factchecks?politician=${p.slug}&directOnly=1`}
+                            href={`/factchecks/politique/${p.slug}`}
                             className="flex items-center gap-3 group"
                             prefetch={false}
                           >
