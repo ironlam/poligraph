@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { MetadataRoute } from "next";
 import { OG_IMAGE_DISALLOW_PATHS, SOCIAL_PREVIEW_USER_AGENTS } from "@/lib/seo/og-image-robots";
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { SITEMAP_SHARD_IDS } from "@/lib/seo/sitemap-tags";
+import { SITE_URL } from "@/config/site";
 
 const ORIGINAL_VERCEL_ENV = process.env.VERCEL_ENV;
 
@@ -75,10 +77,11 @@ describe("robots.txt (production)", () => {
   });
 
   it("announces every sitemap shard", () => {
-    // One entry per id returned by generateSitemaps() in src/app/sitemap.ts (5: Territoires).
+    // One entry per shard id, the list generateSitemaps() in src/app/sitemap.ts derives from too.
     const sitemaps = asArray(robots.sitemap as string[]);
-    expect(sitemaps).toHaveLength(6);
-    expect(sitemaps.at(-1)).toMatch(/\/sitemap\/5\.xml$/);
+    expect(sitemaps).toHaveLength(SITEMAP_SHARD_IDS.length);
+    // 6: the indexable fact-checks.
+    expect(sitemaps.at(-1)).toBe(`${SITE_URL}/sitemap/6.xml`);
   });
 
   describe("generic crawlers", () => {

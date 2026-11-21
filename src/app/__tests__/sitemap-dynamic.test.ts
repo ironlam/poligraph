@@ -96,7 +96,7 @@ describe("the sitemap route renders per request", () => {
     expect(firstDb).toBeGreaterThan(tagAt);
   });
 
-  it("still exposes exactly six shards", async () => {
+  it("exposes exactly seven shards (6: the indexable fact-checks)", async () => {
     expect(await generateSitemaps()).toEqual([
       { id: 0 },
       { id: 1 },
@@ -104,6 +104,7 @@ describe("the sitemap route renders per request", () => {
       { id: 3 },
       { id: 4 },
       { id: 5 },
+      { id: 6 },
     ]);
   });
 
