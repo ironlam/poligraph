@@ -143,10 +143,18 @@ describe("robots.txt (production)", () => {
 
     // A named group replaces the generic one for that crawler: forgetting a rule here would
     // reopen to these two what is closed to everyone else.
-    it("restates every rule of the generic group", () => {
-      const generic = asArray(groupFor(robots, "*")!.disallow);
-      expect(asArray(groupFor(robots, "ShapBot")!.disallow)).toEqual(generic);
-      expect(generic.length).toBeGreaterThan(5);
+    it.each(["ShapBot", "ClaudeBot"])(
+      "restates every rule of the generic group for %s",
+      (agent) => {
+        const generic = asArray(groupFor(robots, "*")!.disallow);
+        expect(asArray(groupFor(robots, agent)!.disallow)).toEqual(generic);
+        expect(generic.length).toBeGreaterThan(5);
+      }
+    );
+
+    // ClaudeBot crawled at exactly the pace a ten-second delay allows, all day long.
+    it("slows ClaudeBot down to one page a minute at most", () => {
+      expect(groupFor(robots, "ClaudeBot")!.crawlDelay).toBeGreaterThanOrEqual(60);
     });
 
     it("leaves every other crawler without a delay", () => {
