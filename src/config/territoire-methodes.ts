@@ -13,9 +13,29 @@ import {
  * officials.
  */
 
+/** D28: the accounts are a family of their own, shown outside "Le territoire en chiffres". */
+export type RepereFamille = "CHIFFRES" | "COMPTES";
+
+/** Completes « le chiffre X … » in the page description. */
+export const REPERE_FAMILLE_DU: Record<RepereFamille, string> = {
+  CHIFFRES: "du territoire en chiffres",
+  COMPTES: "des comptes de la collectivité",
+};
+
+/** Producer's own definition, quoted word for word, with the date it was read. */
+export interface DefinitionOfficielle {
+  texte: string;
+  producteur: string;
+  documentTitle: string;
+  documentUrl: string;
+  lueLe: string;
+}
+
 export interface RepereMethode {
   slug: string;
   title: string;
+  famille?: RepereFamille;
+  definition?: DefinitionOfficielle;
   sourceIds: readonly string[];
   montre: string;
   calcul: string;
@@ -23,6 +43,126 @@ export interface RepereMethode {
   neDitPas: string;
   historique: readonly { date: string; text: string }[];
 }
+
+const OFGL_SOURCE_IDS = [
+  "ofgl-comptes-communes",
+  "ofgl-comptes-departements",
+  "ofgl-comptes-regions",
+];
+
+/** Read on 2026-11-21 in the OFGL dataset below, field `commentaire`, quoted without change. */
+function definitionOfgl(texte: string): DefinitionOfficielle {
+  return {
+    texte,
+    producteur: "OFGL",
+    documentTitle: "Méthodologie OFGL : définitions des agrégats financiers",
+    documentUrl:
+      "https://data.ofgl.fr/explore/dataset/methodologie-ofgl-definitions-agregats-financiers/",
+    lueLe: "2026-11-21",
+  };
+}
+
+const COMPTES_CALCUL =
+  "Poligraph reprend sans le modifier le montant calculé par l'OFGL à partir des balances comptables que publie la DGFiP. Ce sont des comptes consolidés : le budget principal de la collectivité et ses budgets annexes (eau, assainissement, transports…) sont additionnés, après retrait des flux entre ces budgets. Le montant par habitant est aussi celui de l'OFGL, qui divise le montant par la population totale de la collectivité pour l'exercice. Communes, départements et régions affichent le même exercice : le dernier que l'OFGL a complété pour toutes les communes.";
+
+const COMPTES_CAS_PARTICULIERS =
+  "Paris n'a qu'un compte, celui de la Ville de Paris, qui exerce les compétences d'une commune et d'un département : le même chiffre figure sur les deux pages. Les arrondissements de Paris, Lyon et Marseille n'ont pas de compte propre dans les données de l'OFGL. Pour le Bas-Rhin et le Haut-Rhin, le chiffre est celui de la Collectivité européenne d'Alsace, qui couvre les deux départements. La Corse, la Martinique et la Guyane ont chacune une collectivité unique, dont les comptes figurent sur la page de la région. Mayotte est un département qui exerce aussi les compétences d'une région : ses comptes figurent sur la page du département. Sur le territoire de la métropole de Lyon, c'est la métropole qui exerce les compétences du département, et le chiffre du Rhône ne couvre pas ce territoire.";
+
+const COMPTES_SANS_STRATE =
+  "Aucune moyenne de strate n'est affichée à côté du chiffre. L'OFGL n'en publie pas, et celle de la DGFiP porte sur le budget principal seul, avec d'autres définitions : la placer à côté d'un chiffre consolidé rapprocherait deux mesures différentes.";
+
+const COMPTES_INTERCOMMUNALITE =
+  "Une commune confie souvent une partie de ses services à son intercommunalité ou à un syndicat, qui tiennent leurs propres comptes : deux communes de même taille ne se comparent pas sur ce seul chiffre.";
+
+const COMPTES_NE_DIT_PAS =
+  "Ce montant ne dit pas si la dépense est utile ni comment le service est rendu aux habitants. Il ne se rapporte à aucun élu ni à aucun parti.";
+
+const COMPTES_HISTORIQUE = [
+  {
+    date: "2026-11-21",
+    text: "Première version de la méthode, publiée avant tout import de données.",
+  },
+] as const;
+
+const COMPTES_METHODES: readonly RepereMethode[] = [
+  {
+    slug: "depenses-de-fonctionnement",
+    title: "Dépenses de fonctionnement",
+    famille: "COMPTES",
+    definition: definitionOfgl(
+      "Les dépenses de fonctionnement comprennent l'ensemble des dépenses récurrentes de la collectivité, nécessaires au fonctionnement de ses services et à la mise en œuvre de ses compétences, ainsi que les charges financières et les dépenses exceptionnelles qui ne modifient pas son patrimoine."
+    ),
+    sourceIds: OFGL_SOURCE_IDS,
+    montre:
+      "Ce que la collectivité a dépensé dans l'année pour faire fonctionner ses services : salaires, achats, subventions et aides versées, intérêts de la dette. Le chiffre est donné en euros par habitant, puis en montant total.",
+    calcul: `${COMPTES_CALCUL} L'OFGL retire du total les dotations aux amortissements et aux provisions et la valeur comptable des biens cédés, des écritures qui ne correspondent pas à une dépense de l'année.`,
+    limites: `${COMPTES_INTERCOMMUNALITE} ${COMPTES_CAS_PARTICULIERS} ${COMPTES_SANS_STRATE}`,
+    neDitPas: COMPTES_NE_DIT_PAS,
+    historique: COMPTES_HISTORIQUE,
+  },
+  {
+    slug: "frais-de-personnel",
+    title: "Frais de personnel",
+    famille: "COMPTES",
+    definition: definitionOfgl(
+      "Les frais de personnel constituent l'un des postes des dépenses de fonctionnement. Ils correspondent au paiement du traitement des agents de la collectivité, ainsi que des charges afférentes."
+    ),
+    sourceIds: OFGL_SOURCE_IDS,
+    montre:
+      "La rémunération des agents de la collectivité et les charges qui s'y rattachent, cotisations et taxes sur les salaires comprises. C'est une partie des dépenses de fonctionnement.",
+    calcul: `${COMPTES_CALCUL} Le personnel extérieur que la collectivité fait travailler pour ses services, et qu'elle rembourse à un autre organisme, est compté.`,
+    limites: `Un service confié à une entreprise, à une association ou à l'intercommunalité n'apparaît pas ici : ses salariés sont payés par un autre employeur. Le chiffre ne donne pas le nombre d'agents. ${COMPTES_CAS_PARTICULIERS} ${COMPTES_SANS_STRATE}`,
+    neDitPas: COMPTES_NE_DIT_PAS,
+    historique: COMPTES_HISTORIQUE,
+  },
+  {
+    slug: "depenses-d-equipement",
+    title: "Dépenses d'équipement",
+    famille: "COMPTES",
+    definition: definitionOfgl(
+      "Les dépenses d'équipement constituent un sous-poste des dépenses d'investissement hors remboursements d'emprunts. Elles correspondent aux opérations d'investissement réalisées sur le patrimoine propre de la collectivité."
+    ),
+    sourceIds: OFGL_SOURCE_IDS,
+    montre:
+      "Ce que la collectivité a investi dans l'année dans son propre patrimoine : bâtiments, voirie, réseaux, terrains, matériel, études et logiciels.",
+    calcul: `${COMPTES_CALCUL} Les subventions d'équipement versées à d'autres organismes et les avances versées sur commande n'en font pas partie.`,
+    limites: `Un chantier s'étale souvent sur plusieurs années, et le chiffre d'un exercice isolé peut monter ou baisser avec un seul projet. Un équipement construit par l'intercommunalité n'apparaît pas dans les comptes de la commune. ${COMPTES_CAS_PARTICULIERS} ${COMPTES_SANS_STRATE}`,
+    neDitPas: COMPTES_NE_DIT_PAS,
+    historique: COMPTES_HISTORIQUE,
+  },
+  {
+    slug: "encours-de-dette",
+    title: "Encours de dette",
+    famille: "COMPTES",
+    definition: definitionOfgl(
+      "L'encours de dette correspond au stock de dette due par la collectivité au 31 décembre de l'exercice. Il inclut essentiellement les dettes bancaires et assimilées, mais également les dépôts et cautionnements reçus, ainsi que d'autres opérations assimilées à de la dette."
+    ),
+    sourceIds: OFGL_SOURCE_IDS,
+    montre:
+      "Le capital que la collectivité doit encore rembourser au 31 décembre de l'exercice. C'est un stock, accumulé au fil des années, et non une dépense de l'année.",
+    calcul: `${COMPTES_CALCUL} Les intérêts courus et les primes de remboursement des obligations n'en font pas partie.`,
+    limites: `Les emprunts de l'intercommunalité, et ceux des sociétés ou établissements liés à la collectivité, ne sont pas dans ce chiffre. Il ne dit pas en combien d'années la dette sera remboursée. ${COMPTES_CAS_PARTICULIERS} ${COMPTES_SANS_STRATE}`,
+    neDitPas:
+      "Ce montant ne dit pas à quoi l'argent emprunté a servi. Il ne se rapporte à aucun élu ni à aucun parti.",
+    historique: COMPTES_HISTORIQUE,
+  },
+  {
+    slug: "epargne-brute",
+    title: "Épargne brute",
+    famille: "COMPTES",
+    definition: definitionOfgl(
+      "L'épargne brute correspond à la différence entre les recettes et les dépenses de fonctionnement de l'année. Elle constitue l'épargne dégagée par le fonctionnement de la collectivité. Cette épargne finance prioritairement le remboursement du capital de la dette et, le cas échéant, les investissements de la collectivité."
+    ),
+    sourceIds: OFGL_SOURCE_IDS,
+    montre:
+      "Ce qui reste des recettes de fonctionnement de l'année une fois payées les dépenses de fonctionnement. Cette somme sert d'abord à rembourser le capital de la dette, puis à financer des investissements.",
+    calcul: `${COMPTES_CALCUL} Le chiffre est négatif quand les dépenses de fonctionnement dépassent les recettes : il est alors affiché avec son signe.`,
+    limites: `Une recette ou une dépense exceptionnelle peut suffire à le faire varier d'une année à l'autre. ${COMPTES_INTERCOMMUNALITE} ${COMPTES_CAS_PARTICULIERS} ${COMPTES_SANS_STRATE}`,
+    neDitPas:
+      "Ce montant ne dit pas comment la collectivité équilibre ses recettes et ses dépenses ni ce qu'elle prévoit d'en faire. Il ne se rapporte à aucun élu ni à aucun parti.",
+    historique: COMPTES_HISTORIQUE,
+  },
+];
 
 export const REPERE_METHODES: readonly RepereMethode[] = [
   {
@@ -96,6 +236,7 @@ export const REPERE_METHODES: readonly RepereMethode[] = [
       },
     ],
   },
+  ...COMPTES_METHODES,
 ];
 
 export function repereMethode(slug: string): RepereMethode | undefined {
