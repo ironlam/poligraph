@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { COMPTES_AGREGATS } from "@/config/territoire-comptes";
 import { methodeSources, REPERE_METHODES } from "@/config/territoire-methodes";
 import { TERRITOIRES_SOURCES } from "@/config/territoires-sources";
 import fixture from "./fixtures/ofgl-definitions-agregats.json";
@@ -6,14 +7,10 @@ import fixture from "./fixtures/ofgl-definitions-agregats.json";
 // D28: the five method pages of "Les comptes de la collectivité" ship before any import.
 const COMPTES = REPERE_METHODES.filter((m) => m.famille === "COMPTES");
 
-// OFGL aggregate name for each method slug, as written in the producer's dataset.
-const AGREGAT_BY_SLUG: Record<string, string> = {
-  "depenses-de-fonctionnement": "Dépenses de fonctionnement",
-  "frais-de-personnel": "Frais de personnel",
-  "depenses-d-equipement": "Dépenses d'équipement",
-  "encours-de-dette": "Encours de dette",
-  "epargne-brute": "Epargne brute",
-};
+// OFGL aggregate name for each method slug, from the indicator config.
+const AGREGAT_BY_SLUG: Record<string, string> = Object.fromEntries(
+  COMPTES_AGREGATS.map((a) => [a.methodSlug, a.ofglAgregat])
+);
 
 const texts = (m: (typeof COMPTES)[number]) => [
   m.title,
