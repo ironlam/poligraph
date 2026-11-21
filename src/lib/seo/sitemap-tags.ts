@@ -1,6 +1,13 @@
 import type { SelectableCacheTag } from "@/lib/cache-tags";
 
 /**
+ * The sitemap shard ids. `generateSitemaps`, the shard switch of `src/app/sitemap.ts` and the
+ * sitemap list of `src/app/robots.ts` all derive from this one list.
+ */
+export const SITEMAP_SHARD_IDS = [0, 1, 2, 3, 4, 5, 6] as const;
+export type SitemapShardId = (typeof SITEMAP_SHARD_IDS)[number];
+
+/**
  * The cache tags each sitemap shard depends on.
  *
  * `src/app/sitemap.ts` declares these on its `"use cache"` entries so ordinary
@@ -30,7 +37,10 @@ export const SITEMAP_SHARD_TAGS = {
   // with its mayor's publication; "territoires": the operator purge of the section; "elections":
   // the elections sub-page is listed only for communes with recorded results.
   5: ["politicians", "territoires", "elections"],
-} as const satisfies Record<number, readonly SelectableCacheTag[]>;
+  // Indexable fact-checks. "politicians": the author's publication and current party; "votes": the
+  // claim-day block; "elections": the presidential candidacy block.
+  6: ["factchecks", "politicians", "votes", "elections"],
+} as const satisfies Record<SitemapShardId, readonly SelectableCacheTag[]>;
 
 /**
  * Shards an affair can appear in, directly or through the profile it keeps

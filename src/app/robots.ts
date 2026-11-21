@@ -2,6 +2,7 @@ import { MetadataRoute } from "next";
 import { SITE_URL } from "@/config/site";
 import { OG_IMAGE_DISALLOW_PATHS, SOCIAL_PREVIEW_USER_AGENTS } from "@/lib/seo/og-image-robots";
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { SITEMAP_SHARD_IDS } from "@/lib/seo/sitemap-tags";
 
 const isProduction =
   process.env.VERCEL_ENV === "production" ||
@@ -113,13 +114,6 @@ export default function robots(): MetadataRoute.Robots {
         crawlDelay,
       })),
     ],
-    sitemap: [
-      `${SITE_URL}/sitemap/0.xml`,
-      `${SITE_URL}/sitemap/1.xml`,
-      `${SITE_URL}/sitemap/2.xml`,
-      `${SITE_URL}/sitemap/3.xml`,
-      `${SITE_URL}/sitemap/4.xml`,
-      `${SITE_URL}/sitemap/5.xml`,
-    ],
+    sitemap: SITEMAP_SHARD_IDS.map((id) => `${SITE_URL}/sitemap/${id}.xml`),
   };
 }

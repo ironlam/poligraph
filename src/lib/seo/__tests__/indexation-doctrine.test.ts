@@ -21,6 +21,11 @@ import {
 import { hasActiveListingFilter, listingRobotsMetadata } from "../listing-robots";
 import { voteDateArchiveRobotsMetadata } from "../parliament-robots";
 import { scrutinRobotsMetadata, type ScrutinIndexSignals } from "../scrutin-robots";
+import {
+  factCheckRobotsMetadata,
+  isIndexableFactCheck,
+  type FactCheckIndexSignals,
+} from "../factcheck-robots";
 import { OG_IMAGE_ROBOTS_SOURCE } from "../og-image-robots";
 import { API_NOINDEX_HEADERS, API_ROBOTS_SOURCE } from "../api-robots";
 import { NEXT_STATIC_NOINDEX_HEADERS, NEXT_STATIC_ROBOTS_SOURCE } from "../next-static-robots";
@@ -114,6 +119,23 @@ const BARE_AMENDMENT: ScrutinIndexSignals = {
 };
 const BARE_VOTE_SOLENNEL: ScrutinIndexSignals = { ...BARE_AMENDMENT, type: "FINAL" };
 
+const factCheckRobots = (signals: FactCheckIndexSignals) =>
+  factCheckRobotsMetadata(isIndexableFactCheck(signals));
+const FACTCHECK_NO_AUTHOR: FactCheckIndexSignals = {
+  hasPublishedAuthor: false,
+  authorFactCheckCount: 0,
+  hasCandidacy: false,
+  hasClaimDayVotes: false,
+  hasParty: false,
+};
+const FACTCHECK_AUTHOR_WITH_RECORD_AND_PARTY: FactCheckIndexSignals = {
+  hasPublishedAuthor: true,
+  authorFactCheckCount: 6,
+  hasCandidacy: false,
+  hasClaimDayVotes: false,
+  hasParty: true,
+};
+
 describe("doctrine — strong surfaces stay indexable", () => {
   it("presidential affairs hub with published content stays indexable", async () => {
     vi.mocked(getPresidentialAffairs).mockResolvedValue({
@@ -202,6 +224,9 @@ describe("doctrine — strong surfaces stay indexable", () => {
   });
   it("editorially promoted key vote", () => {
     expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, isKeyVote: true })).toEqual(INDEXABLE);
+  });
+  it("fact-check whose single author has a record and a party", () => {
+    expect(factCheckRobots(FACTCHECK_AUTHOR_WITH_RECORD_AND_PARTY)).toEqual(INDEXABLE);
   });
 });
 
@@ -297,6 +322,14 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
     expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, citizenImpact: "   " })).toEqual(
       NOINDEX_FOLLOW
     );
+  });
+  it("fact-check with no single published author (duplicate of the source)", () => {
+    expect(factCheckRobots(FACTCHECK_NO_AUTHOR)).toEqual(NOINDEX_FOLLOW);
+  });
+  it("fact-check whose author has only this fact-check and a party (one block)", () => {
+    expect(
+      factCheckRobots({ ...FACTCHECK_AUTHOR_WITH_RECORD_AND_PARTY, authorFactCheckCount: 1 })
+    ).toEqual(NOINDEX_FOLLOW);
   });
   it("scrutin with no ballot recorded, whatever its type", () => {
     expect(scrutinRobotsMetadata({ ...BARE_VOTE_SOLENNEL, totalVotes: 0 })).toEqual(NOINDEX_FOLLOW);
@@ -429,6 +462,47 @@ describe("doctrine — sitemap shares the indexability thresholds (no drift)", (
   it("keeps an unknown scrutin type fail-open", () => {
     expect(scrutinShardQuery).toContain("IS DISTINCT FROM");
   });
+});
+
+describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => {
+  const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
+
+  it("imports the thresholds from the shared helper", () => {
+    expect(src).toContain('from "@/lib/seo/factcheck-robots"');
+  });
+
+  // Scoped to the shard, comments stripped, like the scrutin guard above.
+  const factChecksShard = (() => {
+    const start = src.indexOf("async function buildFactChecksSitemap");
+    expect(start).toBeGreaterThan(-1);
+    const end = src.indexOf("\n}", start);
+    return src
+      .slice(start, end)
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*|--)/.test(line))
+      .join("\n");
+  })();
+
+  it.each([
+    "FACTCHECK_MIN_CONTEXT_BLOCKS",
+    "FACTCHECK_RECORD_MIN_TOTAL",
+    "PUBLIC_POLITICIAN_PUBLICATION_STATUS",
+    'getPublicFactCheckSqlWhere("fc")',
+  ])("uses %s rather than a hardcoded value", (name) => {
+    expect(factChecksShard).toContain(name);
+  });
+
+  it("keeps a single claimant as the precondition", () => {
+    expect(factChecksShard).toContain("HAVING count(*) = 1");
+  });
+
+  // One condition per block counted by isIndexableFactCheck().
+  it.each(['"Candidacy"', '"Vote"', '"currentPartyId"', '"FactCheckMention" m2'])(
+    "counts the block read from %s",
+    (signal) => {
+      expect(factChecksShard).toContain(signal);
+    }
+  );
 });
 
 describe("doctrine — the Territoires shard mirrors isIndexableTerritoireCommune()", () => {
@@ -793,11 +867,9 @@ describe("doctrine — indexable routes the 2026-11-12 audit found missing from 
     expect(dossiersShard).not.toMatch(/legislature: \d+/);
   });
 
-  // Deliberately left out: third-party fact-check summaries (near-duplicates of their source),
-  // the daily view (same content as a noindex date archive), the flagged chatbot, the
+  // Deliberately left out: the daily view (same content as a noindex date archive), the flagged chatbot, the
   // group evidence pages, and the 2026 municipal department pages (overlap with Territoires).
   it.each([
-    "/factchecks/${",
     "/parlement/votes/aujourd-hui",
     "/chat",
     "/projets-gouvernementaux",

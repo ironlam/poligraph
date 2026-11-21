@@ -12,6 +12,7 @@ import {
 import { isFicheCandidatPublishable } from "@/config/publication-gates";
 import { VERDICT_GROUPS } from "@/config/labels";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { isIndexableFactCheck } from "@/lib/seo/factcheck-robots";
 import { getPoliticianFactcheckContext } from "./factchecks";
 
 /**
@@ -26,7 +27,7 @@ import { getPoliticianFactcheckContext } from "./factchecks";
  */
 
 /** Positions that count as taking part in a scrutin. ABSENT and NON_VOTANT do not. */
-const PARTICIPATION_POSITIONS = ["POUR", "CONTRE", "ABSTENTION"] as const;
+export const PARTICIPATION_POSITIONS = ["POUR", "CONTRE", "ABSTENTION"] as const;
 type ParticipationPosition = (typeof PARTICIPATION_POSITIONS)[number];
 
 /** Mandates that name a chamber come first when several are current. */
@@ -128,6 +129,8 @@ export interface FactCheckContext {
   candidacy: AuthorCandidacy | null;
   claimDay: ClaimDay | null;
   party: PartyRecord | null;
+  /** Indexing verdict, computed here once and read by the page metadata. */
+  indexable: boolean;
 }
 
 export const EMPTY_FACTCHECK_CONTEXT: FactCheckContext = {
@@ -136,7 +139,37 @@ export const EMPTY_FACTCHECK_CONTEXT: FactCheckContext = {
   candidacy: null,
   claimDay: null,
   party: null,
+  indexable: false,
 };
+
+/**
+ * The context input of a fact-check, from its mentions already restricted to published profiles.
+ * Context is read for a single identified author only: with several, no block can say whose
+ * record it shows.
+ */
+export function factCheckContextInput(factCheck: {
+  slug: string;
+  claimDate: Date | null;
+  mentions: ReadonlyArray<{ isClaimant: boolean; politician: { slug: string } }>;
+}): FactCheckContextInput {
+  const claimants = factCheck.mentions.filter((m) => m.isClaimant);
+  return {
+    factCheckSlug: factCheck.slug,
+    authorSlug: claimants.length === 1 ? claimants[0]!.politician.slug : null,
+    claimDay: factCheck.claimDate ? factCheck.claimDate.toISOString().slice(0, 10) : null,
+  };
+}
+
+/** The indexing verdict of a context: the author's identity, then the blocks that carry content. */
+export function isIndexableFactCheckContext(context: Omit<FactCheckContext, "indexable">): boolean {
+  return isIndexableFactCheck({
+    hasPublishedAuthor: context.author !== null,
+    authorFactCheckCount: context.record?.total ?? 0,
+    hasCandidacy: context.candidacy !== null,
+    hasClaimDayVotes: context.claimDay !== null,
+    hasParty: context.party !== null,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -417,7 +450,8 @@ export async function queryFactCheckContext(
   const claimDay = input.claimDay ? await queryClaimDay(author.id, input.claimDay) : null;
   const party = author.identity.party ? await queryParty(author.identity.party) : null;
 
-  return { author: author.identity, record, candidacy, claimDay, party };
+  const blocks = { author: author.identity, record, candidacy, claimDay, party };
+  return { ...blocks, indexable: isIndexableFactCheckContext(blocks) };
 }
 
 /**
