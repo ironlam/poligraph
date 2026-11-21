@@ -78,8 +78,9 @@ const INDEXER_DISALLOW = [
  * The other AI crawlers document no such setting (Amazonbot rejects the directive outright), so
  * nothing is declared for them here.
  */
-const CRAWL_DELAY_USER_AGENTS = ["ShapBot", "ClaudeBot"] as const;
-const CRAWL_DELAY_SECONDS = 10;
+// Seconds between two requests, per crawler. ClaudeBot used the whole allowance of a ten-second
+// delay, day after day (one page every ten seconds, around the clock), so it gets a longer one.
+const CRAWL_DELAYS: Record<string, number> = { ShapBot: 10, ClaudeBot: 60 };
 
 export default function robots(): MetadataRoute.Robots {
   if (!isProduction) {
@@ -103,14 +104,14 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         disallow: SHARED_DISALLOW,
       },
-      // A crawler obeys only the most specific group that names it: this one restates every
-      // rule of the generic group, plus the delay.
-      {
-        userAgent: [...CRAWL_DELAY_USER_AGENTS],
+      // A crawler obeys only the most specific group that names it: each of these restates
+      // every rule of the generic group, plus its delay.
+      ...Object.entries(CRAWL_DELAYS).map(([userAgent, crawlDelay]) => ({
+        userAgent,
         allow: "/",
         disallow: INDEXER_DISALLOW,
-        crawlDelay: CRAWL_DELAY_SECONDS,
-      },
+        crawlDelay,
+      })),
     ],
     sitemap: [
       `${SITE_URL}/sitemap/0.xml`,
