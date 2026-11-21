@@ -56,18 +56,18 @@ export function PresidentialAffairsFilters({
 }
 
 function ChipRow({ legend, children }: { legend: string; children: React.ReactNode }) {
+  const labelId = `affairs-filter-${legend.toLowerCase()}`;
   return (
-    <fieldset>
-      <legend className="mb-1 text-xs font-medium text-muted-foreground">{legend}</legend>
+    // Navigation links, so no radio role: it would announce arrow-key selection links lack.
+    <div role="group" aria-labelledby={labelId}>
+      <p id={labelId} className="mb-1 text-xs font-medium text-muted-foreground">
+        {legend}
+      </p>
       {/* Below md a row scrolls sideways: stacked wrapping chips pushed the list off the first screen. */}
-      <div
-        className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
-        role="radiogroup"
-        aria-label={legend}
-      >
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
         {children}
       </div>
-    </fieldset>
+    </div>
   );
 }
 
@@ -83,8 +83,7 @@ function Chip({
   return (
     <Link
       href={href}
-      role="radio"
-      aria-checked={active}
+      aria-current={active ? "true" : undefined}
       scroll={false}
       prefetch={false}
       className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full border px-4 text-sm transition-colors hover:bg-muted ${
