@@ -1,0 +1,60 @@
+{
+  "total_count": 5,
+  "results": [
+    {
+      "exer": "2024",
+      "dep_code": "29",
+      "siren": "222900011",
+      "categ": "DEPT",
+      "lbudg": "DEP FINISTERE",
+      "agregat": "Dépenses d'équipement",
+      "montant": 67951978.9,
+      "euros_par_habitant": 71.80572009159586,
+      "ptot": 946331
+    },
+    {
+      "exer": "2024",
+      "dep_code": "29",
+      "siren": "222900011",
+      "categ": "DEPT",
+      "lbudg": "DEP FINISTERE",
+      "agregat": "Dépenses de fonctionnement",
+      "montant": 868997915.68,
+      "euros_par_habitant": 918.2811465332953,
+      "ptot": 946331
+    },
+    {
+      "exer": "2024",
+      "dep_code": "29",
+      "siren": "222900011",
+      "categ": "DEPT",
+      "lbudg": "DEP FINISTERE",
+      "agregat": "Encours de dette",
+      "montant": 236838794.42,
+      "euros_par_habitant": 250.27056539413798,
+      "ptot": 946331
+    },
+    {
+      "exer": "2024",
+      "dep_code": "29",
+      "siren": "222900011",
+      "categ": "DEPT",
+      "lbudg": "DEP FINISTERE",
+      "agregat": "Epargne brute",
+      "montant": 71013609.0300001,
+      "euros_par_habitant": 75.04098357762781,
+      "ptot": 946331
+    },
+    {
+      "exer": "2024",
+      "dep_code": "29",
+      "siren": "222900011",
+      "categ": "DEPT",
+      "lbudg": "DEP FINISTERE",
+      "agregat": "Frais de personnel",
+      "montant": 196693827.25,
+      "euros_par_habitant": 207.8488681550113,
+      "ptot": 946331
+    }
+  ]
+}

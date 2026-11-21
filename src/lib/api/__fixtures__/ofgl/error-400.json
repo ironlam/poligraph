@@ -1,0 +1,4 @@
+{
+  "error_code": "IncompatibleTypesInComparisonFilter",
+  "message": "Incompatible types in comparison filter. Left type: date, right_type: text. Clause(s) containing the error(s): where."
+}
