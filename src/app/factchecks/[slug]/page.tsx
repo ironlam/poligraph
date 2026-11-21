@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { Suspense } from "react";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
@@ -15,6 +15,16 @@ import { ShareBar } from "@/components/ui/ShareBar";
 import { FactCheckShareSheet } from "@/components/share/FactCheckShareSheet";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
+import { getFactCheckContext } from "@/lib/data/factcheck-context";
+import { FactCheckPeople, type FactCheckPerson } from "@/components/factchecks/FactCheckPeople";
+import {
+  AuthorBlock,
+  CandidacyBlock,
+  ClaimDayBlock,
+  MethodNote,
+  PartyBlock,
+  RecordBlock,
+} from "@/components/factchecks/context/FactCheckContextBlocks";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -102,12 +112,34 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
     url: `${SITE_URL}/factchecks/${factCheck.slug}`,
   };
 
+  const toPerson = (m: (typeof factCheck.mentions)[number]): FactCheckPerson => ({
+    slug: m.politician.slug,
+    fullName: m.politician.fullName,
+    partyShortName: m.politician.currentParty?.shortName ?? null,
+  });
+  const claimants = factCheck.mentions.filter((m) => m.isClaimant).map(toPerson);
+  const subjects = factCheck.mentions.filter((m) => !m.isClaimant).map(toPerson);
+  // Context is read for a single identified author only: with several, no block can say whose
+  // record it shows.
+  const author = claimants.length === 1 ? claimants[0]! : null;
+
+  // Not awaited: each block awaits it inside its own Suspense boundary, so the header streams first.
+  const context = getFactCheckContext({
+    factCheckSlug: slug,
+    authorSlug: author?.slug ?? null,
+    claimDay: factCheck.claimDate ? factCheck.claimDate.toISOString().slice(0, 10) : null,
+  });
+
   return (
     <>
       <ShareBar data={shareData} />
       <div className="container mx-auto px-4 pt-4 pb-8 max-w-3xl">
         <Breadcrumb
-          items={[{ label: "Fact-checks", href: "/factchecks" }, { label: factCheck.title }]}
+          items={[
+            { label: "Fact-checks", href: "/factchecks" },
+            // The href only feeds the BreadcrumbList JSON-LD: the last step renders as plain text.
+            { label: factCheck.title, href: `/factchecks/${factCheck.slug}` },
+          ]}
         />
         <ClaimReviewJsonLd
           url={`${SITE_URL}/factchecks/${factCheck.slug}`}
@@ -118,6 +150,9 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
           reviewDate={factCheck.publishedAt.toISOString().split("T")[0]!}
           source={factCheck.source}
           sourceUrl={factCheck.sourceUrl}
+          about={
+            author ? { name: author.fullName, url: `${SITE_URL}/politiques/${author.slug}` } : null
+          }
         />
 
         {/* Source */}
@@ -177,75 +212,15 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
           </CardContent>
         </Card>
 
-        {/* Politicians — split by role */}
-        {factCheck.mentions.length > 0 &&
-          (() => {
-            const claimants = factCheck.mentions.filter((m) => m.isClaimant);
-            const subjects = factCheck.mentions.filter((m) => !m.isClaimant);
-
-            return (
-              <Card className="mb-6">
-                <CardContent className="pt-6 space-y-4">
-                  {claimants.length > 0 && (
-                    <div>
-                      <h2 className="text-sm font-semibold mb-2">
-                        Auteur{claimants.length > 1 ? "s" : ""} de la déclaration
-                      </h2>
-                      <div className="flex flex-wrap gap-2">
-                        {claimants.map((mention) => (
-                          <Link
-                            key={mention.politician.slug}
-                            href={`/politiques/${mention.politician.slug}`}
-                            className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted transition-colors"
-                          >
-                            <span className="text-sm font-medium">
-                              {mention.politician.fullName}
-                            </span>
-                            {mention.politician.currentParty && (
-                              <Badge variant="outline" className="text-xs">
-                                {mention.politician.currentParty.shortName}
-                              </Badge>
-                            )}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {subjects.length > 0 && (
-                    <div>
-                      <h2 className="text-sm font-semibold mb-2 text-muted-foreground">
-                        Politicien{subjects.length > 1 ? "s" : ""} concerné
-                        {subjects.length > 1 ? "s" : ""}
-                      </h2>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Mentionné{subjects.length > 1 ? "s" : ""} dans ce fact-check, mais pas
-                        auteur
-                        {subjects.length > 1 ? "s" : ""} de la déclaration vérifiée.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {subjects.map((mention) => (
-                          <Link
-                            key={mention.politician.slug}
-                            href={`/politiques/${mention.politician.slug}`}
-                            className="inline-flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 hover:bg-muted transition-colors"
-                          >
-                            <span className="text-sm text-muted-foreground">
-                              {mention.politician.fullName}
-                            </span>
-                            {mention.politician.currentParty && (
-                              <Badge variant="outline" className="text-xs">
-                                {mention.politician.currentParty.shortName}
-                              </Badge>
-                            )}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
+        {/* Politicians, split by role */}
+        {(claimants.length > 0 || subjects.length > 0) && (
+          <Card className="mb-6">
+            <CardContent className="pt-6 space-y-4">
+              <FactCheckPeople people={claimants} variant="claimant" />
+              <FactCheckPeople people={subjects} variant="subject" />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Source link */}
         <div className="flex justify-center">
@@ -259,11 +234,28 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
           </a>
         </div>
 
-        {/* Disclaimer */}
-        <p className="text-xs text-muted-foreground text-center mt-8">
-          Le verdict ci-dessus provient de {factCheck.source}. Poligraph ne produit pas ses propres
-          vérifications.
-        </p>
+        {/* Context blocks: each renders nothing when it has no data */}
+        <div className="mt-8">
+          <Suspense fallback={null}>
+            <AuthorBlock context={context} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <RecordBlock context={context} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <CandidacyBlock context={context} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <ClaimDayBlock context={context} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <PartyBlock context={context} />
+          </Suspense>
+        </div>
+
+        <Suspense fallback={null}>
+          <MethodNote context={context} source={factCheck.source} />
+        </Suspense>
       </div>
     </>
   );
