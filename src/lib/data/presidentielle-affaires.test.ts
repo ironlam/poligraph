@@ -51,11 +51,17 @@ describe("getPresidentialAffairs", () => {
     ]);
     mocks.count.mockResolvedValue(1);
     mocks.findUnique.mockResolvedValue({ id: "election-2027" });
-    mocks.queryRaw.mockResolvedValue([{ id: "affair-1" }]);
+    mocks.queryRaw
+      .mockResolvedValueOnce([
+        { id: "pol-1", slug: "jean-dupont", fullName: "Jean Dupont", count: 1 },
+      ])
+      .mockResolvedValueOnce([{ id: "affair-1" }]);
 
     const result = await getPresidentialAffairs("presidentielle-2027");
 
     expect(result.total).toBe(1);
+    expect(result.candidates).toEqual([{ slug: "jean-dupont", fullName: "Jean Dupont", count: 1 }]);
+    expect(result.candidat).toBeNull();
     expect(result.affairs[0]).toMatchObject({
       title: "Affaire documentée",
       fineAmount: 1200.5,
@@ -73,5 +79,29 @@ describe("getPresidentialAffairs", () => {
     expect(JSON.stringify(args.where)).toContain('"electionId":"election-2027"');
     expect(JSON.stringify(args.where)).toContain('"sourceUrl":{"not":null}');
     expect(mocks.queryRaw).toHaveBeenCalled();
+  });
+
+  it("filtre par candidat connu et ignore un slug inconnu", async () => {
+    mocks.findUnique.mockResolvedValue({ id: "election-2027" });
+    mocks.findMany.mockResolvedValue([]);
+    mocks.count.mockResolvedValue(0);
+    const facets = [{ id: "pol-1", slug: "jean-dupont", fullName: "Jean Dupont", count: 2 }];
+
+    mocks.queryRaw.mockResolvedValueOnce(facets).mockResolvedValueOnce([]);
+    const known = await getPresidentialAffairs("presidentielle-2027", {
+      candidat: "jean-dupont",
+      tri: "anciennes",
+    });
+    expect(known.candidat).toBe("jean-dupont");
+    expect(known.tri).toBe("anciennes");
+    const countArgs = mocks.count.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+    expect(countArgs.where.politicianId).toBe("pol-1");
+
+    mocks.count.mockClear();
+    mocks.queryRaw.mockResolvedValueOnce(facets).mockResolvedValueOnce([]);
+    const unknown = await getPresidentialAffairs("presidentielle-2027", { candidat: "inconnu" });
+    expect(unknown.candidat).toBeNull();
+    const unfiltered = mocks.count.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+    expect(unfiltered.where.politicianId).toBeUndefined();
   });
 });
