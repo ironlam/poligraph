@@ -128,7 +128,9 @@ jobs:
           name: judge-policy-titles-report
           path: scripts/.local/judge-report*.json
           retention-days: 14
-          if-no-files-found: ignore
+          # scripts/.local is a hidden directory, skipped by default.
+          include-hidden-files: true
+          if-no-files-found: warn
 
   notify:
     name: Notify on Failure
