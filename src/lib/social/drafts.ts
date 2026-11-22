@@ -23,7 +23,9 @@ export interface SocialPostSummary {
   xText: string | null;
   blueskyUrl: string | null;
   twitterUrl: string | null;
-  error: string | null;
+  /** Last diagnostic per network, as stored (JSON). */
+  blueskyError: string | null;
+  twitterError: string | null;
   createdAt: string;
   postedAt: string | null;
 }
@@ -36,7 +38,8 @@ const summarySelect = {
   twitterContent: true,
   blueskyUrl: true,
   twitterUrl: true,
-  error: true,
+  blueskyError: true,
+  twitterError: true,
   createdAt: true,
   postedAt: true,
 } as const;
@@ -49,7 +52,8 @@ type SummaryRow = {
   twitterContent: string | null;
   blueskyUrl: string | null;
   twitterUrl: string | null;
-  error: string | null;
+  blueskyError: string | null;
+  twitterError: string | null;
   createdAt: Date;
   postedAt: Date | null;
 };
@@ -63,7 +67,8 @@ function toSummary(row: SummaryRow): SocialPostSummary {
     xText: row.twitterContent,
     blueskyUrl: row.blueskyUrl,
     twitterUrl: row.twitterUrl,
-    error: row.error,
+    blueskyError: row.blueskyError,
+    twitterError: row.twitterError,
     createdAt: row.createdAt.toISOString(),
     postedAt: row.postedAt?.toISOString() ?? null,
   };

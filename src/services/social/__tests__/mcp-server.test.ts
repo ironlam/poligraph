@@ -82,7 +82,8 @@ describe("social MCP server", () => {
       twitterContent: "Texte X",
       blueskyUrl: null,
       twitterUrl: null,
-      error: null,
+      blueskyError: null,
+      twitterError: null,
       createdAt: new Date("2026-11-22T10:00:00Z"),
       postedAt: null,
     });

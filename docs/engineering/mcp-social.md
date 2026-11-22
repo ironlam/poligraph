@@ -22,7 +22,9 @@ rédaction se fait dans la conversation, et chaque publication est confirmée pa
 Claude (outil marqué `destructiveHint`, à régler sur « Demander » dans les réglages du connecteur).
 
 Pour la catégorie `affaires`, la confirmation dans Claude ne suffit pas : le post doit avoir été
-approuvé dans `/admin/social` (statut `APPROVED`). C'est le seul garde-fou humain que Claude ne
+approuvé dans `/admin/social` (statut `APPROVED`). L'écran affiche et édite les deux textes, et
+l'approbation porte sur les deux. Le MCP n'a aucun outil d'édition : un texte approuvé ne change
+plus. C'est le seul garde-fou humain que Claude ne
 peut pas déclencher lui-même, réservé au sujet le plus exposé (RGPD art. 10, présomption
 d'innocence).
 
@@ -39,9 +41,15 @@ d'innocence).
 Garde-fous de `social_publier` :
 
 - coupe-circuit `SOCIAL_AUTO_POST=false` ;
-- plafond quotidien par réseau `SOCIAL_DAILY_CAP` (6 par défaut) ;
+- plafond quotidien par réseau `SOCIAL_DAILY_CAP` (6 par défaut), compté sur la date de
+  publication propre à chaque réseau ;
 - `affaires` exige le statut `APPROVED` ;
+- chaque réseau est réservé par une mise à jour conditionnelle avant l'appel externe
+  (`blueskyPostedAt` / `twitterPostedAt`) : deux appels simultanés ne publient jamais deux fois,
+  et chaque appel n'écrit que les colonnes de son réseau ;
 - pas de republication sur un réseau où le post est déjà parti (réessai possible sur l'autre) ;
+- une publication interrompue (réservation de plus de 10 minutes sans URL) n'est reprise qu'avec
+  `reprendre: true`, après vérification à la main sur le réseau ;
 - X : refus des URL dans le texte, un post avec lien coûte 0,20 $ contre 0,015 $ ;
 - longueurs : 300 graphèmes sur Bluesky, `SOCIAL_X_MAX_CHARS` sur X (280 par défaut, à relever
   si le compte X passe Premium).
@@ -49,7 +57,7 @@ Garde-fous de `social_publier` :
 ## Diagnostic d'erreurs
 
 Chaque échec renvoie `{ reseau, code, message, action, reessayable }`, enregistré aussi dans
-`SocialPost.error` et visible dans `/admin/social`.
+`SocialPost.blueskyError` ou `SocialPost.twitterError` et visible dans `/admin/social`.
 
 | Code                       | Cause typique                                     | Action indiquée                                               |
 | -------------------------- | ------------------------------------------------- | ------------------------------------------------------------- |

@@ -29,6 +29,8 @@ export type PublishResult =
 
 export interface PublishOptions {
   allowLinkOnX?: boolean;
+  /** Takes back a claim left by an interrupted publication, once checked by hand on the network. */
+  resume?: boolean;
   /** Who asked, for the audit log: the OAuth client behind the MCP call. */
   actor: string;
   now?: Date;
@@ -65,17 +67,79 @@ export function startOfParisDay(now: Date): Date {
   return new Date(Date.UTC(get("year"), get("month") - 1, get("day")) - offsetMs);
 }
 
+/** Publications in flight longer than this are treated as interrupted, not as running. */
+export const CLAIM_STALE_MS = 10 * 60 * 1000;
+
 async function countPublishedToday(network: SocialNetwork, now: Date): Promise<number> {
   const since = startOfParisDay(now);
-  // `NOT: { field: null }` rather than `{ not: null }`, which Prisma 7 rejects on some nullable fields.
+  // In-flight claims count too: two parallel calls cannot both slip under the cap.
   if (network === "bluesky") {
-    return db.socialPost.count({
-      where: { NOT: { blueskyUrl: null }, postedAt: { gte: since } },
-    });
+    return db.socialPost.count({ where: { blueskyPostedAt: { gte: since } } });
   }
-  return db.socialPost.count({
-    where: { NOT: { twitterUrl: null }, postedAt: { gte: since } },
+  return db.socialPost.count({ where: { twitterPostedAt: { gte: since } } });
+}
+
+/**
+ * Takes the network for this post in one conditional UPDATE: Postgres re-checks the WHERE clause
+ * once it holds the row lock, so of two concurrent calls only one sees `count === 1`. A stale claim
+ * (crash between the network call and the save) is only taken back on an explicit resume, because
+ * the post may already be online and nothing here can tell.
+ */
+async function claimNetwork(
+  id: string,
+  network: SocialNetwork,
+  now: Date,
+  resume: boolean
+): Promise<boolean> {
+  const staleBefore = new Date(now.getTime() - CLAIM_STALE_MS);
+  if (network === "bluesky") {
+    const freeOrStale: Prisma.SocialPostWhereInput[] = [{ blueskyPostedAt: null }];
+    if (resume) freeOrStale.push({ blueskyPostedAt: { lt: staleBefore } });
+    const claimed = await db.socialPost.updateMany({
+      where: { id, blueskyUrl: null, OR: freeOrStale },
+      data: { blueskyPostedAt: now, blueskyError: null },
+    });
+    return claimed.count === 1;
+  }
+  const freeOrStale: Prisma.SocialPostWhereInput[] = [{ twitterPostedAt: null }];
+  if (resume) freeOrStale.push({ twitterPostedAt: { lt: staleBefore } });
+  const claimed = await db.socialPost.updateMany({
+    where: { id, twitterUrl: null, OR: freeOrStale },
+    data: { twitterPostedAt: now, twitterError: null },
   });
+  return claimed.count === 1;
+}
+
+/** Writes only this network's columns, so a parallel call on the other network is never undone. */
+async function saveNetworkOutcome(id: string, outcome: NetworkOutcome): Promise<void> {
+  if (outcome.statut === "publie") {
+    if (outcome.reseau === "bluesky") {
+      await db.socialPost.update({ where: { id }, data: { blueskyUrl: outcome.url } });
+    } else {
+      await db.socialPost.update({ where: { id }, data: { twitterUrl: outcome.url } });
+    }
+    // First publication on any network, kept for the pages written for the former pipeline.
+    await db.socialPost.updateMany({
+      where: { id, postedAt: null },
+      data: { postedAt: new Date() },
+    });
+    return;
+  }
+  if (outcome.statut === "echec") {
+    // Releasing the claim also gives the slot back to the daily cap: nothing went out.
+    const error = JSON.stringify(outcome.diagnostic);
+    if (outcome.reseau === "bluesky") {
+      await db.socialPost.update({
+        where: { id },
+        data: { blueskyPostedAt: null, blueskyError: error },
+      });
+    } else {
+      await db.socialPost.update({
+        where: { id },
+        data: { twitterPostedAt: null, twitterError: error },
+      });
+    }
+  }
 }
 
 async function publishOn(network: SocialNetwork, text: string): Promise<NetworkOutcome> {
@@ -96,6 +160,30 @@ async function publishOn(network: SocialNetwork, text: string): Promise<NetworkO
     console.error(`[social] publication ${network} en échec : ${diagnostic.code}`, error);
     return { reseau: network, statut: "echec", diagnostic };
   }
+}
+
+function describeBusyClaim(
+  network: SocialNetwork,
+  post: {
+    blueskyUrl: string | null;
+    twitterUrl: string | null;
+    blueskyPostedAt: Date | null;
+    twitterPostedAt: Date | null;
+  },
+  now: Date
+): NetworkOutcome {
+  const url = network === "bluesky" ? post.blueskyUrl : post.twitterUrl;
+  if (url) return { reseau: network, statut: "ignore", raison: "Déjà publié.", url };
+  const claimedAt = network === "bluesky" ? post.blueskyPostedAt : post.twitterPostedAt;
+  if (claimedAt && now.getTime() - claimedAt.getTime() >= CLAIM_STALE_MS) {
+    return {
+      reseau: network,
+      statut: "ignore",
+      raison:
+        "Publication interrompue sans résultat enregistré. Vérifier sur le réseau qu'aucun post n'est parti, puis relancer avec reprendre à true.",
+    };
+  }
+  return { reseau: network, statut: "ignore", raison: "Publication déjà en cours." };
 }
 
 /**
@@ -128,12 +216,6 @@ export async function publishSocialPost(
   const results: NetworkOutcome[] = [];
   for (const network of [...new Set(networks)]) {
     const text = network === "bluesky" ? post.content : (post.twitterContent ?? "");
-    const existingUrl = network === "bluesky" ? post.blueskyUrl : post.twitterUrl;
-
-    if (existingUrl) {
-      results.push({ reseau: network, statut: "ignore", raison: "Déjà publié.", url: existingUrl });
-      continue;
-    }
     if (text.length === 0) {
       results.push({ reseau: network, statut: "ignore", raison: "Pas de texte pour ce réseau." });
       continue;
@@ -160,34 +242,26 @@ export async function publishSocialPost(
       });
       continue;
     }
-    results.push(await publishOn(network, text));
+    if (!(await claimNetwork(id, network, now, options.resume ?? false))) {
+      const current = await db.socialPost.findUnique({ where: { id } });
+      results.push(describeBusyClaim(network, current ?? post, now));
+      continue;
+    }
+    const outcome = await publishOn(network, text);
+    await saveNetworkOutcome(id, outcome);
+    results.push(outcome);
   }
 
-  const published = new Map(
-    results.flatMap((result) =>
-      result.statut === "publie" ? [[result.reseau, result.url] as const] : []
-    )
-  );
-  const blueskyUrl = published.get("bluesky") ?? post.blueskyUrl;
-  const twitterUrl = published.get("x") ?? post.twitterUrl;
-  const failures = results.flatMap((result) =>
-    result.statut === "echec" ? [result.diagnostic] : []
-  );
+  // Completeness is read back from the row: a parallel call may have finished the other network.
+  const fresh = await db.socialPost.findUnique({ where: { id } });
   const complete =
-    (post.content.length === 0 || blueskyUrl !== null) &&
-    (!post.twitterContent || twitterUrl !== null);
-
-  await db.socialPost.update({
-    where: { id },
-    data: {
-      blueskyUrl,
-      twitterUrl,
-      error: failures.length > 0 ? JSON.stringify(failures) : null,
-      postedAt: published.size > 0 ? (post.postedAt ?? now) : post.postedAt,
-      // Never downgraded on failure: an approved affaire stays approved and can be retried.
-      status: complete ? "POSTED" : post.status,
-    },
-  });
+    fresh !== null &&
+    (fresh.content.length === 0 || fresh.blueskyUrl !== null) &&
+    (!fresh.twitterContent || fresh.twitterUrl !== null);
+  if (complete) {
+    // Never downgraded on failure: an approved affaire stays approved and can be retried.
+    await db.socialPost.update({ where: { id }, data: { status: "POSTED" } });
+  }
   await db.auditLog.create({
     data: {
       action: "SOCIAL_PUBLISH",

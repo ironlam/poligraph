@@ -124,6 +124,12 @@ export function createSocialMcpServer(context: { actor: string }): McpServer {
           .min(1)
           .max(2),
         autoriserLienX: z.boolean().optional(),
+        reprendre: z
+          .boolean()
+          .optional()
+          .describe(
+            "Reprendre une publication interrompue. Seulement après avoir vérifié sur le réseau qu'aucun post n'est parti."
+          ),
       }),
       annotations: {
         readOnlyHint: false,
@@ -132,9 +138,10 @@ export function createSocialMcpServer(context: { actor: string }): McpServer {
         openWorldHint: true,
       },
     },
-    async ({ id, reseaux, autoriserLienX }) => {
+    async ({ id, reseaux, autoriserLienX, reprendre }) => {
       const outcome = await publishSocialPost(id, reseaux, {
         allowLinkOnX: autoriserLienX,
+        resume: reprendre,
         actor: context.actor,
       });
       const failed = !outcome.ok || outcome.resultats.some((entry) => entry.statut === "echec");

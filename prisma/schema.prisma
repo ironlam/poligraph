@@ -2882,25 +2882,36 @@ enum AffairReviewAction {
 }
 
 model SocialPost {
-  id             String           @id @default(cuid())
-  category       String
+  id              String           @id @default(cuid())
+  category        String
   /// Bluesky text. Empty when the post does not go to Bluesky.
-  content        String           @db.Text
+  content         String           @db.Text
   /// X text, written separately from the Bluesky one. Null when the post does not go to X.
-  twitterContent String?          @db.Text
-  link           String?
-  entityId       String?
-  status         SocialPostStatus @default(PENDING_REVIEW)
-  blueskyUrl     String?
-  twitterUrl     String?
-  error          String?
-  postedAt       DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  twitterContent  String?          @db.Text
+  link            String?
+  entityId        String?
+  status          SocialPostStatus @default(PENDING_REVIEW)
+  blueskyUrl      String?
+  twitterUrl      String?
+  /// Set when a publication on the network starts: the atomic claim, then the date the daily cap
+  /// counts. Cleared again if the network refuses the post.
+  blueskyPostedAt DateTime?
+  twitterPostedAt DateTime?
+  /// Last diagnostic (JSON) of the network, cleared on the next attempt.
+  blueskyError    String?
+  twitterError    String?
+  /// Legacy single-text pipeline error.
+  error           String?
+  /// First publication on any network.
+  postedAt        DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@index([status])
   @@index([createdAt])
   @@index([entityId])
+  @@index([blueskyPostedAt])
+  @@index([twitterPostedAt])
 }
 
 // ============================================
