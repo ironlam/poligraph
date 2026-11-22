@@ -6,7 +6,7 @@
  * substance and decides APPROVE / EDIT / REJECT / KEEP.
  *
  *   --sample N          stratified calibration sample, DRY-RUN, no write
- *   --all               judge the whole anchored set → report JSON, no write
+ *   --all [--limit N]   judge the anchored set (first N) → report JSON, no write
  *   --load [--limit N]  dump anchored candidates + official substance to JSON,
  *                       NO LLM call — a Claude Code session judges them in-context
  *                       (no API spend) then writes the report --apply consumes.
@@ -323,7 +323,8 @@ async function runSample(): Promise<void> {
 
 // ── ALL (full judge → report) ─────────────────────────────────────────────
 async function runAll(): Promise<void> {
-  const anchored = await loadAnchored();
+  const limit = arg("limit") ? Number(arg("limit")) : undefined;
+  const anchored = limit ? (await loadAnchored()).slice(0, limit) : await loadAnchored();
   log(`Jugement de ${anchored.length} titres (coverage>0), concurrence ${CONCURRENCY}, DRY-RUN…\n`);
   const verdicts = await mapPool(anchored, CONCURRENCY, async (c) => {
     const v = await judgeOne(c).catch(() => null);
@@ -333,7 +334,11 @@ async function runAll(): Promise<void> {
   mkdirSync("scripts/.local", { recursive: true });
   writeFileSync(
     REPORT_PATH,
-    JSON.stringify({ model: JUDGE_MODEL, total: rows.length, verdicts: rows }, null, 2)
+    JSON.stringify(
+      { model: JUDGE_MODEL, candidates: anchored.length, total: rows.length, verdicts: rows },
+      null,
+      2
+    )
   );
   const counts: Record<string, number> = {};
   for (const r of rows) counts[r.verdict] = (counts[r.verdict] ?? 0) + 1;
