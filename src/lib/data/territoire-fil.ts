@@ -46,14 +46,7 @@ export async function getFilTerritoire(
       where: { territoryType: type, territoryCode: code, status: "PUBLISHED" },
       orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }],
       take: FIL_READ,
-      select: {
-        id: true,
-        type: true,
-        occurredOn: true,
-        payload: true,
-        sourceLabel: true,
-        sourceUrl: true,
-      },
+      select: SELECT,
     });
   } catch (error) {
     // The code can ship before prisma/migrations/manual/2026-11-15-territoire-evenements.sql.
@@ -61,18 +54,68 @@ export async function getFilTerritoire(
     throw error;
   }
 
-  return rows
-    .flatMap((row) => {
-      const evenement = parseEvenementPayload(row.type, row.payload);
-      if (!evenement || !isEvenementSourceUrl(row.sourceUrl)) return [];
-      return [
-        {
-          id: row.id,
-          date: row.occurredOn.toISOString().slice(0, 10),
-          evenement,
-          source: { label: row.sourceLabel, url: row.sourceUrl },
-        },
-      ];
-    })
-    .slice(0, FIL_LIMIT);
+  return lignes(rows).slice(0, FIL_LIMIT);
+}
+
+/** The audit chamber reports listed under the accounts block: the most recent ones, bounded. */
+export const RAPPORTS_CRC_LIMIT = 20;
+
+/**
+ * Published report notices of one territory, most recent first. Same cache profile and tags as
+ * the fil: a publication in the admin shows within the 24 h of `synced`, like every event.
+ */
+export async function getRapportsCrcTerritoire(
+  type: RepereTerritoryKind,
+  code: string
+): Promise<FilEvenement[]> {
+  "use cache";
+  cacheLife("synced");
+  cacheTag("territoires", territoireTag(type, code));
+
+  try {
+    const rows = await db.territoireEvenement.findMany({
+      where: { type: "RAPPORT_CRC", territoryType: type, territoryCode: code, status: "PUBLISHED" },
+      orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }],
+      take: RAPPORTS_CRC_LIMIT,
+      select: SELECT,
+    });
+    return lignes(rows);
+  } catch (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
+}
+
+const SELECT = {
+  id: true,
+  type: true,
+  occurredOn: true,
+  payload: true,
+  sourceLabel: true,
+  sourceUrl: true,
+} as const;
+
+/** Rows whose payload still matches its schema and whose source is a plain https link. */
+function lignes(
+  rows: Array<{
+    id: string;
+    type: string;
+    occurredOn: Date;
+    payload: unknown;
+    sourceLabel: string;
+    sourceUrl: string;
+  }>
+): FilEvenement[] {
+  return rows.flatMap((row) => {
+    const evenement = parseEvenementPayload(row.type, row.payload);
+    if (!evenement || !isEvenementSourceUrl(row.sourceUrl)) return [];
+    return [
+      {
+        id: row.id,
+        date: row.occurredOn.toISOString().slice(0, 10),
+        evenement,
+        source: { label: row.sourceLabel, url: row.sourceUrl },
+      },
+    ];
+  });
 }

@@ -7,7 +7,12 @@ const h = vi.hoisted(() => ({ findMany: vi.fn(), cacheTag: vi.fn(), cacheLife: v
 vi.mock("next/cache", () => ({ cacheTag: h.cacheTag, cacheLife: h.cacheLife }));
 vi.mock("@/lib/db", () => ({ db: { territoireEvenement: { findMany: h.findMany } } }));
 
-import { FIL_LIMIT, getFilTerritoire } from "@/lib/data/territoire-fil";
+import {
+  FIL_LIMIT,
+  getFilTerritoire,
+  getRapportsCrcTerritoire,
+  RAPPORTS_CRC_LIMIT,
+} from "@/lib/data/territoire-fil";
 import { parseEvenementPayload } from "@/lib/territoires/evenements";
 
 const row = (over: Record<string, unknown> = {}) => ({
@@ -132,5 +137,47 @@ describe("SQL manuel du fil", () => {
     const fields = [...model.matchAll(/^\s{2}([a-zA-Z]+)\s+\S/gm)].map((m) => m[1]!);
     expect(fields.length).toBeGreaterThanOrEqual(11);
     for (const field of fields) expect(sql).toContain(`"${field}"`);
+  });
+});
+
+describe("getRapportsCrcTerritoire", () => {
+  const rapport = (id: string) =>
+    row({
+      id,
+      type: "RAPPORT_CRC",
+      payload: {
+        juridictionId: 143,
+        document: "RAPPORT_OBSERVATIONS_DEFINITIVES",
+        collectivite: "Département de la Meuse",
+        cahier: null,
+        titre: "Département de la Meuse",
+      },
+      sourceLabel: "Chambre régionale des comptes Grand Est",
+      sourceUrl: "https://www.ccomptes.fr/fr/publications/departement-de-la-meuse-5",
+    });
+
+  it("lit les seuls rapports publiés du territoire, bornés, sous le cache du fil", async () => {
+    h.findMany.mockResolvedValueOnce([rapport("r1"), rapport("r2")]);
+    const rapports = await getRapportsCrcTerritoire("DEP", "55");
+    const args = h.findMany.mock.calls[0]?.[0];
+    expect(args.where).toEqual({
+      type: "RAPPORT_CRC",
+      territoryType: "DEP",
+      territoryCode: "55",
+      status: "PUBLISHED",
+    });
+    expect(args.take).toBe(RAPPORTS_CRC_LIMIT);
+    expect(h.cacheLife).toHaveBeenCalledWith("synced");
+    expect(h.cacheTag).toHaveBeenLastCalledWith("territoires", "territoire:55");
+    expect(rapports.map((r) => r.id)).toEqual(["r1", "r2"]);
+    expect(rapports[0]?.evenement.type).toBe("RAPPORT_CRC");
+  });
+
+  it("écarte un contenu qui ne passe plus son schéma", async () => {
+    h.findMany.mockResolvedValueOnce([
+      rapport("r1"),
+      row({ id: "r2", type: "RAPPORT_CRC", payload: {} }),
+    ]);
+    expect((await getRapportsCrcTerritoire("DEP", "55")).map((r) => r.id)).toEqual(["r1"]);
   });
 });
