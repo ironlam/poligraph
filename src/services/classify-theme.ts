@@ -238,7 +238,9 @@ ${input.verdict ? `<verdict>${promptText(input.verdict, 80)}</verdict>\n` : ""}
 ${CATEGORY_GUIDE}
 - ${NO_THEME} : la déclaration ne relève d'aucune politique publique ci-dessus (parodie, rumeur sur une personne, vie privée, fausse citation sans sujet politique)
 
-Choisis le thème de politique publique dont parle la déclaration, pas celui du média ni de la personne. En cas de doute entre deux thèmes, prends celui du chiffre ou du fait vérifié.`;
+Choisis le thème de politique publique dont parle la déclaration, pas celui du média ni de la personne. En cas de doute entre deux thèmes, prends celui du chiffre ou du fait vérifié.
+
+Réponds ${NO_THEME} quand la vérification porte sur l'authenticité d'un contenu ou sur un acte prêté à une personne, et non sur une politique publique : photo, vidéo ou publication truquée, montée ou générée par IA ; citation inventée ou prêtée à tort ; rumeur sur ce qu'une personne aurait fait. Le sujet apparent de ce contenu (manifestation, sécurité, IA) ne compte pas. Une déclaration réelle d'un responsable politique sur une politique publique garde son thème, même quand elle est fausse.`;
 }
 
 function toFactCheckResult(
@@ -266,6 +268,9 @@ export async function classifyFactCheckTheme(
     const res = await callMistral([{ role: "user", content: prompt }], {
       model: MISTRAL_MODEL,
       maxTokens: 100,
+      // A classification must not change from one run to the next. Small accepts 0, and two runs
+      // over the same 50 fact-checks gave the same 50 answers (checked on 2026-11-22).
+      temperature: 0,
       responseFormat: {
         type: "json_schema",
         json_schema: {
