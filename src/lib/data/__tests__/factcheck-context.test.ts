@@ -418,14 +418,28 @@ describe("bloc des votes sur le thème", () => {
     expect(ctx.themeVotes).toBeNull();
   });
 
-  it("ne lit rien sans thème validé, et ne compte pas le bloc pour l'indexation", async () => {
+  it("ne lit rien sans thème validé", async () => {
     const ctx = await queryFactCheckContext(INPUT);
     expect(ctx.themeVotes).toBeNull();
     expect(mocks.voteGroupBy).not.toHaveBeenCalled();
+  });
+
+  it("rend la page indexable par le thème validé quand l'auteur n'a pas voté le jour même", async () => {
+    // No vote on the day of the claim: the claim-day block is absent.
+    mocks.voteFindMany.mockImplementation(async (args: { where: { scrutin: object } }) =>
+      "theme" in args.where.scrutin ? [themeVote("s-1", "POUR", "2026-10-01")] : []
+    );
+    const plain = await queryFactCheckContext(INPUT);
+    expect(plain.claimDay).toBeNull();
+    // A record and a party are not specific to the claim.
+    expect(plain.record).not.toBeNull();
+    expect(plain.party).not.toBeNull();
+    expect(plain.indexable).toBe(false);
+
     mocks.voteGroupBy.mockResolvedValue([{ position: "POUR", _count: { _all: 4 } }]);
     const themed = await queryFactCheckContext(withTheme);
     expect(themed.themeVotes).not.toBeNull();
-    expect(themed.indexable).toBe(ctx.indexable);
+    expect(themed.indexable).toBe(true);
   });
 
   it("transmet le thème validé à la lecture en cache", async () => {

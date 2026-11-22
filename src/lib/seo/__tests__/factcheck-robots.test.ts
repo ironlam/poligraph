@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  FACTCHECK_MIN_CONTEXT_BLOCKS,
   FACTCHECK_POLITICIAN_MIN_CLAIMS,
   FACTCHECK_RECORD_MIN_TOTAL,
-  countFactCheckContextBlocks,
   factCheckRobotsMetadata,
+  hasAuthorContextBlock,
+  hasClaimSpecificBlock,
   isIndexableFactCheck,
   isIndexableFactCheckPolitician,
   type FactCheckIndexSignals,
@@ -15,48 +15,53 @@ const NO_BLOCK: FactCheckIndexSignals = {
   authorFactCheckCount: 1,
   hasCandidacy: false,
   hasClaimDayVotes: false,
-  hasParty: false,
+  hasThemeVotes: false,
 };
 
 describe("isIndexableFactCheck", () => {
-  it("indexe un auteur avec un bilan et un parti", () => {
-    expect(isIndexableFactCheck({ ...NO_BLOCK, authorFactCheckCount: 5, hasParty: true })).toBe(
-      true
-    );
-  });
-
-  it("n'indexe pas un auteur qui n'a qu'un bloc", () => {
-    expect(isIndexableFactCheck({ ...NO_BLOCK, hasParty: true })).toBe(false);
-  });
-
-  it("ne compte pas un bilan réduit au fact-check de la page", () => {
-    const signals = { ...NO_BLOCK, authorFactCheckCount: 1, hasParty: true };
-    expect(countFactCheckContextBlocks(signals)).toBe(1);
+  it("indexe un bloc propre à la déclaration accompagné d'un bilan", () => {
     expect(
-      countFactCheckContextBlocks({ ...signals, authorFactCheckCount: FACTCHECK_RECORD_MIN_TOTAL })
-    ).toBe(2);
+      isIndexableFactCheck({ ...NO_BLOCK, hasClaimDayVotes: true, authorFactCheckCount: 5 })
+    ).toBe(true);
+    expect(
+      isIndexableFactCheck({ ...NO_BLOCK, hasThemeVotes: true, authorFactCheckCount: 5 })
+    ).toBe(true);
   });
 
-  it("compte la candidature et le vote du jour comme des blocs", () => {
-    expect(isIndexableFactCheck({ ...NO_BLOCK, hasCandidacy: true, hasClaimDayVotes: true })).toBe(
+  it("accepte la candidature 2027 comme contexte de l'auteur", () => {
+    expect(isIndexableFactCheck({ ...NO_BLOCK, hasClaimDayVotes: true, hasCandidacy: true })).toBe(
       true
     );
+  });
+
+  it("n'indexe pas un auteur bien situé sans bloc propre à la déclaration", () => {
+    // Record and candidacy are the same on every page of this author: they cannot tell two
+    // sibling pages apart (review of 2026-11-22).
+    expect(
+      isIndexableFactCheck({ ...NO_BLOCK, authorFactCheckCount: 40, hasCandidacy: true })
+    ).toBe(false);
+  });
+
+  it("n'indexe pas un bloc propre à la déclaration sans contexte sur l'auteur", () => {
+    const signals = { ...NO_BLOCK, hasClaimDayVotes: true, authorFactCheckCount: 1 };
+    expect(hasClaimSpecificBlock(signals)).toBe(true);
+    expect(hasAuthorContextBlock(signals)).toBe(false);
+    expect(isIndexableFactCheck(signals)).toBe(false);
+    expect(
+      isIndexableFactCheck({ ...signals, authorFactCheckCount: FACTCHECK_RECORD_MIN_TOTAL })
+    ).toBe(true);
   });
 
   it("n'indexe jamais sans auteur publié, quels que soient les autres signaux", () => {
-    const signals: FactCheckIndexSignals = {
-      hasPublishedAuthor: false,
-      authorFactCheckCount: 10,
-      hasCandidacy: true,
-      hasClaimDayVotes: true,
-      hasParty: true,
-    };
-    expect(countFactCheckContextBlocks(signals)).toBe(0);
-    expect(isIndexableFactCheck(signals)).toBe(false);
-  });
-
-  it("garde un seuil de deux blocs au moins", () => {
-    expect(FACTCHECK_MIN_CONTEXT_BLOCKS).toBeGreaterThanOrEqual(2);
+    expect(
+      isIndexableFactCheck({
+        hasPublishedAuthor: false,
+        authorFactCheckCount: 10,
+        hasCandidacy: true,
+        hasClaimDayVotes: true,
+        hasThemeVotes: true,
+      })
+    ).toBe(false);
   });
 });
 
