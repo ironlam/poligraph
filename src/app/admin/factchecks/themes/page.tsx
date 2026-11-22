@@ -9,7 +9,7 @@ import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   getPublicFactCheckSqlWhere,
 } from "@/lib/api/public-contract";
-import { parsePageParam } from "@/lib/data/query-params";
+import { clampPage, parsePageParam } from "@/lib/data/query-params";
 import { formatDateShort } from "@/lib/utils";
 
 /**
@@ -51,7 +51,7 @@ function queueSql(reviewed: boolean) {
 export default async function FactcheckThemesPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const reviewed = params.statut === "valides";
-  const page = parsePageParam(params.page);
+  const requestedPage = parsePageParam(params.page);
 
   const all = await db.$queryRaw<QueueRow[]>(Prisma.sql`
     SELECT q."id", q."useful" FROM (${queueSql(reviewed)}) q
@@ -67,6 +67,8 @@ export default async function FactcheckThemesPage({ searchParams }: PageProps) {
     : all.filter((r) => r.useful).length;
   const reviewedCount = reviewed ? all.length : Number(other[0]?.total ?? 0);
 
+  // Validating the last row of the last page shrinks the queue under the page that refreshes.
+  const page = clampPage(requestedPage, all.length, PAGE_SIZE);
   const slice = all.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const usefulIds = new Set(slice.filter((r) => r.useful).map((r) => r.id));
   const details = await db.factCheck.findMany({

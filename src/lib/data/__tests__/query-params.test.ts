@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePageParam, parseIntFilter } from "@/lib/data/query-params";
+import { clampPage, parsePageParam, parseIntFilter } from "@/lib/data/query-params";
 
 // Real payload lifted from the production scan of 2026-09-01.
 const SQLI_PROBE = 'SENATORIALES") AND UPDATEXML(6619,CONCAT(0x2e),1)-- -';
@@ -75,5 +75,22 @@ describe("parseIntFilter", () => {
     expect(parseIntFilter("")).toBeUndefined();
     expect(parseIntFilter(undefined)).toBeUndefined();
     expect(parseIntFilter(null)).toBeUndefined();
+  });
+});
+
+describe("clampPage", () => {
+  it("ramène une page disparue sur la dernière page restante", () => {
+    // 26 rows on two pages of 25; the 26th is validated and the queue refreshes on page 2.
+    expect(clampPage(2, 25, 25)).toBe(1);
+    expect(clampPage(5, 60, 25)).toBe(3);
+  });
+
+  it("garde une page qui existe encore", () => {
+    expect(clampPage(2, 26, 25)).toBe(2);
+  });
+
+  it("rend la page 1 pour une liste vide ou une page inférieure à 1", () => {
+    expect(clampPage(3, 0, 25)).toBe(1);
+    expect(clampPage(0, 40, 25)).toBe(1);
   });
 });

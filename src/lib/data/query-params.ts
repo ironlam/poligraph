@@ -43,6 +43,15 @@ export function parsePageParam(value: RawParam): number {
 }
 
 /**
+ * A requested page brought back inside the list: a list that shrank since the page was opened
+ * (an item validated off a queue) keeps its last page instead of showing an empty one.
+ */
+export function clampPage(page: number, totalItems: number, pageSize: number): number {
+  const lastPage = Math.max(1, Math.ceil(totalItems / pageSize));
+  return Math.min(Math.max(1, page), lastPage);
+}
+
+/**
  * Integer filter (legislature, year…) for a Prisma `where`. An unusable value
  * yields `undefined` so the caller drops the filter instead of narrowing on a
  * NaN that Prisma refuses.
