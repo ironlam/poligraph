@@ -49,7 +49,7 @@ describe("méthodes des comptes de la collectivité", () => {
   });
 
   it("garde les sources OFGL en PREVU tant qu'aucun lot n'est importé", () => {
-    const ofgl = TERRITOIRES_SOURCES.filter((s) => s.id.startsWith("ofgl-"));
+    const ofgl = TERRITOIRES_SOURCES.filter((s) => s.id.startsWith("ofgl-comptes-"));
     expect(ofgl).toHaveLength(3);
     for (const s of ofgl) expect(s.status, s.id).toBe("PREVU");
   });

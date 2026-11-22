@@ -41,6 +41,19 @@ function fixture(jeu: string): OfglRow[] {
   });
 }
 
+// Real "disponibilité des comptes" rows of 2024 for the same communes, plus Conques-en-Rouergue
+// (filed under 12076), Peynier (no account in 2024) and Cugand-la-Bernardière (formed in 2025).
+const DISPO: OfglRow[] = readFileSync(
+  join(__dirname, "fixtures/ofgl-disponibilite-2024.csv"),
+  "utf8"
+)
+  .split("\n")
+  .filter((l) => l && !l.startsWith("#") && !l.startsWith("annee"))
+  .map((l) => {
+    const [annee, insee, siren, presence_budget, insee_25, siren_25] = l.split(";");
+    return { annee, insee, siren, presence_budget, insee_25, siren_25 };
+  });
+
 const get = (plan: ComptesPlan, code: string, key: string, mesure: "MONTANT" | "PAR_HABITANT") =>
   plan.rows.find(
     (r) =>
@@ -54,6 +67,7 @@ describe("plan d'import des comptes", () => {
       scale: "COM",
       exercice: 2024,
       rows: fixture("communes2024"),
+      disponibilite: DISPO,
       territoryCodes: ["29019"],
     });
     expect(plan.anomalies).toEqual([]);
@@ -79,6 +93,7 @@ describe("plan d'import des comptes", () => {
       scale: "COM",
       exercice: 2024,
       rows: fixture("communes2024"),
+      disponibilite: DISPO,
       territoryCodes: ["75056"],
     });
     expect(plan.anomalies).toEqual([]);
@@ -90,6 +105,7 @@ describe("plan d'import des comptes", () => {
       scale: "COM",
       exercice: 2024,
       rows: fixture("communes2024"),
+      disponibilite: DISPO,
       territoryCodes: ["55039"],
     });
     expect(get(plan, "55039", "depenses_equipement", "MONTANT")).toMatchObject({
@@ -108,6 +124,7 @@ describe("plan d'import des comptes", () => {
       scale: "COM",
       exercice: 2024,
       rows: fixture("communes2024"),
+      disponibilite: DISPO,
       territoryCodes: ["02627"],
     });
     for (const mesure of ["MONTANT", "PAR_HABITANT"] as const) {
@@ -125,17 +142,66 @@ describe("plan d'import des comptes", () => {
       scale: "COM",
       exercice: 2024,
       rows: fixture("communes2024"),
-      territoryCodes: ["29001", "75101", "97501"],
+      disponibilite: DISPO,
+      territoryCodes: ["13072", "85076", "29001", "75101", "97501"],
     });
+    expect(plan.anomalies).toEqual([]);
     expect(plan.absent).toEqual({
-      COMPTE_NON_PUBLIE: ["29001"],
+      COMPTE_NON_PUBLIE: ["13072"],
+      COMMUNE_FORMEE_APRES: ["85076"],
+      COMMUNE_INCONNUE_OFGL: ["29001"],
       ARRONDISSEMENT_SANS_COMPTE: ["75101"],
       HORS_PERIMETRE_OFGL: ["97501"],
     });
-    expect(plan.rows).toHaveLength(30);
+    expect(plan.rows).toHaveLength(50);
     for (const r of plan.rows) expect(r.value).toBeNull();
     expect(plan.rows.filter((r) => r.state === "HORS_COUVERTURE")).toHaveLength(10);
-    expect(plan.horsTerritoire).toEqual(["01426", "02627", "29019", "55039", "75056"]);
+  });
+
+  it("rattache une commune nouvelle par son SIREN, jamais par le code de ses anciennes communes", () => {
+    const plan = planComptes({
+      scale: "COM",
+      exercice: 2024,
+      rows: fixture("communes2024"),
+      disponibilite: DISPO,
+      territoryCodes: ["12218", "85076"],
+    });
+    // Conques-en-Rouergue files its accounts under 12076, with its own SIREN.
+    expect(get(plan, "12218", "encours_dette", "MONTANT")).toMatchObject({
+      state: "ETABLI",
+      scopeId: "200055929",
+    });
+    // La Bernardière (85021) joined Cugand-la-Bernardière in 2025: its 2024 accounts are not the
+    // new commune's.
+    expect(plan.absent).toEqual({ COMMUNE_FORMEE_APRES: ["85076"] });
+    expect(plan.horsTerritoire).toContain("218500213");
+  });
+
+  it("lit le SIREN de 2025 tel que l'export le type, en entier", () => {
+    // Real export shape on 2026-11-22: siren is text, siren_25 is an int.
+    const plan = planComptes({
+      scale: "COM",
+      exercice: 2024,
+      rows: fixture("communes2024"),
+      disponibilite: DISPO.map((r) => ({ ...r, siren_25: Number(r.siren_25) })),
+      territoryCodes: ["29019", "12218"],
+    });
+    expect(plan.covered).toBe(2);
+    expect(plan.anomalies).toEqual([]);
+  });
+
+  it("exige la disponibilité pour les communes et signale un compte annoncé mais absent", () => {
+    expect(() =>
+      planComptes({ scale: "COM", exercice: 2024, rows: [], territoryCodes: ["29019"] })
+    ).toThrow(/disponibilité/);
+    const plan = planComptes({
+      scale: "COM",
+      exercice: 2024,
+      rows: [],
+      disponibilite: DISPO,
+      territoryCodes: ["29019"],
+    });
+    expect(plan.anomalies[0]?.detail).toMatch(/annoncé par la disponibilité/);
   });
 
   it("range l'Alsace, la Corse et la métropole de Lyon côté départements", () => {
@@ -181,7 +247,13 @@ describe("plan d'import des comptes", () => {
   it("signale toute ligne qui ne passe pas les contrôles", () => {
     const brest = fixture("communes2024").filter((r) => r.insee === "29019");
     const run = (rows: OfglRow[]) =>
-      planComptes({ scale: "COM", exercice: 2024, rows, territoryCodes: ["29019"] }).anomalies;
+      planComptes({
+        scale: "COM",
+        exercice: 2024,
+        rows,
+        disponibilite: DISPO,
+        territoryCodes: ["29019"],
+      }).anomalies;
     const tamper = (i: number, patch: OfglRow) =>
       brest.map((r, k) => (k === i ? { ...r, ...patch } : r));
 

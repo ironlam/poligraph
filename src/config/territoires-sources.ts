@@ -381,6 +381,23 @@ export const TERRITOIRES_SOURCES: readonly TerritoireSource[] = [
       status: "PREVU",
     })
   ),
+  {
+    id: "ofgl-disponibilite-communes",
+    name: "Disponibilité des comptes des communes 2012-2025",
+    producer: "Observatoire des finances et de la gestion publique locales (OFGL)",
+    url: "https://data.ofgl.fr/explore/dataset/disponibilite-des-comptes-des-communes/",
+    licence: {
+      ...LICENCE_OUVERTE_2,
+      verifiedOn:
+        "https://data.ofgl.fr/api/explore/v2.1/catalog/datasets/disponibilite-des-comptes-des-communes",
+      verifiedAt: "2026-11-22",
+      note: "Licence lue dans les métadonnées du jeu : « Licence Ouverte v2.0 (Etalab) ».",
+    },
+    attribution: "« OFGL, source DGCL-DGFiP », avec la date de dernière mise à jour des données.",
+    reuse:
+      "Rattachement des comptes de chaque exercice à la commune d'aujourd'hui, par son numéro SIREN, et existence d'un compte pour l'année.",
+    status: "PREVU",
+  },
 ];
 
 /**
