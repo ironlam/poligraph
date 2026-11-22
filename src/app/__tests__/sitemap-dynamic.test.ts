@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // #572: the sitemap shards were served as static artefacts that tag invalidation
@@ -49,7 +51,7 @@ vi.mock("next/cache", () => ({ cacheTag: h.cacheTag, cacheLife: h.cacheLife }));
 vi.mock("@/lib/db", () => ({ db: h.db }));
 
 import sitemap, { generateSitemaps } from "@/app/sitemap";
-import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
+import { SITEMAP_SHARD_IDS, SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 
 beforeEach(() => {
   h.calls.length = 0;
@@ -122,5 +124,24 @@ describe("the sitemap route renders per request", () => {
         expect.stringMatching(/\/statistiques\/participation$/),
       ])
     );
+  });
+});
+
+describe("the shard table calls its builders at request time", () => {
+  // The builders are "use cache" functions, which the Next compiler turns into variables: a table
+  // holding them directly read each one before its initialisation, and on 2026-11-22 every shard
+  // shipped as an empty <urlset> in production. Vitest does not apply that transform, so the tests
+  // above stayed green; this guard reads the table itself.
+  it("wraps every builder in a function instead of storing it", () => {
+    const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
+    const start = src.indexOf("const SHARD_BUILDERS");
+    expect(start).toBeGreaterThan(-1);
+    const body = src.slice(src.indexOf("{", src.indexOf("=", start)) + 1, src.indexOf("};", start));
+    const entries = body
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^\d+:/.test(line));
+    expect(entries).toHaveLength(SITEMAP_SHARD_IDS.length);
+    for (const entry of entries) expect(entry).toMatch(/^\d+: \(\) => build\w+\(\),$/);
   });
 });

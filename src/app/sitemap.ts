@@ -69,14 +69,19 @@ export async function generateSitemaps() {
   return SITEMAP_SHARD_IDS.map((id) => ({ id }));
 }
 
+// Each entry calls its builder when the request arrives, never at module load. The builders are
+// `"use cache"` functions: the compiler turns them into variables, which are not hoisted like
+// function declarations. A table holding `buildX` itself read them before their initialisation,
+// got `undefined` for every shard, and every sitemap shipped empty (2026-11-22, all seven shards).
+// Vitest does not apply that transform, so only the guard on this source catches it.
 const SHARD_BUILDERS: Record<SitemapShardId, () => Promise<MetadataRoute.Sitemap>> = {
-  0: buildStaticAndPoliticiansSitemap,
-  1: buildAffairsPartiesElectionsDepartmentsSitemap,
-  2: buildDossiersSitemap,
-  3: buildScrutinsSitemap,
-  4: buildCommunesSitemap,
-  5: buildTerritoiresSitemap,
-  6: buildFactChecksSitemap,
+  0: () => buildStaticAndPoliticiansSitemap(),
+  1: () => buildAffairsPartiesElectionsDepartmentsSitemap(),
+  2: () => buildDossiersSitemap(),
+  3: () => buildScrutinsSitemap(),
+  4: () => buildCommunesSitemap(),
+  5: () => buildTerritoiresSitemap(),
+  6: () => buildFactChecksSitemap(),
 };
 
 export default async function sitemap(props: {
