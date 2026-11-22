@@ -50,6 +50,17 @@ export function EchelleTerritoires({ barreaux }: { barreaux: Barreau[] }) {
                 )}
               </p>
               {b.competences && <p>{b.competences}</p>}
+              {b.comptesHref && (
+                <Link
+                  href={b.comptesHref}
+                  prefetch={false}
+                  // Three rungs read « Ses comptes »: the name says whose, visible text first.
+                  aria-label={`Ses comptes, ${b.nom}`}
+                  className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-primary"
+                >
+                  Ses comptes
+                </Link>
+              )}
             </div>
           </li>
         ))}

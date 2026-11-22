@@ -50,7 +50,11 @@ const absent = (reason: string) => v(null, { reason });
 const meta: Meta<typeof BudgetResume> = {
   title: "Territoires/BudgetResume",
   component: BudgetResume,
-  args: { comptes: COMMUNE, scale: "COM" },
+  args: {
+    comptes: COMMUNE,
+    scale: "COM",
+    budgetHref: "/territoires/communes/saint-exemple-99019/budget",
+  },
 };
 
 export default meta;

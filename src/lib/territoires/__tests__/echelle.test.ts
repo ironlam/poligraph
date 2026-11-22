@@ -139,3 +139,32 @@ describe("texte des compétences", () => {
     expect(COMPETENCES_SOURCE.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
+
+describe("échelle des territoires : lien vers les comptes", () => {
+  const liens = (comptes?: Parameters<typeof echelleCommune>[1]) =>
+    echelleCommune(dossier(), comptes).map((b) => b.comptesHref ?? null);
+
+  it("ne lie aucune sous-page de comptes tant qu'aucun lot n'est publié", () => {
+    expect(liens()).toEqual([null, null, null]);
+    expect(liens({ commune: false, echelles: [] })).toEqual([null, null, null]);
+  });
+
+  it("lie chaque niveau dont les comptes sont publiés, et seulement ceux-là", () => {
+    expect(liens({ commune: true, echelles: ["COM", "DEP", "REG"] })).toEqual([
+      "/territoires/communes/rennes-35238/budget",
+      "/territoires/departements/ille-et-vilaine/budget",
+      "/territoires/regions/bretagne/budget",
+    ]);
+    expect(liens({ commune: false, echelles: ["REG"] })).toEqual([
+      null,
+      null,
+      "/territoires/regions/bretagne/budget",
+    ]);
+  });
+
+  it("ne lie pas les comptes d'un territoire hors de toute région", () => {
+    const barreaux = echelleCommune(papeete(), { commune: true, echelles: ["COM", "DEP", "REG"] });
+    const territoire = barreaux.find((b) => b.niveau === "departement");
+    expect(territoire?.comptesHref).toBeUndefined();
+  });
+});

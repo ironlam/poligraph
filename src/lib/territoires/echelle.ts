@@ -10,7 +10,14 @@ import {
 } from "@/config/territoires-competences";
 import type { CommuneDossier } from "@/lib/data/territoires";
 import { territoireLabel } from "@/lib/territoires/commune-display";
-import { territoireDepartementPath, territoireRegionPath } from "@/lib/territoires/paths";
+import {
+  territoireCommuneBudgetPath,
+  territoireDepartementBudgetPath,
+  territoireDepartementPath,
+  territoireRegionBudgetPath,
+  territoireRegionPath,
+} from "@/lib/territoires/paths";
+import type { RepereTerritoryKind } from "@/config/territoire-reperes";
 
 /** One rung of the « échelle des territoires »: a level, the body at that level, what it does. */
 export interface Barreau {
@@ -23,6 +30,14 @@ export interface Barreau {
   /** Null where the ordinary line would be wrong: a particular status, said in `titre`. */
   competences: string | null;
   ici: boolean;
+  /** Its /budget sub-page, only while that page exists (accounts published). */
+  comptesHref?: string;
+}
+
+/** What the commune page knows of the accounts: its own, and the scales already published. */
+export interface EchelleComptes {
+  commune: boolean;
+  echelles: readonly RepereTerritoryKind[];
 }
 
 const STATUT_PARTICULIER = "statut particulier, voir sa page";
@@ -33,7 +48,7 @@ const GRAND_PARIS_SIREN = "200054781";
  * only where the common regime applies: not in a territory outside any region (commune included),
  * nor for a department or region whose powers a particular collectivité exercises.
  */
-export function echelleCommune(dossier: CommuneDossier): Barreau[] {
+export function echelleCommune(dossier: CommuneDossier, comptes?: EchelleComptes): Barreau[] {
   const { identity, intercommunalite } = dossier;
   const { department, region, territoireHorsRegion: horsRegion } = identity;
   const sansCommune = TERRITOIRES_SANS_COMMUNE.has(horsRegion?.code ?? "");
@@ -46,6 +61,9 @@ export function echelleCommune(dossier: CommuneDossier): Barreau[] {
       // outside any region follow their own statute, so nothing is asserted for them.
       competences: horsRegion ? null : COMPETENCES_TERRITOIRES.commune,
       ici: true,
+      comptesHref: comptes?.commune
+        ? territoireCommuneBudgetPath(identity.inseeCode, identity.name)
+        : undefined,
     },
   ];
   if (intercommunalite?.state === "DISPONIBLE") {
@@ -80,6 +98,10 @@ export function echelleCommune(dossier: CommuneDossier): Barreau[] {
       href: department.slug ? territoireDepartementPath(department.slug) : undefined,
       competences: horsRegion || particulier ? null : COMPETENCES_TERRITOIRES.departement,
       ici: false,
+      comptesHref:
+        department.slug && !horsRegion && comptes?.echelles.includes("DEP")
+          ? territoireDepartementBudgetPath(department.slug)
+          : undefined,
     });
   }
   if (region) {
@@ -91,6 +113,9 @@ export function echelleCommune(dossier: CommuneDossier): Barreau[] {
       href: territoireRegionPath(region.slug),
       competences: particulier ? null : COMPETENCES_TERRITOIRES.region,
       ici: false,
+      comptesHref: comptes?.echelles.includes("REG")
+        ? territoireRegionBudgetPath(region.slug)
+        : undefined,
     });
   }
   return barreaux;

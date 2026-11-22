@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({ getComptesTerritoire: vi.fn() }));
 
 vi.mock("@/lib/data/territoire-comptes", () => ({
+  getEchellesComptesPubliees: vi.fn(async () => []),
   getComptesTerritoire: h.getComptesTerritoire,
 }));
 vi.mock("next/navigation", () => ({

@@ -59,12 +59,18 @@ const text = (html: string) =>
     .trim();
 
 describe("BudgetResume", () => {
-  const html = renderToStaticMarkup(<BudgetResume comptes={BREST} scale="COM" />);
+  const html = renderToStaticMarkup(
+    <BudgetResume
+      comptes={BREST}
+      scale="COM"
+      budgetHref="/territoires/communes/brest-29019/budget"
+    />
+  );
 
   it("répond d'abord par la phrase du gabarit, sous sa propre ancre", () => {
     expect(html).toContain('id="comptes"');
     expect(text(html)).toContain(
-      "Les comptes de la collectivité En 2024, la commune a dépensé 934 € par habitant pour son fonctionnement, soit 132,9 millions d'euros au total."
+      "Les comptes de la collectivité Méthode En 2024, la commune a dépensé 934 € par habitant pour son fonctionnement, soit 132,9 millions d'euros au total."
     );
   });
 
@@ -83,6 +89,12 @@ describe("BudgetResume", () => {
     );
   });
 
+  it("mène à la série année par année et à la méthode du chiffre de la phrase", () => {
+    expect(html).toContain('href="/territoires/communes/brest-29019/budget"');
+    expect(text(html)).toContain("Les comptes année par année, depuis 2018");
+    expect(html).toContain('href="/territoires/methode/depenses-de-fonctionnement"');
+  });
+
   it("dit le motif d'une collectivité unique au lieu d'un chiffre", () => {
     const absent = (key: string) => row(key, null, { reason: "COLLECTIVITE_UNIQUE", scopeId: "" });
     const corse = groupComptes(
@@ -94,14 +106,30 @@ describe("BudgetResume", () => {
         "epargne_brute",
       ].flatMap((k) => [absent(`${k}_par_habitant`), absent(`${k}_montant`)])
     );
-    const out = text(renderToStaticMarkup(<BudgetResume comptes={corse} scale="DEP" />));
+    const out = text(
+      renderToStaticMarkup(
+        <BudgetResume
+          comptes={corse}
+          scale="DEP"
+          budgetHref="/territoires/departements/corse-du-sud/budget"
+        />
+      )
+    );
     expect(out).toContain("une collectivité unique en exerce les compétences");
     expect(out).not.toMatch(/\b0 €/);
     expect(out).not.toContain("Dépenses 2024");
   });
 
   it("ne rend rien tant que rien n'est publié", () => {
-    expect(renderToStaticMarkup(<BudgetResume comptes={groupComptes([])} scale="REG" />)).toBe("");
+    expect(
+      renderToStaticMarkup(
+        <BudgetResume
+          comptes={groupComptes([])}
+          scale="REG"
+          budgetHref="/territoires/regions/bretagne/budget"
+        />
+      )
+    ).toBe("");
   });
 
   it("ne lit ni élu, ni parti, ni autre territoire", () => {
