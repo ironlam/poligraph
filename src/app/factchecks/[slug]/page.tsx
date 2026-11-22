@@ -84,8 +84,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const ratingLabel = FACTCHECK_RATING_LABELS[factCheck.verdictRating];
   const description = factCheck.claimant
-    ? `${ratingLabel} — ${factCheck.claimant} : « ${factCheck.claimText.slice(0, 120)} »`
-    : `${ratingLabel} — « ${factCheck.claimText.slice(0, 140)} »`;
+    ? `${ratingLabel}. ${factCheck.claimant} : « ${factCheck.claimText.slice(0, 120)} »`
+    : `${ratingLabel}. « ${factCheck.claimText.slice(0, 140)} »`;
 
   return {
     title: factCheck.title,
@@ -93,7 +93,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: { canonical: `/factchecks/${slug}` },
     ...factCheckRobotsMetadata(context.indexable),
     openGraph: openGraph({
-      title: `${ratingLabel} — ${factCheck.title}`,
+      title: `${ratingLabel} : ${factCheck.title}`,
       description,
       type: "article",
       images: SEGMENT_IMAGE_FILE,

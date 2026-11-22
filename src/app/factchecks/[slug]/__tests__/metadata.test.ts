@@ -71,6 +71,21 @@ describe("/factchecks/[slug] metadata", () => {
     );
   });
 
+  it("écrit la description et le titre de partage sans tiret cadratin ni demi-cadratin", async () => {
+    findFirst.mockResolvedValue(FACTCHECK);
+    getFactCheckContext.mockResolvedValue(EMPTY_FACTCHECK_CONTEXT);
+    const m = await metadataFor("factcheck-reel");
+    expect(m.description).toBe("Faux. Jean Dupont : « Une affirmation à vérifier. »");
+    expect(m.openGraph?.title).toBe("Faux : Un fact-check publié");
+
+    findFirst.mockResolvedValue({ ...FACTCHECK, claimant: null });
+    const anonymous = await metadataFor("factcheck-reel");
+    expect(anonymous.description).toBe("Faux. « Une affirmation à vérifier. »");
+    for (const text of [m.description, m.openGraph?.title, anonymous.description]) {
+      expect(text).not.toMatch(/[\u2013\u2014]/);
+    }
+  });
+
   it("sort de l'index, sans bloquer les liens, un fact-check sans contexte suffisant", async () => {
     findFirst.mockResolvedValue({ ...FACTCHECK, mentions: [] });
     getFactCheckContext.mockResolvedValue(EMPTY_FACTCHECK_CONTEXT);
