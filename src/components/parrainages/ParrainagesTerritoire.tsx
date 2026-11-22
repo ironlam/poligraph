@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { LIEN_LIGNE, Pied } from "@/components/parrainages/ParrainagesBlocs";
 import {
   PARRAINAGES_ELECTIONS,
@@ -35,43 +36,56 @@ export function ParrainagesCommune({ blocs }: { blocs: ParrainagesCommuneBloc[] 
     <section
       id="parrainages"
       aria-labelledby="parrainages-titre"
-      className="mt-5 scroll-mt-32 space-y-3 border-t pt-5"
+      className="mt-5 scroll-mt-32 border-t pt-5"
     >
-      <h3 id="parrainages-titre" className="font-display text-lg font-bold text-primary">
-        Parrainages présidentiels
-      </h3>
-      {known.map(({ electionSlug, lignes }) => (
-        <div key={electionSlug} className="space-y-2">
-          <h4 className="font-bold">{PARRAINAGES_ELECTIONS[electionSlug]!.titre}</h4>
-          <ul className="space-y-2">
-            {lignes.map((ligne) => (
-              <li key={ligne.id}>
-                {ligne.politicianSlug ? (
-                  <Link
-                    href={`/politiques/${ligne.politicianSlug}`}
-                    prefetch={false}
-                    className={INLINE}
-                  >
-                    {nomElu(ligne)}
-                  </Link>
-                ) : (
-                  <span className="font-semibold">{nomElu(ligne)}</span>
-                )}{" "}
-                ({mandatPublie(ligne)}) a présenté{" "}
-                <Link
-                  href={parrainagesCandidatPath(electionSlug, generateSlug(ligne.candidateName))}
-                  prefetch={false}
-                  className={INLINE}
-                >
-                  {ligne.candidateName}
-                </Link>{" "}
-                (publié le {formatDatePublication(ligne.publishedOn)}).
-              </li>
-            ))}
-          </ul>
+      <details className="group rounded-xl border">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+          <h3 id="parrainages-titre" className="font-display text-lg font-bold text-primary">
+            Parrainages présidentiels
+          </h3>
+          <ChevronDown
+            className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+            aria-hidden="true"
+          />
+        </summary>
+        <div className="space-y-3 border-t px-4 py-3">
+          {known.map(({ electionSlug, lignes }) => (
+            <div key={electionSlug} className="space-y-2">
+              <h4 className="font-bold">{PARRAINAGES_ELECTIONS[electionSlug]!.titre}</h4>
+              <ul className="space-y-2">
+                {lignes.map((ligne) => (
+                  <li key={ligne.id}>
+                    {ligne.politicianSlug ? (
+                      <Link
+                        href={`/politiques/${ligne.politicianSlug}`}
+                        prefetch={false}
+                        className={INLINE}
+                      >
+                        {nomElu(ligne)}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold">{nomElu(ligne)}</span>
+                    )}{" "}
+                    ({mandatPublie(ligne)}) a présenté{" "}
+                    <Link
+                      href={parrainagesCandidatPath(
+                        electionSlug,
+                        generateSlug(ligne.candidateName)
+                      )}
+                      prefetch={false}
+                      className={INLINE}
+                    >
+                      {ligne.candidateName}
+                    </Link>{" "}
+                    (publié le {formatDatePublication(ligne.publishedOn)}).
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <Pied electionSlug={known[0]!.electionSlug} />
         </div>
-      ))}
-      <Pied electionSlug={known[0]!.electionSlug} />
+      </details>
     </section>
   );
 }

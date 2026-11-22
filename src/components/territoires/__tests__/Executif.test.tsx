@@ -30,4 +30,13 @@ describe("Executif", () => {
   it("ne rend rien quand le registre ne donne aucun rang", () => {
     expect(render(<Executif titre="t" rangs={[]} />).container.innerHTML).toBe("");
   });
+
+  it("replie toute la liste derrière son titre quand la page le demande", () => {
+    const { container } = render(<Executif titre="Adjoints" rangs={rangs(3)} replie />);
+    const details = container.querySelectorAll("details");
+    expect(details).toHaveLength(1);
+    expect(details[0]!.hasAttribute("open")).toBe(false);
+    expect(details[0]!.querySelector("summary")?.textContent).toBe("Adjoints (3)");
+    expect(details[0]!.querySelectorAll("li")).toHaveLength(3);
+  });
 });

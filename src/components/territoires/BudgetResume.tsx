@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SectionCard } from "@/components/territoires/CommuneSections";
+import { Collapsible, SectionCard } from "@/components/territoires/CommuneSections";
 import { LigneSource } from "@/components/territoires/LigneSource";
 import { MesureBarre } from "@/components/territoires/MesureBarre";
 import {
@@ -77,63 +77,66 @@ export function BudgetResume({
     >
       <p className="text-base">{phrase}</p>
       {!allAbsent && (
-        <>
-          <h3 className="mt-5 mb-3 font-display text-lg font-bold">Dépenses {y}, par habitant</h3>
-          <div className="space-y-4">
-            {depenses.map(({ key, entry }, i) => {
-              const v = entry?.parHabitant ?? null;
-              const m = entry?.montant ?? null;
-              return (
-                <MesureBarre
-                  key={key}
-                  label={label(key)}
-                  valeur={v?.value == null ? null : formatEurosParHabitant(v.value)}
-                  ratio={ratios[i] ?? null}
-                  detail={m?.value == null ? null : `${formatMontant(m.value)} au total`}
-                  nonEtabli={v ? absenceWords(v) : undefined}
-                />
-              );
-            })}
-          </div>
-          <dl className="mt-5 divide-y border-t">
-            {SOLDES.map((key) => {
-              const entry = dernierExercice(comptes, key);
-              const v = entry?.parHabitant;
-              const m = entry?.montant;
-              return (
-                // Stacked on a phone, label left and figure right from sm up.
-                <div
-                  key={key}
-                  className="py-3 sm:flex sm:items-baseline sm:justify-between sm:gap-x-4"
-                >
-                  <dt className="text-sm">
-                    {label(key)}
-                    {key === "encours_dette" ? ` au 31 décembre ${y}` : ` ${y}`}
-                  </dt>
-                  <dd className="tabular-nums sm:text-right">
-                    {v && m && (v.value !== null || m.value !== null) ? (
-                      <>
-                        {/* Per inhabitant first; without it, the total takes the first line. */}
-                        <b className="font-display">
-                          {parHab(v) ?? `${formatMontant(m.value as number)} au total`}
-                        </b>
-                        <span className="block text-xs text-muted-foreground">
-                          {v.value === null
-                            ? absenceWords(v)
-                            : m.value !== null && `${formatMontant(m.value)} au total`}
+        // The answer sentence stays visible; the five figures are one tap away.
+        <div className="mt-4">
+          <Collapsible summary={`Le détail ${y} : dépenses, dette, épargne`}>
+            <h3 className="mb-3 font-display text-lg font-bold">Dépenses {y}, par habitant</h3>
+            <div className="space-y-4">
+              {depenses.map(({ key, entry }, i) => {
+                const v = entry?.parHabitant ?? null;
+                const m = entry?.montant ?? null;
+                return (
+                  <MesureBarre
+                    key={key}
+                    label={label(key)}
+                    valeur={v?.value == null ? null : formatEurosParHabitant(v.value)}
+                    ratio={ratios[i] ?? null}
+                    detail={m?.value == null ? null : `${formatMontant(m.value)} au total`}
+                    nonEtabli={v ? absenceWords(v) : undefined}
+                  />
+                );
+              })}
+            </div>
+            <dl className="mt-5 divide-y border-t">
+              {SOLDES.map((key) => {
+                const entry = dernierExercice(comptes, key);
+                const v = entry?.parHabitant;
+                const m = entry?.montant;
+                return (
+                  // Stacked on a phone, label left and figure right from sm up.
+                  <div
+                    key={key}
+                    className="py-3 sm:flex sm:items-baseline sm:justify-between sm:gap-x-4"
+                  >
+                    <dt className="text-sm">
+                      {label(key)}
+                      {key === "encours_dette" ? ` au 31 décembre ${y}` : ` ${y}`}
+                    </dt>
+                    <dd className="tabular-nums sm:text-right">
+                      {v && m && (v.value !== null || m.value !== null) ? (
+                        <>
+                          {/* Per inhabitant first; without it, the total takes the first line. */}
+                          <b className="font-display">
+                            {parHab(v) ?? `${formatMontant(m.value as number)} au total`}
+                          </b>
+                          <span className="block text-xs text-muted-foreground">
+                            {v.value === null
+                              ? absenceWords(v)
+                              : m.value !== null && `${formatMontant(m.value)} au total`}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {m ? absenceWords(m) : "Non établi pour cet exercice."}
                         </span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        {m ? absenceWords(m) : "Non établi pour cet exercice."}
-                      </span>
-                    )}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-        </>
+                      )}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </Collapsible>
+        </div>
       )}
       {seule && <p className="mt-4 text-sm">{seule}</p>}
       <p className="mt-2 text-sm">

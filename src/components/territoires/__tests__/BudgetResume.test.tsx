@@ -150,6 +150,18 @@ describe("BudgetResume", () => {
     expect(text(out)).not.toContain("commune seule");
   });
 
+  it("replie le détail des chiffres et laisse visibles la phrase, le lien et la source", () => {
+    const repli = html.slice(html.indexOf("<details"), html.indexOf("</details>"));
+    expect(html).not.toContain("<details open");
+    expect(text(repli)).toContain("Le détail 2024 : dépenses, dette, épargne");
+    expect(text(repli)).toContain("Encours de dette au 31 décembre 2024");
+    expect(repli).toContain('style="width:100%"');
+    const apres = html.slice(html.indexOf("</details>"));
+    expect(html.indexOf("En 2024, la commune a dépensé")).toBeLessThan(html.indexOf("<details"));
+    expect(apres).toContain('href="/territoires/communes/brest-29019/budget"');
+    expect(text(apres)).toContain("Comptes 2024 · Source");
+  });
+
   it("ne rend rien tant que rien n'est publié", () => {
     expect(
       renderToStaticMarkup(

@@ -32,6 +32,16 @@ describe("ParrainagesCommune", () => {
     expect(render(<ParrainagesCommune blocs={inconnue} />).container.innerHTML).toBe("");
   });
 
+  it("replie les présentations sous leur titre, liens compris", () => {
+    const { container } = render(
+      <ParrainagesCommune blocs={[{ electionSlug: SLUG, lignes: [ligne()] }]} />
+    );
+    const volet = container.querySelector("#parrainages details")!;
+    expect(volet.hasAttribute("open")).toBe(false);
+    expect(volet.querySelector("summary h3")?.textContent).toBe("Parrainages présidentiels");
+    expect(volet.querySelector('a[href$="/hidalgo-anne"]')).not.toBeNull();
+  });
+
   it("écrit « a présenté », avec la commune telle que publiée et la date de publication", () => {
     const { container } = render(
       <ParrainagesCommune blocs={[{ electionSlug: SLUG, lignes: [ligne()] }]} />
