@@ -15,10 +15,13 @@
  *                       supplies the title AND verbatim evidenceQuotes from `blocks`.
  *   --apply --from F    apply the verdicts from report F via the approval guard
  *   --apply --dry-run   recompute and run the guard on every verdict, write nothing
+ *   --apply --actor ID  record ID ("type:name") as the actor instead of the default
  *
  * Apply replicates the SHARED approval service (recompute → approveGuard(single,
  * override) → persistApproval), edit/reject in a transaction, NO revalidatePath
- * (public pages are ISR). Hard blockers always win, even over the judge.
+ * (public pages are ISR). Hard blockers always win, even over the judge. After a
+ * real apply, one profile recompute request covers every title that appeared or
+ * disappeared: the profile document embeds the approved title of recent votes.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { db } from "@/lib/db";
@@ -39,6 +42,7 @@ import {
   LLM_OUTAGE_WINDOW,
 } from "@/services/scrutin-policy-title/fallback-recovery";
 import type { EvidenceQuote, SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import type { Prisma } from "@/generated/prisma";
 
 const JUDGE_MODEL = "claude-sonnet-4-5-20250929";
@@ -112,6 +116,46 @@ interface LoadedCandidate extends Candidate {
   /** Fallback mode: the blocks themselves, so quotes can cite their key. */
   blocks?: Pick<SubstanceTextBlock, "sourceType" | "sourceId" | "field" | "text" | "meta">[];
   proceduralLabel?: string;
+}
+
+/**
+ * Validates the --actor value. `raw` is undefined when the option is absent, which
+ * keeps the default. The "type:" prefix tells a revision's author kind apart
+ * (llm-judge, session, cloud-routine…) in the audit trail.
+ */
+export function resolveActor(raw: string | undefined, fallback: string): string {
+  if (raw === undefined) return fallback;
+  const actor = raw.trim();
+  if (actor === "") throw new Error("--actor: valeur vide");
+  if (!/^[a-z][a-z0-9-]*:\S/.test(actor)) {
+    throw new Error(
+      `--actor: préfixe « type: » attendu (ex. cloud-routine:judge-script), reçu « ${actor} »`
+    );
+  }
+  return actor;
+}
+
+/** Outcomes that change the title a profile shows: a title became APPROVED, or an APPROVED one was rejected. */
+const PROFILE_REFRESH_OUTCOMES = new Set(["approved", "edited+approved", "rejected:was-approved"]);
+
+/**
+ * One recompute request for every scrutin whose public title changed. Nothing in
+ * dry run, nothing when no title changed.
+ */
+export async function refreshProfilesAfterApply(
+  detail: { scrutinId: string; outcome: string }[],
+  dryRun: boolean,
+  request: typeof requestProfileRefresh = requestProfileRefresh
+): Promise<string[]> {
+  if (dryRun) return [];
+  const scrutinIds = [
+    ...new Set(
+      detail.filter((d) => PROFILE_REFRESH_OUTCOMES.has(d.outcome)).map((d) => d.scrutinId)
+    ),
+  ];
+  if (scrutinIds.length === 0) return [];
+  await request({ scrutinIds }, "script:judge-policy-titles");
+  return scrutinIds;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -470,7 +514,8 @@ async function applyReject(scrutinId: string, reason: string, o: ApplyOptions): 
     });
     await tx.scrutinPolicyTitle.update({ where: { id: row.id }, data: { status: "REJECTED" } });
   });
-  return "rejected";
+  // A reject hides a title only if it was public.
+  return row.status === "APPROVED" ? "rejected:was-approved" : "rejected";
 }
 
 async function runApply(): Promise<void> {
@@ -481,9 +526,13 @@ async function runApply(): Promise<void> {
   };
   const rows = report.verdicts;
   const isFallbackReport = report.source === "fallback-recovery";
+  // Present without a value (`--actor` last) reads as empty, so it is refused rather than ignored.
+  const actorArg = process.argv.some((a) => a === "--actor" || a.startsWith("--actor="))
+    ? (arg("actor") ?? "")
+    : undefined;
   const o: ApplyOptions = {
     dryRun: flag("dry-run"),
-    actor: isFallbackReport ? FALLBACK_ACTOR : ACTOR,
+    actor: resolveActor(actorArg, isFallbackReport ? FALLBACK_ACTOR : ACTOR),
   };
   const prefix = isFallbackReport ? "Titre écrit en session (#1356)" : "LLM judge (Claude)";
   log(
@@ -507,6 +556,8 @@ async function runApply(): Promise<void> {
     detail.push({ scrutinId: r.scrutinId, slug: r.slug, verdict: r.verdict, outcome });
     if (++i % 50 === 0) process.stdout.write(`  …${i}/${rows.length}\n`);
   }
+  const refreshed = await refreshProfilesAfterApply(detail, o.dryRun);
+  if (refreshed.length > 0) log(`Recalcul des fiches demandé pour ${refreshed.length} scrutins.`);
   const detailPath = from.replace(/\.json$/, "") + (o.dryRun ? ".dry-run.json" : ".applied.json");
   writeFileSync(detailPath, JSON.stringify(detail, null, 2));
   log(`\n=== Résultats ${o.dryRun ? "du dry-run" : "application"} (détail: ${detailPath}) ===`);
@@ -520,9 +571,12 @@ async function main(): Promise<void> {
   else await runSample();
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => db.$disconnect());
+// Guarded so the unit test can import the helpers without running the script.
+if (require.main === module) {
+  main()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => db.$disconnect());
+}
