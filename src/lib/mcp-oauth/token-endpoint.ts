@@ -23,7 +23,11 @@ export interface TokenEndpointResponse {
   body: Record<string, unknown>;
 }
 
-function oauthError(error: string, description: string, status = 400): TokenEndpointResponse {
+function tokenEndpointError(
+  error: string,
+  description: string,
+  status = 400
+): TokenEndpointResponse {
   return { status, body: { error, error_description: description } };
 }
 
@@ -85,11 +89,11 @@ export async function handleTokenRequest(
   const now = deps.now ?? Date.now();
   const grantType = params.get("grant_type");
   const clientId = params.get("client_id");
-  if (!clientId) return oauthError("invalid_request", "client_id manquant.");
+  if (!clientId) return tokenEndpointError("invalid_request", "client_id manquant.");
 
   const resource = params.get("resource");
   if (resource && resource !== getResourceUrl()) {
-    return oauthError("invalid_target", "Ressource inconnue.");
+    return tokenEndpointError("invalid_target", "Ressource inconnue.");
   }
 
   if (grantType === "authorization_code") {
@@ -97,7 +101,10 @@ export async function handleTokenRequest(
     const verifier = params.get("code_verifier");
     const redirectUri = params.get("redirect_uri");
     if (!code || !verifier || !redirectUri) {
-      return oauthError("invalid_request", "code, code_verifier et redirect_uri sont requis.");
+      return tokenEndpointError(
+        "invalid_request",
+        "code, code_verifier et redirect_uri sont requis."
+      );
     }
     const record = await consumeAuthorizationCode(deps.kv, code);
     if (
@@ -107,7 +114,7 @@ export async function handleTokenRequest(
       record.epoch !== getEpoch() ||
       !verifyPkce(verifier, record.codeChallenge)
     ) {
-      return oauthError("invalid_grant", "Code invalide, expiré ou déjà utilisé.");
+      return tokenEndpointError("invalid_grant", "Code invalide, expiré ou déjà utilisé.");
     }
     return issueTokens(deps.kv, {
       clientId,
@@ -119,14 +126,14 @@ export async function handleTokenRequest(
 
   if (grantType === "refresh_token") {
     const refreshToken = params.get("refresh_token");
-    if (!refreshToken) return oauthError("invalid_request", "refresh_token manquant.");
+    if (!refreshToken) return tokenEndpointError("invalid_request", "refresh_token manquant.");
     const consumed = await consumeRefreshToken(deps.kv, refreshToken);
     if (
       consumed.status !== "ok" ||
       consumed.record.clientId !== clientId ||
       consumed.record.epoch !== getEpoch()
     ) {
-      return oauthError("invalid_grant", "Jeton de rafraîchissement invalide ou révoqué.");
+      return tokenEndpointError("invalid_grant", "Jeton de rafraîchissement invalide ou révoqué.");
     }
     return issueTokens(deps.kv, {
       clientId,
@@ -136,5 +143,5 @@ export async function handleTokenRequest(
     });
   }
 
-  return oauthError("unsupported_grant_type", "Grant non pris en charge.");
+  return tokenEndpointError("unsupported_grant_type", "Grant non pris en charge.");
 }
