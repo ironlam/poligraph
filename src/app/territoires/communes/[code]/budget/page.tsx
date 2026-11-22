@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { BudgetPage } from "@/components/territoires/BudgetPage";
 import { getCommuneDossier } from "@/lib/data/territoires";
 import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
+import { getRapportsCrcTerritoire } from "@/lib/data/territoire-fil";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { openGraph } from "@/lib/seo/open-graph";
 import { territoireBudgetRobotsMetadata } from "@/lib/seo/territoire-robots";
@@ -61,12 +62,14 @@ export default async function CommuneBudgetPage({ params }: PageProps) {
   const { code } = await params;
   const data = await loadBudget(code);
   if (!data) notFound();
+  const rapports = await getRapportsCrcTerritoire("COM", data.code);
   return (
     <BudgetPage
       retour={{ label: data.name, href: territoireCommunePath(data.code, data.name) }}
       titre={`Les comptes de la commune de ${data.name}`}
       comptes={data.comptes}
       scale="COM"
+      rapports={rapports}
       intercommunalites={data.intercommunalites}
     />
   );

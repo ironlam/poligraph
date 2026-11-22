@@ -15,7 +15,8 @@ import {
   getVotesDeputesDepartement,
   getVotesSenateursDepartement,
 } from "@/lib/data/territoire-votes";
-import { getFilTerritoire } from "@/lib/data/territoire-fil";
+import { getFilTerritoire, getRapportsCrcTerritoire } from "@/lib/data/territoire-fil";
+import { RapportsCrc } from "@/components/territoires/RapportsCrc";
 import { territoireDepartementBudgetPath } from "@/lib/territoires/paths";
 import { CommuneIndex } from "@/components/territoires/CommuneIndex";
 import {
@@ -43,18 +44,29 @@ export async function DepartementPageBody({
 
   // The bare page opens on the largest communes; the A to Z views list them all.
   const accueil = query.letter === null && query.page === 1;
-  const [territoire, deputies, senators, grandes, votes, votesSenat, fil, parrainages, comptes] =
-    await Promise.all([
-      getDepartementTerritoire(dept.code, query),
-      getDeputesByDepartment(dept.code),
-      getSenateursByDepartment(dept.code),
-      accueil ? getDepartementGrandesCommunes(dept.code) : [],
-      getVotesDeputesDepartement(dept.code),
-      getVotesSenateursDepartement(dept.code),
-      getFilTerritoire("DEP", dept.code),
-      getParrainagesDepartementResumes(dept.code),
-      getComptesTerritoire("DEP", dept.code),
-    ]);
+  const [
+    territoire,
+    deputies,
+    senators,
+    grandes,
+    votes,
+    votesSenat,
+    fil,
+    parrainages,
+    comptes,
+    rapports,
+  ] = await Promise.all([
+    getDepartementTerritoire(dept.code, query),
+    getDeputesByDepartment(dept.code),
+    getSenateursByDepartment(dept.code),
+    accueil ? getDepartementGrandesCommunes(dept.code) : [],
+    getVotesDeputesDepartement(dept.code),
+    getVotesSenateursDepartement(dept.code),
+    getFilTerritoire("DEP", dept.code),
+    getParrainagesDepartementResumes(dept.code),
+    getComptesTerritoire("DEP", dept.code),
+    getRapportsCrcTerritoire("DEP", dept.code),
+  ]);
 
   if (!territoire) notFound();
   if (deputies.length === 0 && senators.length === 0 && territoire.communeCount === 0) {
@@ -112,6 +124,7 @@ export async function DepartementPageBody({
             scale="DEP"
             budgetHref={territoireDepartementBudgetPath(slug)}
           />
+          <RapportsCrc rapports={rapports} />
           <CommuneIndex slug={slug} territoire={territoire} grandes={grandes} />
           <VotesParlementaires votes={votes} mode={{ kind: "decompte" }} senat={votesSenat} />
           <ParrainagesDepartement resumes={parrainages} departmentSlug={slug} />

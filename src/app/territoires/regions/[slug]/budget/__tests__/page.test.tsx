@@ -7,6 +7,7 @@ vi.mock("@/lib/data/territoire-comptes", () => ({
   getEchellesComptesPubliees: vi.fn(async () => []),
   getComptesTerritoire: h.getComptesTerritoire,
 }));
+vi.mock("@/lib/data/territoire-fil", () => ({ getRapportsCrcTerritoire: vi.fn(async () => []) }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");

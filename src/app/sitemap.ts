@@ -61,6 +61,7 @@ import { REGIONS } from "@/config/regions";
 import { REPERE_METHODES, repereMethodePath } from "@/config/territoire-methodes";
 import {
   TERRITOIRES_DONNEES_PATH,
+  TERRITOIRES_METHODE_RAPPORTS_CRC_PATH,
   TERRITOIRES_PATH,
   territoireCommunePath,
   territoireCommuneElectionsPath,
@@ -1094,6 +1095,12 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly" as const,
       priority: 0.4,
     })),
+    {
+      url: `${SITE_URL}${TERRITOIRES_METHODE_RAPPORTS_CRC_PATH}`,
+      lastModified: sectionLastmod ?? new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.4,
+    },
     ...REGIONS.map((region) => ({
       url: `${SITE_URL}${territoireRegionPath(region.slug)}`,
       lastModified: sectionLastmod ?? new Date(),

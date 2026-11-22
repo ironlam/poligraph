@@ -21,7 +21,8 @@ import {
 import { getCommuneDossier } from "@/lib/data/territoires";
 import { getCommuneElections } from "@/lib/data/territoire-elections";
 import { getCommuneChiffres } from "@/lib/data/territoire-chiffres";
-import { getFilTerritoire } from "@/lib/data/territoire-fil";
+import { getFilTerritoire, getRapportsCrcTerritoire } from "@/lib/data/territoire-fil";
+import { RapportsCrc } from "@/components/territoires/RapportsCrc";
 import { getParrainagesCommuneBlocs } from "@/lib/data/parrainages";
 import { ParrainagesCommune } from "@/components/parrainages/ParrainagesTerritoire";
 import {
@@ -94,7 +95,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
   const { identity } = dossier;
   // The dossier knows 2026 and the presidential only: the earlier municipales come from the
   // elections reader, so the count and the lines match the dedicated page.
-  const [elections, chiffres, votes, fil, parrainages, comptes, echellesComptes] =
+  const [elections, chiffres, votes, fil, parrainages, comptes, echellesComptes, rapports] =
     await Promise.all([
       getCommuneElections(identity.inseeCode),
       getCommuneChiffres(identity.inseeCode),
@@ -103,6 +104,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
       getParrainagesCommuneBlocs(identity.inseeCode),
       getComptesTerritoire("COM", identity.inseeCode),
       getEchellesComptesPubliees(),
+      getRapportsCrcTerritoire("COM", identity.inseeCode),
     ]);
   // A name only when the base establishes one deputy for the commune; otherwise no name.
   const { deputes } = dossier.parlement;
@@ -160,6 +162,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
               budgetHref={territoireCommuneBudgetPath(identity.inseeCode, identity.name)}
               intercommunalites={intercommunalites}
             />
+            <RapportsCrc rapports={rapports} />
             <ParlementSection dossier={dossier} />
             <VotesParlementaires votes={votes} mode={votesMode} />
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}

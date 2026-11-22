@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { BudgetPage } from "@/components/territoires/BudgetPage";
 import { getDepartmentBySlug } from "@/config/departments";
 import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
+import { getRapportsCrcTerritoire } from "@/lib/data/territoire-fil";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { openGraph } from "@/lib/seo/open-graph";
 import { territoireBudgetRobotsMetadata } from "@/lib/seo/territoire-robots";
@@ -51,12 +52,14 @@ export default async function DepartementBudgetPage({ params }: PageProps) {
   const { slug } = await params;
   const data = await loadBudget(slug);
   if (!data) notFound();
+  const rapports = await getRapportsCrcTerritoire("DEP", data.code);
   return (
     <BudgetPage
       retour={{ label: data.name, href: territoireDepartementPath(slug) }}
       titre={`Les comptes du département : ${data.name}`}
       comptes={data.comptes}
       scale="DEP"
+      rapports={rapports}
     />
   );
 }

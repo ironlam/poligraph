@@ -1,3 +1,4 @@
+import { RAPPORT_CRC_REPONSE } from "@/config/juridictions-financieres";
 import type { FilEvenement } from "@/lib/data/territoire-fil";
 import { phraseEvenement } from "@/lib/territoires/evenements";
 
@@ -43,6 +44,9 @@ export function FilTerritoire({ evenements }: { evenements: FilEvenement[] }) {
               {dateCourte(e.date)}
             </time>
             <p className="text-sm font-medium">{phraseEvenement(e.evenement)}</p>
+            {e.evenement.type === "RAPPORT_CRC" && (
+              <p className="text-xs text-muted-foreground">{RAPPORT_CRC_REPONSE}</p>
+            )}
             <a
               href={e.source.url}
               target="_blank"

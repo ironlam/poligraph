@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
   imageResponses: [] as ReactNode[],
 }));
 
-vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: vi.fn(async () => []) }));
+vi.mock("@/lib/data/territoire-fil", () => ({
+  getFilTerritoire: vi.fn(async () => []),
+  getRapportsCrcTerritoire: vi.fn(async () => []),
+}));
 vi.mock("@/lib/data/territoire-comptes", () => ({
   getEchellesComptesPubliees: vi.fn(async () => []),
   getComptesTerritoire: vi.fn(async () => ({ dernierExercice: null, agregats: [], source: null })),
