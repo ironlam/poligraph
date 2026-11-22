@@ -1,13 +1,24 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { isSensitiveCategory, isAutoPostEnabled, SOCIAL_CATEGORIES } from "./config";
+import {
+  isSensitiveCategory,
+  isAutoPostEnabled,
+  requiresAdminApproval,
+  SOCIAL_CATEGORIES,
+} from "./config";
 
 describe("social config", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("has exactly 8 categories", () => {
-    expect(SOCIAL_CATEGORIES).toHaveLength(8);
+  it("has exactly 10 categories", () => {
+    expect(SOCIAL_CATEGORIES).toHaveLength(10);
+  });
+
+  it("requires an admin approval for judicial affairs only", () => {
+    expect(requiresAdminApproval("affaires")).toBe(true);
+    expect(requiresAdminApproval("votes")).toBe(false);
+    expect(requiresAdminApproval("opendata")).toBe(false);
   });
 
   it("does not include consensus or presse", () => {
