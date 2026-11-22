@@ -64,7 +64,10 @@ export function snapshot(row: ScrutinPolicyTitle): Prisma.InputJsonValue {
  * warnings and evidence drift FRESH. Never trusts the stored values: every
  * approval decision must reflect what the official text says today.
  */
-export async function recomputeApprovalContext(scrutinId: string): Promise<ApprovalContext> {
+export async function recomputeApprovalContext(
+  scrutinId: string,
+  { readOnly = false }: { readOnly?: boolean } = {}
+): Promise<ApprovalContext> {
   const policy = await db.scrutinPolicyTitle.findUnique({
     where: { scrutinId },
     include: {
@@ -105,15 +108,16 @@ export async function recomputeApprovalContext(scrutinId: string): Promise<Appro
   // revision) so the guard does not report INPUT_DRIFT on an unchanged scrutin.
   // REJECTED and STALE rows are left alone: isRejectedNotRevised reads the latest
   // revision, and a STALE row must be regenerated anyway.
-  if (
+  // A read-only caller (dry run) keeps the refreshed values in memory only.
+  const agreementOnlyDrift =
     row.status !== "REJECTED" &&
     row.status !== "STALE" &&
     isAgreementOnlyTitleDrift({
       storedHash: row.inputHash,
       storedTitle: row.officialTitleSnapshot,
       current: currentInput,
-    })
-  ) {
+    });
+  if (agreementOnlyDrift && !readOnly) {
     await db.$transaction(async (tx) => {
       await tx.scrutinPolicyTitleRevision.create({
         data: {
@@ -128,6 +132,8 @@ export async function recomputeApprovalContext(scrutinId: string): Promise<Appro
         data: { officialTitleSnapshot: scrutin.title, inputHash: currentInputHash },
       });
     });
+  }
+  if (agreementOnlyDrift) {
     policy.officialTitleSnapshot = row.officialTitleSnapshot = scrutin.title;
     policy.inputHash = row.inputHash = currentInputHash;
   }

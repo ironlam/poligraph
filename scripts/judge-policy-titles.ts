@@ -10,7 +10,11 @@
  *   --load [--limit N]  dump anchored candidates + official substance to JSON,
  *                       NO LLM call — a Claude Code session judges them in-context
  *                       (no API spend) then writes the report --apply consumes.
+ *   --load --fallback   same dump for the rows left in FALLBACK by the model outage
+ *                       of 2026-11-12..17 (#1356): no title, so the in-session writer
+ *                       supplies the title AND verbatim evidenceQuotes from `blocks`.
  *   --apply --from F    apply the verdicts from report F via the approval guard
+ *   --apply --dry-run   recompute and run the guard on every verdict, write nothing
  *
  * Apply replicates the SHARED approval service (recompute → approveGuard(single,
  * override) → persistApproval), edit/reject in a transaction, NO revalidatePath
@@ -28,12 +32,19 @@ import {
   snapshot,
   asJson,
 } from "@/services/scrutin-policy-title/approval";
-import { approveGuard, computeCurrentWarnings } from "@/app/admin/policy-titles/approve-guard";
-import type { EvidenceQuote } from "@/services/scrutin-policy-title/types";
+import { approveGuard, detectEvidenceDrift } from "@/app/admin/policy-titles/approve-guard";
+import {
+  checkManualTitle,
+  isOutageFallbackRow,
+  LLM_OUTAGE_WINDOW,
+} from "@/services/scrutin-policy-title/fallback-recovery";
+import type { EvidenceQuote, SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
 import type { Prisma } from "@/generated/prisma";
 
 const JUDGE_MODEL = "claude-sonnet-4-5-20250929";
 const ACTOR = "llm-judge:claude-sonnet-4-5";
+/** Titles written in session for the outage fallback rows (#1356). */
+const FALLBACK_ACTOR = "session:fallback-recovery";
 const REPORT_PATH = "scripts/.local/judge-report.json";
 const CANDIDATES_PATH = "scripts/.local/judge-candidates.json";
 const CONCURRENCY = 6;
@@ -77,6 +88,9 @@ interface Verdict {
   reason: string;
   suggestedTitle?: string;
   suggestedSubtitle?: string;
+  /** Fallback rows only: verbatim quotes grounding the written title, each
+   *  pointing at one of the loaded `blocks` (sourceType, sourceId, field). */
+  evidenceQuotes?: EvidenceQuote[];
 }
 
 interface Candidate {
@@ -95,6 +109,9 @@ interface LoadedCandidate extends Candidate {
   /** Official amendment substance (HTML-stripped blocks), so the in-session
    *  judge can decide grounding without any further DB access. */
   official: string;
+  /** Fallback mode: the blocks themselves, so quotes can cite their key. */
+  blocks?: Pick<SubstanceTextBlock, "sourceType" | "sourceId" | "field" | "text" | "meta">[];
+  proceduralLabel?: string;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -168,6 +185,43 @@ async function loadAnchored(): Promise<Candidate[]> {
       coverage: ((r.qualitySignals as any)?.evidenceCoverage as number) ?? 0,
     }))
     .filter((c) => c.coverage > 0);
+}
+
+async function loadOutageFallback(): Promise<(Candidate & { proceduralLabel: string })[]> {
+  const rows = await db.scrutinPolicyTitle.findMany({
+    where: {
+      status: "NEEDS_REVIEW",
+      generationSource: "FALLBACK",
+      policyTitle: null,
+      generatedAt: { gte: LLM_OUTAGE_WINDOW.from, lt: LLM_OUTAGE_WINDOW.to },
+    },
+    select: {
+      scrutinId: true,
+      status: true,
+      generationSource: true,
+      policyTitle: true,
+      policySubtitle: true,
+      generatedAt: true,
+      generationWarnings: true,
+      officialTitleSnapshot: true,
+      proceduralLabel: true,
+      confidence: true,
+      scrutin: { select: { slug: true } },
+    },
+    orderBy: { generatedAt: "asc" },
+  });
+  return rows
+    .filter((r) => isOutageFallbackRow(r))
+    .map((r) => ({
+      scrutinId: r.scrutinId,
+      slug: r.scrutin?.slug ?? null,
+      policyTitle: null,
+      policySubtitle: null,
+      officialTitleSnapshot: r.officialTitleSnapshot,
+      proceduralLabel: r.proceduralLabel,
+      confidence: r.confidence,
+      coverage: 0,
+    }));
 }
 
 async function mapPool<T, R>(
@@ -247,7 +301,12 @@ async function runAll(): Promise<void> {
 
 // ── LOAD (dump candidates + substance, NO LLM — for in-session judging) ─────
 async function runLoad(): Promise<void> {
-  const anchored = await loadAnchored();
+  const fallback = flag("fallback");
+  const anchored = fallback ? await loadOutageFallback() : await loadAnchored();
+  if (fallback)
+    log(
+      `Lignes en repli de la panne modèle (${LLM_OUTAGE_WINDOW.from.toISOString().slice(0, 10)} → ${LLM_OUTAGE_WINDOW.to.toISOString().slice(0, 10)} exclu) : ${anchored.length}`
+    );
   const limit = arg("limit") ? Number(arg("limit")) : undefined;
   const subset = limit ? anchored.slice(0, limit) : anchored;
   log(
@@ -263,47 +322,109 @@ async function runLoad(): Promise<void> {
             `[${b.field}${b.meta?.amendmentNumber ? ` · amdt ${b.meta.amendmentNumber}` : ""}]\n${b.text}`
         )
         .join("\n\n");
-      return { ...c, official } as LoadedCandidate;
+      const blocks = fallback
+        ? resolved.blocks.map(({ sourceType, sourceId, field, text, meta }) => ({
+            sourceType,
+            sourceId,
+            field,
+            text,
+            meta,
+          }))
+        : undefined;
+      return { ...c, official, blocks } as LoadedCandidate;
     } catch {
       return null;
     }
   });
   const rows = loaded.filter(Boolean) as LoadedCandidate[];
   mkdirSync("scripts/.local", { recursive: true });
-  writeFileSync(CANDIDATES_PATH, JSON.stringify({ total: rows.length, candidates: rows }, null, 2));
+  const out = arg("out") ?? CANDIDATES_PATH;
+  writeFileSync(out, JSON.stringify({ total: rows.length, candidates: rows }, null, 2));
+  const withoutSubstance = subset
+    .filter((c) => !rows.some((r) => r.scrutinId === c.scrutinId))
+    .map((c) => c.scrutinId);
   log(
-    `\n=== ${rows.length} candidats écrits dans ${CANDIDATES_PATH} (${subset.length - rows.length} sans substance résolvable, ignorés) ===`
+    `\n=== ${rows.length} candidats écrits dans ${out} (${withoutSubstance.length} sans substance résolvable, ignorés) ===`
   );
+  if (fallback && withoutSubstance.length > 0) {
+    log(`Sans substance (restent NEEDS_REVIEW, verdict KEEP) : ${withoutSubstance.join(", ")}`);
+  }
   log(
     `Étapes suivantes: juger chaque titre en session → écrire ${REPORT_PATH} → --apply --from ${REPORT_PATH}.`
   );
 }
 
 // ── APPLY (from report) ────────────────────────────────────────────────────
-async function applyApprove(scrutinId: string, reason: string): Promise<string> {
-  const ctx = await recomputeApprovalContext(scrutinId);
-  if (await isRejectedNotRevised(ctx.row)) return "skip:REJECTED_NOT_REVISED";
-  const res = approveGuard({
+interface ApplyOptions {
+  dryRun: boolean;
+  actor: string;
+}
+
+/** Same guard call as the admin override path, on a row the caller may have
+ *  patched in memory (dry run of an edit). */
+function guardFor(
+  ctx: Awaited<ReturnType<typeof recomputeApprovalContext>>,
+  reason: string,
+  actor: string
+) {
+  return approveGuard({
     row: ctx.row,
     currentInputHash: ctx.currentInputHash,
     currentWarnings: ctx.currentWarnings,
     evidenceDrift: ctx.evidenceDrift,
     mode: "single",
-    override: { reason, actor: ACTOR },
+    override: { reason, actor },
   });
+}
+
+async function applyApprove(scrutinId: string, reason: string, o: ApplyOptions): Promise<string> {
+  const ctx = await recomputeApprovalContext(scrutinId, { readOnly: o.dryRun });
+  if (await isRejectedNotRevised(ctx.row)) return "skip:REJECTED_NOT_REVISED";
+  const res = guardFor(ctx, reason, o.actor);
   if (!res.ok) return "skip:" + (res.hardBlockers.join("+") || "GUARD");
-  await persistApproval(ctx, { actor: ACTOR, approvalOverride: { reason, actor: ACTOR } });
+  if (o.dryRun) return "would:approve";
+  await persistApproval(ctx, {
+    actor: o.actor,
+    approvalOverride: { reason, actor: o.actor },
+  });
   return "approved";
 }
 
-async function applyEdit(r: ReportRow): Promise<string> {
-  const title = (r.suggestedTitle ?? "").trim();
-  if (!title || title.length > 140) return "skip:BAD_SUGGESTION";
-  const subtitle = (r.suggestedSubtitle ?? "").trim() || null;
-  const ctx = await recomputeApprovalContext(r.scrutinId);
+/**
+ * Writes the suggested title, then approves it through the guard. The guard is
+ * evaluated on the edited row BEFORE any write, so a blocked title leaves the row
+ * untouched instead of half-edited. On an outage fallback row (no title, no
+ * quotes) the report's evidenceQuotes become the row's grounding and the source
+ * turns MANUAL, since no model produced the title.
+ */
+async function applyEdit(r: ReportRow, reason: string, o: ApplyOptions): Promise<string> {
+  const ctx = await recomputeApprovalContext(r.scrutinId, { readOnly: o.dryRun });
   const { row, blocks } = ctx;
-  const evidenceQuotes = (row.evidenceQuotes ?? []) as unknown as EvidenceQuote[];
-  const newWarnings = computeCurrentWarnings(title, subtitle, evidenceQuotes, blocks);
+  if (await isRejectedNotRevised(row)) return "skip:REJECTED_NOT_REVISED";
+  const isFallback = row.generationSource === "FALLBACK" && row.policyTitle === null;
+  const quotes = isFallback
+    ? (r.evidenceQuotes ?? [])
+    : ((row.evidenceQuotes ?? []) as unknown as EvidenceQuote[]);
+  const check = checkManualTitle(
+    { title: r.suggestedTitle, subtitle: r.suggestedSubtitle, evidenceQuotes: quotes },
+    blocks,
+    ctx.scrutin.title
+  );
+  if (!check.ok) return "skip:" + check.reason;
+
+  const res = guardFor(
+    {
+      ...ctx,
+      row: { ...row, policyTitle: check.title, policySubtitle: check.subtitle },
+      currentWarnings: check.warnings,
+      evidenceDrift: detectEvidenceDrift(check.evidenceQuotes, blocks),
+    },
+    reason,
+    o.actor
+  );
+  if (!res.ok) return "skip:" + (res.hardBlockers.join("+") || "GUARD");
+  if (o.dryRun) return "would:edit+approve";
+
   await db.$transaction(async (tx) => {
     await tx.scrutinPolicyTitleRevision.create({
       data: {
@@ -314,34 +435,37 @@ async function applyEdit(r: ReportRow): Promise<string> {
           previousPolicySubtitle: row.policySubtitle,
         } as Prisma.InputJsonValue,
         action: "edited",
-        actorId: ACTOR,
+        actorId: o.actor,
       },
     });
     await tx.scrutinPolicyTitle.update({
       where: { id: row.id },
       data: {
-        policyTitle: title,
-        policySubtitle: subtitle,
-        editedFromGenerated: true,
-        currentWarnings: asJson(newWarnings),
+        policyTitle: check.title,
+        policySubtitle: check.subtitle,
+        currentWarnings: asJson(check.warnings),
+        ...(isFallback
+          ? { evidenceQuotes: asJson(check.evidenceQuotes), generationSource: "MANUAL" as const }
+          : { editedFromGenerated: true }),
       },
     });
   });
-  // Approve the edited title (re-recomputes with the new title).
-  const r2 = await applyApprove(r.scrutinId, `EDIT — ${r.reason}`);
+  // Re-recomputes from the DB with the new title before approving.
+  const r2 = await applyApprove(r.scrutinId, reason, o);
   return r2 === "approved" ? "edited+approved" : "edited+" + r2;
 }
 
-async function applyReject(scrutinId: string, reason: string): Promise<string> {
+async function applyReject(scrutinId: string, reason: string, o: ApplyOptions): Promise<string> {
   const row = await db.scrutinPolicyTitle.findUnique({ where: { scrutinId } });
   if (!row) return "skip:NO_ROW";
+  if (o.dryRun) return "would:reject";
   await db.$transaction(async (tx) => {
     await tx.scrutinPolicyTitleRevision.create({
       data: {
         policyTitleId: row.id,
         snapshot: { ...(snapshot(row) as object), reason } as Prisma.InputJsonValue,
         action: "rejected",
-        actorId: ACTOR,
+        actorId: o.actor,
       },
     });
     await tx.scrutinPolicyTitle.update({ where: { id: row.id }, data: { status: "REJECTED" } });
@@ -351,26 +475,41 @@ async function applyReject(scrutinId: string, reason: string): Promise<string> {
 
 async function runApply(): Promise<void> {
   const from = arg("from") ?? REPORT_PATH;
-  const report = JSON.parse(readFileSync(from, "utf8")) as { verdicts: ReportRow[] };
+  const report = JSON.parse(readFileSync(from, "utf8")) as {
+    source?: "fallback-recovery";
+    verdicts: ReportRow[];
+  };
   const rows = report.verdicts;
-  log(`Application de ${rows.length} verdicts depuis ${from}…\n`);
+  const isFallbackReport = report.source === "fallback-recovery";
+  const o: ApplyOptions = {
+    dryRun: flag("dry-run"),
+    actor: isFallbackReport ? FALLBACK_ACTOR : ACTOR,
+  };
+  const prefix = isFallbackReport ? "Titre écrit en session (#1356)" : "LLM judge (Claude)";
+  log(
+    `${o.dryRun ? "DRY-RUN, aucune écriture. " : ""}Application de ${rows.length} verdicts depuis ${from}…\n`
+  );
   const outcomes: Record<string, number> = {};
+  const detail: { scrutinId: string; slug: string | null; verdict: string; outcome: string }[] = [];
   let i = 0;
   for (const r of rows) {
     let outcome: string;
     try {
-      const reason = `LLM judge (Claude): ${r.reason}`.slice(0, 280);
-      if (r.verdict === "APPROVE") outcome = await applyApprove(r.scrutinId, reason);
-      else if (r.verdict === "EDIT") outcome = await applyEdit(r);
-      else if (r.verdict === "REJECT") outcome = await applyReject(r.scrutinId, reason);
+      const reason = `${prefix}: ${r.reason}`.slice(0, 280);
+      if (r.verdict === "APPROVE") outcome = await applyApprove(r.scrutinId, reason, o);
+      else if (r.verdict === "EDIT") outcome = await applyEdit(r, reason, o);
+      else if (r.verdict === "REJECT") outcome = await applyReject(r.scrutinId, reason, o);
       else outcome = "kept";
     } catch (e) {
       outcome = "error:" + String(e).slice(0, 60);
     }
     outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+    detail.push({ scrutinId: r.scrutinId, slug: r.slug, verdict: r.verdict, outcome });
     if (++i % 50 === 0) process.stdout.write(`  …${i}/${rows.length}\n`);
   }
-  log("\n=== Résultats application ===");
+  const detailPath = from.replace(/\.json$/, "") + (o.dryRun ? ".dry-run.json" : ".applied.json");
+  writeFileSync(detailPath, JSON.stringify(detail, null, 2));
+  log(`\n=== Résultats ${o.dryRun ? "du dry-run" : "application"} (détail: ${detailPath}) ===`);
   log(JSON.stringify(outcomes, null, 2));
 }
 
