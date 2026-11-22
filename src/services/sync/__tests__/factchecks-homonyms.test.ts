@@ -14,6 +14,10 @@ vi.mock("@/lib/db", () => ({
     },
   },
 }));
+// The theme classifier calls Mistral: never from a test.
+vi.mock("@/services/classify-theme", () => ({
+  classifyFactCheckTheme: vi.fn().mockResolvedValue({ status: "theme", theme: "SANTE" }),
+}));
 vi.mock("@/lib/api", () => ({
   searchClaims: h.searchClaims,
   mapTextualRating: () => "FALSE",
@@ -54,6 +58,7 @@ vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
 }));
 
 import { syncFactchecks } from "../factchecks";
+import { classifyFactCheckTheme } from "@/services/classify-theme";
 
 const claim = {
   text: "Une affirmation fictive",
@@ -83,11 +88,33 @@ describe("syncFactchecks et les homonymes", () => {
 
     const stats = await syncFactchecks({ politician: "exemple", limit: 1 });
 
-    const mentions = h.factCheckCreate.mock.calls[0]![0].data.mentions.create;
+    const data = h.factCheckCreate.mock.calls[0]![0].data;
+    // A new fact-check is classified on creation.
+    expect(data.theme).toBe("SANTE");
+    expect(data.themeClassifiedAt).toBeInstanceOf(Date);
+    expect(stats.themesClassified).toBe(1);
+    const mentions = data.mentions.create;
     expect(mentions).toEqual([
       { politicianId: "ministre", matchedName: "Camille Exemple", isClaimant: true },
     ]);
     // One homonym dropped from the mentions, one from the claimants.
     expect(stats.homonymsSkipped).toBe(2);
+  });
+
+  it("ne classe pas un fact-check d'une source hors liste blanche, créé en brouillon", async () => {
+    const outsider = {
+      ...claim,
+      claimReview: [{ ...claim.claimReview[0]!, publisher: { name: "Blog sans charte" } }],
+    };
+    h.searchClaims.mockResolvedValueOnce([outsider]).mockResolvedValue([]);
+
+    const stats = await syncFactchecks({ politician: "exemple", limit: 1 });
+
+    const data = h.factCheckCreate.mock.calls[0]![0].data;
+    expect(data.publicationStatus).toBe("DRAFT");
+    expect(data.theme).toBeUndefined();
+    expect(data.themeClassifiedAt).toBeUndefined();
+    expect(classifyFactCheckTheme).not.toHaveBeenCalled();
+    expect(stats.themesClassified).toBe(0);
   });
 });

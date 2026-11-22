@@ -2,9 +2,16 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({ classify: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: {} }));
+vi.mock("@/services/classify-theme", () => ({ classifyFactCheckTheme: mocks.classify }));
 
-import { RESERVED_FACTCHECK_SLUGS, keepOneHomonym, planForcedMentions } from "../factchecks";
+import {
+  RESERVED_FACTCHECK_SLUGS,
+  classifyNewFactCheck,
+  keepOneHomonym,
+  planForcedMentions,
+} from "../factchecks";
 
 const POLITICIANS = [
   { id: "ministre", normalizedFullName: "philippe baptiste" },
@@ -100,5 +107,36 @@ describe("RESERVED_FACTCHECK_SLUGS", () => {
       .map((entry) => entry.name);
     expect(routes).toContain("politique");
     for (const route of routes) expect(RESERVED_FACTCHECK_SLUGS.has(route)).toBe(true);
+  });
+});
+
+describe("classifyNewFactCheck", () => {
+  const input = { title: "Titre", claimText: "Déclaration" };
+  const freshStats = () => ({ themesClassified: 0, themeErrors: 0 });
+
+  it("enregistre un thème avec sa date de classement", async () => {
+    mocks.classify.mockResolvedValue({ status: "theme", theme: "SANTE" });
+    const stats = freshStats();
+    const fields = await classifyNewFactCheck(input, stats);
+    expect(fields.theme).toBe("SANTE");
+    expect(fields.themeClassifiedAt).toBeInstanceOf(Date);
+    expect(stats).toEqual({ themesClassified: 1, themeErrors: 0 });
+  });
+
+  it("enregistre l'absence de thème comme un classement fait", async () => {
+    mocks.classify.mockResolvedValue({ status: "none" });
+    const fields = await classifyNewFactCheck(input, freshStats());
+    expect(fields.theme).toBeNull();
+    expect(fields.themeClassifiedAt).toBeInstanceOf(Date);
+  });
+
+  it("laisse le fact-check non classé sur une réponse hors liste ou une panne, sans arrêter le sync", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const stats = freshStats();
+    mocks.classify.mockResolvedValue({ status: "invalid" });
+    expect(await classifyNewFactCheck(input, stats)).toEqual({});
+    mocks.classify.mockRejectedValue(new Error("les deux fournisseurs ont échoué"));
+    expect(await classifyNewFactCheck(input, stats)).toEqual({});
+    expect(stats).toEqual({ themesClassified: 0, themeErrors: 2 });
   });
 });

@@ -43,6 +43,10 @@ vi.mock("@/lib/db", () => {
     },
   };
 });
+// The theme classifier calls Mistral: never from a test.
+vi.mock("@/services/classify-theme", () => ({
+  classifyFactCheckTheme: vi.fn().mockResolvedValue({ status: "theme", theme: "SANTE" }),
+}));
 vi.mock("@/lib/api", () => ({
   searchClaims: h.searchClaims,
   mapTextualRating: () => "FALSE",

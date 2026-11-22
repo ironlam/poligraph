@@ -2202,6 +2202,11 @@ model FactCheck {
   languageCode      String? // "fr", "en"
   publicationStatus PublicationStatus @default(DRAFT)
 
+  // Thème de la déclaration, parmi ceux des scrutins (lot 4). Nul = aucun thème.
+  theme             ThemeCategory?
+  themeClassifiedAt DateTime? // Classé par le modèle ; nul = jamais classé
+  themeReviewedAt   DateTime? // Validé dans l'admin ; nul = proposition du modèle seulement
+
   mentions  FactCheckMention[]
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
