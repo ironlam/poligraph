@@ -8,6 +8,7 @@ import {
   FACTCHECK_RATING_COLORS,
   FACTCHECK_RATING_LABELS,
   MANDATE_TYPE_LABELS,
+  THEME_CATEGORY_LABELS,
   VERDICT_GROUP_COLORS,
   VERDICT_GROUP_LABELS,
   VOTE_POSITION_LABELS,
@@ -17,6 +18,7 @@ import {
 import { ROUTES } from "@/config/routes";
 import type { FactCheckContext, VerdictGroup } from "@/lib/data/factcheck-context";
 import { formatDate } from "@/lib/utils";
+import { themeToSlug } from "@/lib/theme-utils";
 import { buildClaimDaySegments } from "./claim-day-text";
 
 /**
@@ -275,6 +277,69 @@ export async function ClaimDayBlock({ context }: ContextProps) {
       </p>
       <Link href={ROUTES.voteDetail(claimDay.day)} className={linkClass}>
         Tous les scrutins du {date}
+      </Link>
+    </Block>
+  );
+}
+
+/** Shown only for a theme validated in the admin: a theme proposed by the model never reaches it. */
+export async function ThemeVotesBlock({ context }: ContextProps) {
+  const { author, themeVotes } = await context;
+  if (!author || !themeVotes) return null;
+  const { participation, theme } = themeVotes;
+  const label = THEME_CATEGORY_LABELS[theme];
+  const n = participation.total;
+
+  return (
+    <Block id="fc-theme-votes" title="Ses votes sur ce thème">
+      <p>
+        Thème de la déclaration : <strong>{label}</strong>. {author.fullName} a pris part à{" "}
+        {n.toLocaleString("fr-FR")} scrutin{n > 1 ? "s" : ""} classé{n > 1 ? "s" : ""} sous ce thème
+        :{" "}
+        {(["POUR", "CONTRE", "ABSTENTION"] as const)
+          .filter((p) => participation[p] > 0)
+          .map((p) => `${VOTE_POSITION_LABELS[p].toLowerCase()} ${participation[p]}`)
+          .join(", ")}
+        .
+      </p>
+      {themeVotes.recent.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-1">
+            {themeVotes.recent.length > 1 ? "Ses derniers votes" : "Son dernier vote"} sur ce thème
+            {themeVotes.recentExcludesAmendments ? ", hors amendements" : ""}
+          </h3>
+          <ul className="space-y-1.5 text-sm">
+            {themeVotes.recent.map((vote, i) => (
+              <li key={vote.scrutinSlug ?? i} className="flex flex-wrap items-baseline gap-x-2.5">
+                <span className="font-bold text-xs rounded-md border px-2">
+                  {VOTE_POSITION_LABELS[vote.position]}
+                </span>
+                {vote.scrutinSlug ? (
+                  <Link
+                    prefetch={false}
+                    href={ROUTES.voteDetail(vote.scrutinSlug)}
+                    className="text-primary hover:underline"
+                  >
+                    {vote.scrutinTitle}
+                  </Link>
+                ) : (
+                  <span>{vote.scrutinTitle}</span>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {formatDate(vote.votingDate)}, {VOTING_RESULT_LABELS[vote.result].toLowerCase()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Le thème de la déclaration a été relu par Poligraph ; celui des scrutins est attribué
+        automatiquement. Un scrutin du même thème ne porte pas forcément sur le sujet précis de la
+        déclaration.
+      </p>
+      <Link href={ROUTES.voteTheme(themeToSlug(theme))} className={linkClass}>
+        Tous les scrutins classés « {label} »
       </Link>
     </Block>
   );

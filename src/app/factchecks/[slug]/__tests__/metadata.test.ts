@@ -50,11 +50,25 @@ describe("/factchecks/[slug] metadata", () => {
       factCheckSlug: "factcheck-reel",
       authorSlug: "jean-dupont",
       claimDay: "2026-10-09",
+      theme: null,
     });
     expect(m.title).toBe("Un fact-check publié");
     expect(m.description).toContain("Jean Dupont");
     expect(m.alternates?.canonical).toBe("/factchecks/factcheck-reel");
     expect(m.robots).toBeUndefined();
+  });
+
+  it("ne transmet au contexte qu'un thème validé dans l'admin", async () => {
+    getFactCheckContext.mockResolvedValue(EMPTY_FACTCHECK_CONTEXT);
+    findFirst.mockResolvedValue({ ...FACTCHECK, theme: "SANTE", themeReviewedAt: null });
+    await metadataFor("factcheck-reel");
+    expect(getFactCheckContext).toHaveBeenLastCalledWith(expect.objectContaining({ theme: null }));
+
+    findFirst.mockResolvedValue({ ...FACTCHECK, theme: "SANTE", themeReviewedAt: new Date() });
+    await metadataFor("factcheck-reel");
+    expect(getFactCheckContext).toHaveBeenLastCalledWith(
+      expect.objectContaining({ theme: "SANTE" })
+    );
   });
 
   it("sort de l'index, sans bloquer les liens, un fact-check sans contexte suffisant", async () => {
