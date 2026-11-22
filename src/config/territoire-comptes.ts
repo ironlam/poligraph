@@ -80,6 +80,10 @@ export function compteLabel(agregat: CompteAgregat): string {
   return m.title;
 }
 
+/** Communes only: which entity of each year is the commune of today (SIREN), and whether its
+ * account exists. Read with the accounts of the same exercise. */
+export const COMPTES_DISPONIBILITE_DATASET = "disponibilite-des-comptes-des-communes";
+
 /** One OFGL consolidated dataset per scale, and its entry in the licence registry. */
 export const COMPTES_DATASETS: Record<
   RepereTerritoryKind,
@@ -145,6 +149,8 @@ export const COMPTES_SCOPE_LABELS: Readonly<Record<string, string>> = {
 /** Why a territory has no accounts row; never shown as a zero. */
 export type CompteAbsenceReason =
   | "COMPTE_NON_PUBLIE"
+  | "COMMUNE_FORMEE_APRES"
+  | "COMMUNE_INCONNUE_OFGL"
   | "COLLECTIVITE_UNIQUE"
   | "COMPTES_AU_DEPARTEMENT"
   | "ARRONDISSEMENT_SANS_COMPTE"

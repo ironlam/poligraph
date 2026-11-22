@@ -69,10 +69,54 @@ export interface ComptesPlan {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+/** A SIREN, whichever way the dataset types it: `siren_25` of the availability export is an int. */
+const siren = (v: unknown): string =>
+  typeof v === "number" && Number.isInteger(v) ? String(v).padStart(9, "0") : str(v);
+
+/**
+ * Communes of today and their accounts, from the OFGL "disponibilité des comptes" dataset of one
+ * exercise: each row gives the SIREN of a commune of that year and the SIREN of the 2025 commune
+ * it belongs to. An account is a commune's own only when both SIRENs are the same entity: a commune
+ * nouvelle filed under its former chef-lieu's code (Conques-en-Rouergue under 12076) is found, and
+ * the accounts of a commune merged later (La Bernardière into Cugand-la-Bernardière) are not shown
+ * as those of the new commune.
+ */
+interface CommuneIndex {
+  codeBySiren: Map<string, string>;
+  /** Whether the commune's own account exists that year. */
+  own: Map<string, boolean>;
+  /** Communes of today that did not exist yet, their predecessors did. */
+  formedLater: Set<string>;
+}
+
+function indexDisponibilite(rows: readonly OfglRow[], exercice: number): CommuneIndex {
+  const index: CommuneIndex = { codeBySiren: new Map(), own: new Map(), formedLater: new Set() };
+  for (const r of rows) {
+    if (Number(str(r.annee).slice(0, 4)) !== exercice) {
+      throw new Error(`Disponibilité de l'exercice ${str(r.annee)} lue pour ${exercice}`);
+    }
+    const code = str(r.insee_25);
+    const own = siren(r.siren);
+    if (own && own === siren(r.siren_25)) {
+      index.codeBySiren.set(own, code);
+      index.own.set(code, str(r.presence_budget) === "1");
+    } else {
+      index.formedLater.add(code);
+    }
+  }
+  return index;
+}
 
 /** Poligraph territories an OFGL row belongs to. */
-function territoriesOf(scale: RepereTerritoryKind, row: OfglRow): readonly string[] {
-  if (scale === "COM") return [str(row.insee)];
+function territoriesOf(
+  scale: RepereTerritoryKind,
+  row: OfglRow,
+  communes: CommuneIndex | null
+): readonly string[] {
+  if (scale === "COM") {
+    const code = communes?.codeBySiren.get(str(row.siren));
+    return code ? [code] : [];
+  }
   if (scale === "REG") return [str(row.reg_code)];
   return COMPTES_DEP_BY_SIREN[str(row.siren)] ?? [str(row.dep_code)];
 }
@@ -86,12 +130,21 @@ function period(exercice: number, agregat: CompteAgregat) {
   };
 }
 
-function absenceReason(scale: RepereTerritoryKind, code: string): CompteAbsenceReason {
+/** Why a territory has no row; null when the source says its account exists (an anomaly). */
+function absenceReason(
+  scale: RepereTerritoryKind,
+  code: string,
+  communes: CommuneIndex | null
+): CompteAbsenceReason | null {
   const fixed = COMPTES_ABSENCES[scale][code];
   if (fixed) return fixed;
-  if (scale === "COM" && ARRONDISSEMENT_PLM.test(code)) return "ARRONDISSEMENT_SANS_COMPTE";
-  if (scale === "COM" && HORS_PERIMETRE_OFGL.test(code)) return "HORS_PERIMETRE_OFGL";
-  return "COMPTE_NON_PUBLIE";
+  if (scale !== "COM" || !communes) return "COMPTE_NON_PUBLIE";
+  if (ARRONDISSEMENT_PLM.test(code)) return "ARRONDISSEMENT_SANS_COMPTE";
+  if (HORS_PERIMETRE_OFGL.test(code)) return "HORS_PERIMETRE_OFGL";
+  const own = communes.own.get(code);
+  if (own === true) return null;
+  if (own === false) return "COMPTE_NON_PUBLIE";
+  return communes.formedLater.has(code) ? "COMMUNE_FORMEE_APRES" : "COMMUNE_INCONNUE_OFGL";
 }
 
 export function planComptes(input: {
@@ -100,6 +153,8 @@ export function planComptes(input: {
   rows: readonly OfglRow[];
   /** Poligraph territories of the scale to cover. */
   territoryCodes: readonly string[];
+  /** Communes only: the "disponibilité des comptes" rows of the same exercise. */
+  disponibilite?: readonly OfglRow[];
 }): ComptesPlan {
   const { scale, exercice } = input;
   if (exercice < COMPTES_PREMIER_EXERCICE || exercice > COMPTES_DERNIER_EXERCICE) {
@@ -107,6 +162,10 @@ export function planComptes(input: {
       `Exercice ${exercice} hors de la série ${COMPTES_PREMIER_EXERCICE}-${COMPTES_DERNIER_EXERCICE}`
     );
   }
+  if (scale === "COM" && !input.disponibilite) {
+    throw new Error("Communes : la disponibilité des comptes de l'exercice est requise");
+  }
+  const communes = scale === "COM" ? indexDisponibilite(input.disponibilite ?? [], exercice) : null;
   const known = new Set(input.territoryCodes);
   const byName = new Map(COMPTES_AGREGATS.map((a) => [a.ofglAgregat, a]));
   const plan: ComptesPlan = { rows: [], covered: 0, absent: {}, horsTerritoire: [], anomalies: [] };
@@ -117,8 +176,8 @@ export function planComptes(input: {
   for (const row of input.rows) {
     const agregat = byName.get(str(row.agregat));
     if (!agregat) continue;
-    const territories = territoriesOf(scale, row);
-    const id = territories.join("+");
+    const territories = territoriesOf(scale, row, communes);
+    const id = territories.join("+") || str(row.siren);
     const anomaly = (detail: string) =>
       plan.anomalies.push({ code: id, agregat: agregat.ofglAgregat, detail });
 
@@ -152,6 +211,7 @@ export function planComptes(input: {
       }
     }
 
+    if (territories.length === 0) hors.add(str(row.siren));
     for (const code of territories) {
       if (!known.has(code)) {
         hors.add(code || str(row.siren));
@@ -184,7 +244,15 @@ export function planComptes(input: {
   for (const code of input.territoryCodes) {
     const own = found.get(code);
     if (!own) {
-      const reason = absenceReason(scale, code);
+      const reason = absenceReason(scale, code, communes);
+      if (reason === null) {
+        plan.anomalies.push({
+          code,
+          agregat: "",
+          detail: "compte annoncé par la disponibilité mais absent des comptes",
+        });
+        continue;
+      }
       (plan.absent[reason] ??= []).push(code);
       const state = reason === "HORS_PERIMETRE_OFGL" ? "HORS_COUVERTURE" : "NON_ETABLI";
       for (const agregat of COMPTES_AGREGATS) {

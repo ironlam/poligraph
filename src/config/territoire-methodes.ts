@@ -66,7 +66,7 @@ const COMPTES_CALCUL =
   "Poligraph reprend sans le modifier le montant calculé par l'OFGL à partir des balances comptables que publie la DGFiP. Ce sont des comptes consolidés : le budget principal de la collectivité et ses budgets annexes (eau, assainissement, transports…) sont additionnés, après retrait des flux entre ces budgets. Le montant par habitant est aussi celui de l'OFGL, qui divise le montant par la population totale de la collectivité pour l'exercice. Communes, départements et régions affichent le même exercice : le dernier que l'OFGL a complété pour toutes les communes.";
 
 const COMPTES_CAS_PARTICULIERS =
-  "Paris n'a qu'un compte, celui de la Ville de Paris, qui exerce les compétences d'une commune et d'un département : le même chiffre figure sur les deux pages. Les arrondissements de Paris, Lyon et Marseille n'ont pas de compte propre dans les données de l'OFGL. Pour le Bas-Rhin et le Haut-Rhin, le chiffre est celui de la Collectivité européenne d'Alsace, qui couvre les deux départements. La Corse, la Martinique et la Guyane ont chacune une collectivité unique, dont les comptes figurent sur la page de la région. Mayotte est un département qui exerce aussi les compétences d'une région : ses comptes figurent sur la page du département. Sur le territoire de la métropole de Lyon, c'est la métropole qui exerce les compétences du département, et le chiffre du Rhône ne couvre pas ce territoire.";
+  "Paris n'a qu'un compte, celui de la Ville de Paris, qui exerce les compétences d'une commune et d'un département : le même chiffre figure sur les deux pages. Les arrondissements de Paris, Lyon et Marseille n'ont pas de compte propre dans les données de l'OFGL. Pour le Bas-Rhin et le Haut-Rhin, le chiffre est celui de la Collectivité européenne d'Alsace, qui couvre les deux départements. La Corse, la Martinique et la Guyane ont chacune une collectivité unique, dont les comptes figurent sur la page de la région. Mayotte est un département qui exerce aussi les compétences d'une région : ses comptes figurent sur la page du département. Sur le territoire de la métropole de Lyon, c'est la métropole qui exerce les compétences du département, et le chiffre du Rhône ne couvre pas ce territoire. Une commune nouvelle n'a de comptes qu'à partir de l'exercice où elle existe : Poligraph la reconnaît à son numéro SIREN dans le jeu « Disponibilité des comptes des communes » de l'OFGL, et n'affiche pas à sa place les comptes des communes qui l'ont formée.";
 
 const COMPTES_SANS_STRATE =
   "Aucune moyenne de strate n'est affichée à côté du chiffre. L'OFGL n'en publie pas, et celle de la DGFiP porte sur le budget principal seul, avec d'autres définitions : la placer à côté d'un chiffre consolidé rapprocherait deux mesures différentes.";
@@ -81,6 +81,10 @@ const COMPTES_HISTORIQUE = [
   {
     date: "2026-11-21",
     text: "Première version de la méthode, publiée avant tout import de données.",
+  },
+  {
+    date: "2026-11-22",
+    text: "Précision sur les communes nouvelles, rattachées à leurs comptes par leur numéro SIREN.",
   },
 ] as const;
 
