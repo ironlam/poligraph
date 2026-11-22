@@ -1,8 +1,13 @@
+import { cacheLife, cacheTag } from "next/cache";
 import {
   COMPTES_AGREGATS,
+  COMPTES_DATASETS,
+  compteRepereSource,
   parseCompteIndicatorKey,
   type CompteAgregatKey,
 } from "@/config/territoire-comptes";
+import { db } from "@/lib/db";
+import { isMissingTableError } from "@/lib/data/commune-population";
 import type { RepereTerritoryKind } from "@/config/territoire-reperes";
 import {
   getTerritoireComptesRows,
@@ -87,4 +92,28 @@ export async function getComptesTerritoire(
   code: string
 ): Promise<ComptesTerritoire> {
   return groupComptes(await getTerritoireComptesRows(type, code));
+}
+
+/**
+ * Scales whose accounts batch is published. A /budget sub-page answers 404 until then, so a link
+ * to it (from the « échelle des territoires ») is drawn only for these scales. One bounded query,
+ * cached like the accounts themselves: a publication shows within the 24 h profile.
+ */
+export async function getEchellesComptesPubliees(): Promise<RepereTerritoryKind[]> {
+  "use cache";
+  cacheTag("territoires", "comptes:echelles");
+  cacheLife("synced");
+  const scales = Object.keys(COMPTES_DATASETS) as RepereTerritoryKind[];
+  const byUrl = new Map(scales.map((s) => [compteRepereSource(s).resourceUrl, s]));
+  try {
+    const published = await db.repereImport.findMany({
+      where: { status: "PUBLISHED", source: { resourceUrl: { in: [...byUrl.keys()] } } },
+      select: { source: { select: { resourceUrl: true } } },
+      take: 50,
+    });
+    return scales.filter((s) => published.some((p) => byUrl.get(p.source.resourceUrl) === s));
+  } catch (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
 }

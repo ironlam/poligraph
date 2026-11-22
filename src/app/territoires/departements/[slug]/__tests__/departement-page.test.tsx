@@ -17,6 +17,7 @@ const senateursMock = vi.fn();
 
 vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: vi.fn(async () => []) }));
 vi.mock("@/lib/data/territoire-comptes", () => ({
+  getEchellesComptesPubliees: vi.fn(async () => []),
   getComptesTerritoire: vi.fn(async () => ({ dernierExercice: null, agregats: [], source: null })),
 }));
 vi.mock("@/lib/data/parrainages", () => ({

@@ -25,6 +25,7 @@ vi.mock("@/lib/data/territoire-decisions", () => ({
 vi.mock("@/lib/data/territoire-chiffres", () => ({ getCommuneChiffres: async () => null }));
 vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: async () => [] }));
 vi.mock("@/lib/data/territoire-comptes", () => ({
+  getEchellesComptesPubliees: vi.fn(async () => []),
   getComptesTerritoire: vi.fn(async () => ({ dernierExercice: null, agregats: [], source: null })),
 }));
 vi.mock("@/lib/data/parrainages", () => ({

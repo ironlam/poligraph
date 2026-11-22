@@ -16,6 +16,7 @@ import {
   getVotesSenateursDepartement,
 } from "@/lib/data/territoire-votes";
 import { getFilTerritoire } from "@/lib/data/territoire-fil";
+import { territoireDepartementBudgetPath } from "@/lib/territoires/paths";
 import { CommuneIndex } from "@/components/territoires/CommuneIndex";
 import {
   DepartementConseil,
@@ -106,7 +107,11 @@ export async function DepartementPageBody({
           <FilTerritoire evenements={fil} />
           <DepartementConseil territoire={territoire} />
           {/* Under the first tab: the accounts of the collectivity that holds the council. */}
-          <BudgetResume comptes={comptes} scale="DEP" />
+          <BudgetResume
+            comptes={comptes}
+            scale="DEP"
+            budgetHref={territoireDepartementBudgetPath(slug)}
+          />
           <CommuneIndex slug={slug} territoire={territoire} grandes={grandes} />
           <VotesParlementaires votes={votes} mode={{ kind: "decompte" }} senat={votesSenat} />
           <ParrainagesDepartement resumes={parrainages} departmentSlug={slug} />

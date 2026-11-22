@@ -4,7 +4,7 @@ import { cache } from "react";
 import { getRegionTerritoire } from "@/lib/data/territoires";
 import { getElections } from "@/lib/data/elections";
 import { REGIONS } from "@/config/regions";
-import { territoireRegionPath } from "@/lib/territoires/paths";
+import { territoireRegionBudgetPath, territoireRegionPath } from "@/lib/territoires/paths";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Agir } from "@/components/territoires/Agir";
 import { FilTerritoire } from "@/components/territoires/FilTerritoire";
@@ -111,7 +111,11 @@ export default async function RegionPage({ params }: PageProps) {
           <RegionCollectivites data={data} />
           <RegionConseil data={data} />
           {/* Under the first tab (« Conseil » or « Collectivité »), after the council. */}
-          <BudgetResume comptes={comptes} scale="REG" />
+          <BudgetResume
+            comptes={comptes}
+            scale="REG"
+            budgetHref={territoireRegionBudgetPath(data.region.slug)}
+          />
           <RegionDepartements data={data} />
           <RegionElections elections={elections} />
           {!particuliere && <Agir niveau="region" />}

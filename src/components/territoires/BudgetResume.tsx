@@ -1,12 +1,15 @@
+import Link from "next/link";
 import { SectionCard } from "@/components/territoires/CommuneSections";
 import { LigneSource } from "@/components/territoires/LigneSource";
 import { MesureBarre } from "@/components/territoires/MesureBarre";
 import {
   COMPTES_AGREGATS,
   COMPTES_ATTRIBUTION_LIGNE,
+  COMPTES_PREMIER_EXERCICE,
   compteLabel,
 } from "@/config/territoire-comptes";
 import type { RepereTerritoryKind } from "@/config/territoire-reperes";
+import { repereMethodePath } from "@/config/territoire-methodes";
 import type { CompteValeur, ComptesTerritoire } from "@/lib/data/territoire-comptes";
 import {
   absenceWords,
@@ -32,12 +35,17 @@ const label = (key: string) => compteLabel(COMPTES_AGREGATS.find((a) => a.key ==
 const parHab = (v: CompteValeur) =>
   v.value === null ? null : `${formatEurosParHabitant(v.value)} par habitant`;
 
+const LINK = "inline-flex min-h-11 items-center underline underline-offset-2 hover:text-primary";
+
 export function BudgetResume({
   comptes,
   scale,
+  budgetHref,
 }: {
   comptes: ComptesTerritoire;
   scale: RepereTerritoryKind;
+  /** The territory's /budget sub-page: every exercise and one method page per aggregate. */
+  budgetHref: string;
 }) {
   const y = comptes.dernierExercice;
   const phrase = comptesPhrase(comptes, scale);
@@ -48,7 +56,20 @@ export function BudgetResume({
   const allAbsent = depenses.every((d) => d.entry?.montant.value == null);
 
   return (
-    <SectionCard id="comptes" title="Les comptes de la collectivité">
+    <SectionCard
+      id="comptes"
+      title="Les comptes de la collectivité"
+      action={
+        // The answer sentence gives the operating spending: its method is one tap away.
+        <Link
+          href={repereMethodePath("depenses-de-fonctionnement")}
+          prefetch={false}
+          className={`${LINK} text-sm`}
+        >
+          Méthode
+        </Link>
+      }
+    >
       <p className="text-base">{phrase}</p>
       {!allAbsent && (
         <>
@@ -109,6 +130,11 @@ export function BudgetResume({
           </dl>
         </>
       )}
+      <p className="mt-2 text-sm">
+        <Link href={budgetHref} prefetch={false} className={LINK}>
+          {`Les comptes année par année, depuis ${COMPTES_PREMIER_EXERCICE}`}
+        </Link>
+      </p>
       {comptes.source && (
         <LigneSource
           className="mt-4"

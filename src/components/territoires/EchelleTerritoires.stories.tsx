@@ -46,3 +46,20 @@ export default meta;
 type Story = StoryObj<typeof EchelleTerritoires>;
 
 export const Commune: Story = {};
+
+/** Accounts published: each level whose /budget page exists gets its link. */
+export const AvecComptes: Story = {
+  args: {
+    barreaux: (meta.args?.barreaux ?? []).map((b) =>
+      b.niveau === "intercommunalite"
+        ? b
+        : {
+            ...b,
+            comptesHref:
+              b.niveau === "commune"
+                ? "/territoires/communes/saint-exemple-99019/budget"
+                : `${b.href}/budget`,
+          }
+    ),
+  },
+};
