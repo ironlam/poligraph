@@ -19,7 +19,12 @@ export {
   recoverRejectionSchema,
   syncPoliticianSchema,
 } from "./admin";
-export { updateFactcheckSchema, addFactcheckMentionSchema, updateMentionSchema } from "./factcheck";
+export {
+  updateFactcheckSchema,
+  addFactcheckMentionSchema,
+  updateMentionSchema,
+  validateFactcheckThemeSchema,
+} from "./factcheck";
 export { createPromiseSchema, updatePromiseSchema } from "./promise";
 export {
   updateCandidatePresidentialSchema,

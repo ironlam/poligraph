@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { SCRUTIN_THEMES } from "@/config/scrutin-themes";
 
 const VALID_RATINGS = [
   "TRUE",
@@ -25,4 +26,9 @@ export const addFactcheckMentionSchema = z.object({
 
 export const updateMentionSchema = z.object({
   isClaimant: z.boolean(),
+});
+
+/** Theme validated in the admin: one of the scrutin themes, or null for "no theme". */
+export const validateFactcheckThemeSchema = z.object({
+  theme: z.enum(SCRUTIN_THEMES).nullable(),
 });
