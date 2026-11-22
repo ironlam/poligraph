@@ -6,7 +6,7 @@
  * substance and decides APPROVE / EDIT / REJECT / KEEP.
  *
  *   --sample N          stratified calibration sample, DRY-RUN, no write
- *   --all [--limit N]   judge the anchored set (first N) → report JSON, no write
+ *   --all [--limit N]   judge the anchored set (N picked at random) → report JSON, no write
  *   --load [--limit N]  dump anchored candidates + official substance to JSON,
  *                       NO LLM call — a Claude Code session judges them in-context
  *                       (no API spend) then writes the report --apply consumes.
@@ -133,6 +133,20 @@ export function resolveActor(raw: string | undefined, fallback: string): string 
     );
   }
   return actor;
+}
+
+/**
+ * The --all batch under --limit. Shuffled so that titles left in NEEDS_REVIEW by a
+ * previous run (KEEP, guard skip) cannot fill every weekly batch and starve the rest.
+ */
+export function pickBatch<T>(items: T[], limit: number | undefined, random = Math.random): T[] {
+  if (!limit) return items;
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out.slice(0, limit);
 }
 
 /** Outcomes that change the title a profile shows: a title became APPROVED, or an APPROVED one was rejected. */
@@ -324,7 +338,7 @@ async function runSample(): Promise<void> {
 // ── ALL (full judge → report) ─────────────────────────────────────────────
 async function runAll(): Promise<void> {
   const limit = arg("limit") ? Number(arg("limit")) : undefined;
-  const anchored = limit ? (await loadAnchored()).slice(0, limit) : await loadAnchored();
+  const anchored = pickBatch(await loadAnchored(), limit);
   log(`Jugement de ${anchored.length} titres (coverage>0), concurrence ${CONCURRENCY}, DRY-RUN…\n`);
   const verdicts = await mapPool(anchored, CONCURRENCY, async (c) => {
     const v = await judgeOne(c).catch(() => null);

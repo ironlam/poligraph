@@ -12,7 +12,7 @@ vi.mock("@/app/admin/policy-titles/approve-guard", () => ({}));
 vi.mock("@/services/scrutin-policy-title/fallback-recovery", () => ({ LLM_OUTAGE_WINDOW: {} }));
 vi.mock("@/lib/politicians/profile-snapshot/request", () => ({ requestProfileRefresh }));
 
-import { refreshProfilesAfterApply, resolveActor } from "../judge-policy-titles";
+import { pickBatch, refreshProfilesAfterApply, resolveActor } from "../judge-policy-titles";
 
 const DEFAULT = "llm-judge:claude-sonnet-4-5";
 
@@ -78,5 +78,31 @@ describe("refreshProfilesAfterApply", () => {
     const none = detail.filter((d) => !["s1", "s2", "s3"].includes(d.scrutinId));
     expect(await refreshProfilesAfterApply(none, false, requestProfileRefresh)).toEqual([]);
     expect(requestProfileRefresh).not.toHaveBeenCalled();
+  });
+});
+
+describe("pickBatch", () => {
+  const items = ["a", "b", "c", "d", "e"];
+
+  it("garde tout sans plafond", () => {
+    expect(pickBatch(items, undefined)).toEqual(items);
+  });
+
+  it("ne prend pas toujours les premiers candidats", () => {
+    // random() = 0 swaps each slot with index 0: the batch starts from the tail.
+    expect(pickBatch(items, 2, () => 0)).toEqual(["b", "c"]);
+  });
+
+  it("respecte le plafond sans doublon ni perte", () => {
+    const batch = pickBatch(items, 3);
+    expect(batch).toHaveLength(3);
+    expect(new Set(batch).size).toBe(3);
+    expect(batch.every((x) => items.includes(x))).toBe(true);
+    expect(pickBatch(items, 10).sort()).toEqual(items);
+  });
+
+  it("ne modifie pas la liste d'origine", () => {
+    pickBatch(items, 2, () => 0);
+    expect(items).toEqual(["a", "b", "c", "d", "e"]);
   });
 });
