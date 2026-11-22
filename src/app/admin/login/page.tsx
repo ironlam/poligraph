@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock } from "lucide-react";
+import { safeAdminRedirect } from "@/lib/admin-redirect";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -27,7 +28,9 @@ export default function AdminLoginPage() {
       });
 
       if (response.ok) {
-        router.push("/admin");
+        // Read at submit time rather than through useSearchParams, which would need a Suspense
+        // boundary for a page that only cares about the value once.
+        router.push(safeAdminRedirect(new URLSearchParams(window.location.search).get("next")));
         router.refresh();
       } else {
         const data = await response.json();

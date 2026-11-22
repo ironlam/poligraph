@@ -454,7 +454,12 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // Protect admin pages.
   if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
     if (!hasValidAdminSession(request)) {
-      return NextResponse.redirect(new URL("/admin/login", request.url));
+      const login = new URL("/admin/login", request.url);
+      // The OAuth consent screen must survive the login detour: its query is the whole request.
+      if (pathname.startsWith("/admin/oauth/")) {
+        login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+      }
+      return NextResponse.redirect(login);
     }
   }
 
