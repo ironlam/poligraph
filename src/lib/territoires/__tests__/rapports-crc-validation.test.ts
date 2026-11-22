@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
@@ -96,6 +98,21 @@ describe("traiterRapportCrc", () => {
     expect(h.auditCreate.mock.calls[0]?.[0].data.changes).toMatchObject({
       reason: "Rapport sur un syndicat",
     });
+  });
+
+  it("rejette un brouillon sans territoire, ce que la contrainte de la base accepte", async () => {
+    h.findFirst.mockResolvedValue(brouillon({ territoryCode: null }));
+    const r = await traiterRapportCrc("e1", { action: "REJETER", reason: "Syndicat" }, META);
+    expect(r.ok).toBe(true);
+    expect(h.updateMany.mock.calls[0]?.[0].data).toEqual({ status: "REJECTED" });
+    const sql = readFileSync(
+      join(
+        process.cwd(),
+        "prisma/migrations/manual/2026-11-22-territoire-evenement-code-facultatif.sql"
+      ),
+      "utf8"
+    );
+    expect(sql).toMatch(/"territoryCode" IS NOT NULL OR "status" IN \('DRAFT', 'REJECTED'\)/);
   });
 
   it("ne touche ni à une notice publiée, ni à un autre type, ni à un changement concurrent", async () => {
