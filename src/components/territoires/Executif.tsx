@@ -24,8 +24,30 @@ function Rangs({ rangs }: { rangs: ExecutifRang[] }) {
  * register has none) and no link to a profile (it does not identify a person across files).
  * The source line is the one of the council block this sits in.
  */
-export function Executif({ titre, rangs }: { titre: string; rangs: ExecutifRang[] }) {
+export function Executif({
+  titre,
+  rangs,
+  replie = false,
+}: {
+  titre: string;
+  rangs: ExecutifRang[];
+  /** The whole list behind its title, for a page that is already long (commune). */
+  replie?: boolean;
+}) {
   if (rangs.length === 0) return null;
+  if (replie) {
+    return (
+      <details className="rounded-xl border">
+        <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">
+          {`${titre} (${rangs.length})`}
+        </summary>
+        <div className="border-t px-4 py-1">
+          <p className="pt-2 text-xs text-muted-foreground">Par rang, selon le registre.</p>
+          <Rangs rangs={rangs} />
+        </div>
+      </details>
+    );
+  }
   const suite = rangs.slice(VISIBLE);
   return (
     <div>

@@ -89,7 +89,7 @@ export function SectionCard({
 }
 
 /** Collapsed block: a full-width summary row, 44 px high, with a visible focus ring. */
-function Collapsible({ summary, children }: { summary: string; children: React.ReactNode }) {
+export function Collapsible({ summary, children }: { summary: string; children: React.ReactNode }) {
   return (
     <details className="group rounded-xl border">
       <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
@@ -253,6 +253,7 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
                 <Executif
                   titre="Adjointes et adjoints au maire"
                   rangs={rangsExecutif(dossier.conseilMunicipal.membres)}
+                  replie
                 />
               )}
               <ConseilMembres conseil={dossier.conseilMunicipal} groupLabel="" />

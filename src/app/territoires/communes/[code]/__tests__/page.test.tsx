@@ -111,7 +111,7 @@ describe("/territoires/communes/[code]", () => {
     expect(text).toContain("Composition actuelle non établie");
   });
 
-  it("détaille les adjoints par rang dans une commune indexable, et pas en dessous du seuil", async () => {
+  it("détaille les adjoints par rang, repliés, dans une commune indexable, et pas en dessous du seuil", async () => {
     const base = dossier();
     const membre = (lastName: string, functionLabel: string | null) => ({
       lastName,
@@ -131,15 +131,17 @@ describe("/territoires/communes/[code]", () => {
       source: { label: "Répertoire national des élus", url: null },
     };
     const titre = (document: Document) =>
-      [...document.querySelectorAll("#vos-elus h3")].find(
-        (h) => h.textContent === "Adjointes et adjoints au maire"
+      [...document.querySelectorAll("#vos-elus summary")].find(
+        (s) => s.textContent === "Adjointes et adjoints au maire (2)"
       );
 
     const grande = await render({ ...base, conseilMunicipal });
-    const rangs = [...(titre(grande.document)?.parentElement?.querySelectorAll("ol li") ?? [])];
+    const volet = titre(grande.document)?.closest("details");
+    expect(volet?.hasAttribute("open")).toBe(false);
+    const rangs = [...(volet?.querySelectorAll("ol li") ?? [])];
     expect(rangs.map((li) => li.textContent)).toEqual(["Rang 1A Un", "Rang 2A Deux"]);
     // The register wording is masculine for everyone: it is not repeated beside a name.
-    expect(titre(grande.document)?.parentElement?.textContent).not.toContain("adjoint au Maire");
+    expect(volet?.textContent).not.toContain("adjoint au Maire");
 
     const petite = await render({
       ...base,
