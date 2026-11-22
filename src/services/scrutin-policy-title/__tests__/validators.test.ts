@@ -97,6 +97,27 @@ describe("runValidators — evidence + trust", () => {
   });
 });
 
+describe("quoteAppearsInText — HTML entities left in a stored quote", () => {
+  // Blocks are plain text (entities decoded by stripHtml) but some stored quotes
+  // still carry raw entities such as &apos;.
+  const quote = "afin d&apos;assurer que la personne visée puisse comprendre";
+
+  it("grounds an &apos; quote against a typographic apostrophe", () => {
+    const text = "Il s'agit, afin d’assurer que la personne visée puisse comprendre, de motiver.";
+    expect(quoteAppearsInText(quote, text)).toBe(true);
+  });
+
+  it("grounds an &apos; quote against a straight apostrophe", () => {
+    const text = "Il s'agit, afin d'assurer que la personne visée puisse comprendre, de motiver.";
+    expect(quoteAppearsInText(quote, text)).toBe(true);
+  });
+
+  it("still rejects a decoded quote that is absent from the text", () => {
+    const text = "Il s'agit, afin d'informer la personne visée, de motiver.";
+    expect(quoteAppearsInText(quote, text)).toBe(false);
+  });
+});
+
 describe("quoteAppearsInText — ellipsis-stitched LLM quotes", () => {
   // Mistral routinely emits a quote that bridges two non-adjacent spans with an
   // "[...]" marker. The elided middle text still exists in the source, so a plain

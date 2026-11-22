@@ -1,3 +1,4 @@
+import { decodeEntities } from "./strip-html";
 import type { EvidenceQuote, GenerationWarning, SubstanceTextBlock } from "./types";
 
 export interface ValidatorInput {
@@ -123,8 +124,10 @@ const ELLIPSIS_MARKER = /\s*\[\s*(?:\.\.\.|…)\s*\]\s*|\s*…\s*/;
  *  stitches non-adjacent spans with an ellipsis marker (common in LLM-emitted
  *  quotes) can never be a single substring, so it grounds only if every fragment
  *  appears, in order, in the source. Shared by the EvidenceGrounding validator
- *  and the evidence-drift helper. */
-export function quoteAppearsInText(quote: string, text: string): boolean {
+ *  and the evidence-drift helper. The quote's HTML entities are decoded first:
+ *  blocks are already decoded by stripHtml, some stored quotes are not. */
+export function quoteAppearsInText(rawQuote: string, text: string): boolean {
+  const quote = decodeEntities(rawQuote);
   if (text.includes(quote)) return true;
   const normText = normalizeForMatch(text);
   if (normText.includes(normalizeForMatch(quote))) return true;
