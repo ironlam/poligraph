@@ -9,6 +9,9 @@
  * What is read is a proposal: the territory is resolved and checked by a person afterwards.
  */
 
+import { DEPARTMENTS } from "@/config/departments";
+import { REGIONS } from "@/config/regions";
+
 export type CollectiviteType = "COMMUNE" | "DEPARTEMENT" | "REGION";
 
 export interface TitreRapportCrc {
@@ -109,4 +112,68 @@ export function parseDocumentRapportCrc(html: string): DocumentRapportCrc | null
   }
   if (libelles.some((l) => l.startsWith("avis"))) return "AVIS_BUDGETAIRE";
   return "AUTRE";
+}
+
+/**
+ * Comparison key of a name: case, hyphens, apostrophes and spacing ignored, accents kept. The
+ * feed writes "Montceau-les Mines" for "Montceau-les-Mines": nothing looser is accepted.
+ */
+function cle(nom: string): string {
+  return nom
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[’ʼ'-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** "la réunion" and "réunion" are the same department or region: "Région Réunion". */
+const cleSansArticle = (nom: string) => cle(nom).replace(/^(?:la|le|les|l) /, "");
+
+/** Code of the department named exactly so, or null. */
+export function departementParNom(nom: string): string | null {
+  const k = cleSansArticle(nom);
+  const codes = Object.keys(DEPARTMENTS).filter((c) => cleSansArticle(DEPARTMENTS[c]!.name) === k);
+  return codes.length === 1 ? codes[0]! : null;
+}
+
+export type TerritoireRapport = {
+  territoryType: "COM" | "DEP" | "REG";
+  /** Null when no single territory carries that exact name: a person chooses in the admin. */
+  territoryCode: string | null;
+  motif: "PROPOSE" | "DEPARTEMENT_INCONNU" | "INTROUVABLE" | "AMBIGU";
+};
+
+/**
+ * The territory a report title names, as a proposal. Exact name only, and for a commune only
+ * inside the department the title gives: two communes of the same name in that department, or
+ * none, leave the code empty. `communesDuDepartement` holds the communes of `departement`.
+ */
+export function rattacherRapport(
+  collectivite: NonNullable<TitreRapportCrc["collectivite"]>,
+  communesDuDepartement: (code: string) => Array<{ id: string; name: string }>
+): TerritoireRapport {
+  const sans = (
+    territoryType: TerritoireRapport["territoryType"],
+    motif: TerritoireRapport["motif"]
+  ) => ({ territoryType, territoryCode: null, motif }) as const;
+
+  if (collectivite.type === "REGION") {
+    const k = cleSansArticle(collectivite.nom);
+    const region = REGIONS.filter((r) => cleSansArticle(r.name) === k);
+    if (region.length !== 1) return sans("REG", region.length ? "AMBIGU" : "INTROUVABLE");
+    return { territoryType: "REG", territoryCode: region[0]!.code, motif: "PROPOSE" };
+  }
+
+  const departement = collectivite.departement ? departementParNom(collectivite.departement) : null;
+  if (collectivite.type === "DEPARTEMENT") {
+    if (!departement) return sans("DEP", "INTROUVABLE");
+    return { territoryType: "DEP", territoryCode: departement, motif: "PROPOSE" };
+  }
+
+  if (!departement) return sans("COM", "DEPARTEMENT_INCONNU");
+  const k = cle(collectivite.nom);
+  const communes = communesDuDepartement(departement).filter((c) => cle(c.name) === k);
+  if (communes.length !== 1) return sans("COM", communes.length ? "AMBIGU" : "INTROUVABLE");
+  return { territoryType: "COM", territoryCode: communes[0]!.id, motif: "PROPOSE" };
 }

@@ -15,7 +15,8 @@ import {
 
 export interface EvenementDraft {
   territoryType: "COM" | "DEP" | "REG";
-  territoryCode: string;
+  /** Null only on a DRAFT whose territory a person has yet to choose. */
+  territoryCode: string | null;
   /** Date of the fact. */
   occurredOn: Date;
   payload: TerritoireEvenementPayload;
@@ -123,6 +124,7 @@ export async function recordEvenements(
   for (const draft of drafts) {
     const parsed = territoireEvenementSchema.safeParse(draft.payload);
     if (!parsed.success || !isEvenementSourceUrl(draft.sourceUrl)) continue;
+    if (draft.territoryCode === null && draft.status !== "DRAFT") continue;
     const { type, ...fields } = parsed.data;
     data.push({
       type,

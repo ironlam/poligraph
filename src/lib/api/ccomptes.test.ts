@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CcomptesError, fetchFluxJuridiction, parseFluxCcomptes, publicationUrl } from "./ccomptes";
+import {
+  CcomptesError,
+  fetchFluxJuridiction,
+  fetchPagePublication,
+  parseFluxCcomptes,
+  publicationUrl,
+} from "./ccomptes";
 
 const FIXTURE = readFileSync(
   join(process.cwd(), "src/lib/api/__fixtures__/ccomptes/juridiction-143.xml"),
@@ -147,5 +153,17 @@ describe("fetchFluxJuridiction", () => {
       })
     );
     await expect(fetchFluxJuridiction(143)).rejects.toMatchObject({ kind: "RESEAU" });
+  });
+
+  it("lit une page de rapport et refuse toute autre adresse sans appel réseau", async () => {
+    const fetchMock = serve("<html></html>", { headers: { "content-type": "text/html" } });
+    await expect(fetchPagePublication(PUB)).resolves.toBe("<html></html>");
+    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe(PUB);
+    await expect(
+      fetchPagePublication("https://evil.example/fr/publications/a")
+    ).rejects.toMatchObject({
+      kind: "REQUETE",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
