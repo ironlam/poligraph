@@ -52,11 +52,11 @@ import {
   getPublicFactCheckSqlWhere,
 } from "@/lib/api/public-contract";
 import {
-  FACTCHECK_MIN_CONTEXT_BLOCKS,
   FACTCHECK_POLITICIAN_MIN_CLAIMS,
   FACTCHECK_RECORD_MIN_TOTAL,
 } from "@/lib/seo/factcheck-robots";
 import { PARTICIPATION_POSITIONS } from "@/lib/data/factcheck-context";
+import { SCRUTIN_THEMES } from "@/config/scrutin-themes";
 import { REGIONS } from "@/config/regions";
 import { REPERE_METHODES, repereMethodePath } from "@/config/territoire-methodes";
 import {
@@ -1127,11 +1127,12 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
 
 // Sitemap 6: fact-checks that carry Poligraph's own context (priority 0.5). The rule is
 // isIndexableFactCheck() from src/lib/seo/factcheck-robots.ts, fed by getFactCheckContext():
-// exactly one claimant on a published profile, then at least FACTCHECK_MIN_CONTEXT_BLOCKS of
-// these blocks: a record of FACTCHECK_RECORD_MIN_TOTAL public fact-checks or more, a sourced 2027
-// candidacy, a vote on the (UTC) day of the claim, a current party. Keep both in sync. The other
-// fact-checks are noindex,follow on the page and stay out of this list. The shard also lists the
-// indexable landing pages /factchecks/politique/[slug] (priority 0.6).
+// exactly one claimant on a published profile, a block specific to the claim (a vote of the author
+// on the UTC day of the claim, or on scrutins of the claim's validated theme) AND a block that
+// situates the author (a record of FACTCHECK_RECORD_MIN_TOTAL public fact-checks or more, or a
+// sourced 2027 candidacy). Keep both in sync. The other fact-checks are noindex,follow on the page
+// and stay out of this list. The shard also lists the indexable landing pages
+// /factchecks/politique/[slug] (priority 0.6).
 async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache";
   cacheTag(...SITEMAP_SHARD_TAGS[6]);
@@ -1150,17 +1151,37 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
     SELECT fc."slug", fc."updatedAt"
     FROM "FactCheck" fc
     JOIN claimant c ON c."factCheckId" = fc."id"
-    JOIN "Politician" a ON a."id" = c."politicianId"
     WHERE ${getPublicFactCheckSqlWhere("fc")}
       AND fc."slug" IS NOT NULL
+      -- A block specific to this claim.
       AND (
-        CASE WHEN (
+        (fc."claimDate" IS NOT NULL AND EXISTS (
+          SELECT 1 FROM "Vote" v
+          JOIN "Scrutin" s ON s."id" = v."scrutinId"
+          WHERE v."politicianId" = c."politicianId"
+            AND v."position"::text IN (${Prisma.join([...PARTICIPATION_POSITIONS])})
+            AND s."votingDate" >= date_trunc('day', fc."claimDate")
+            AND s."votingDate" < date_trunc('day', fc."claimDate") + interval '1 day'
+        ))
+        OR (fc."themeReviewedAt" IS NOT NULL
+          AND fc."theme"::text IN (${Prisma.join([...SCRUTIN_THEMES])})
+          AND EXISTS (
+            SELECT 1 FROM "Vote" v
+            JOIN "Scrutin" s ON s."id" = v."scrutinId"
+            WHERE v."politicianId" = c."politicianId"
+              AND v."position"::text IN (${Prisma.join([...PARTICIPATION_POSITIONS])})
+              AND s."theme" = fc."theme"
+          ))
+      )
+      -- A block that situates the author.
+      AND (
+        (
           SELECT count(*) FROM "FactCheckMention" m2
           JOIN "FactCheck" fc2 ON fc2."id" = m2."factCheckId"
           WHERE m2."politicianId" = c."politicianId" AND m2."isClaimant"
             AND ${getPublicFactCheckSqlWhere("fc2")}
-        ) >= ${FACTCHECK_RECORD_MIN_TOTAL} THEN 1 ELSE 0 END
-        + CASE WHEN EXISTS (
+        ) >= ${FACTCHECK_RECORD_MIN_TOTAL}
+        OR EXISTS (
           SELECT 1 FROM "Candidacy" ca
           JOIN "Election" e ON e."id" = ca."electionId"
           WHERE ca."politicianId" = c."politicianId"
@@ -1168,17 +1189,8 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
             AND ca."status" IS NOT NULL
             AND ca."sourceUrl" IS NOT NULL
             AND ca."sourceLabel" IS NOT NULL
-        ) THEN 1 ELSE 0 END
-        + CASE WHEN fc."claimDate" IS NOT NULL AND EXISTS (
-          SELECT 1 FROM "Vote" v
-          JOIN "Scrutin" s ON s."id" = v."scrutinId"
-          WHERE v."politicianId" = c."politicianId"
-            AND v."position"::text IN (${Prisma.join([...PARTICIPATION_POSITIONS])})
-            AND s."votingDate" >= date_trunc('day', fc."claimDate")
-            AND s."votingDate" < date_trunc('day', fc."claimDate") + interval '1 day'
-        ) THEN 1 ELSE 0 END
-        + CASE WHEN a."currentPartyId" IS NOT NULL THEN 1 ELSE 0 END
-      ) >= ${FACTCHECK_MIN_CONTEXT_BLOCKS}
+        )
+      )
     ORDER BY fc."publishedAt" DESC
   `);
 

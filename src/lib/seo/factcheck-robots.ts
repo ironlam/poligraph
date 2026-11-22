@@ -4,14 +4,18 @@ const NOINDEX_FOLLOW = { index: false, follow: true } as const;
 
 /**
  * A fact-check page repeats the outlet's title and claim: on its own it is a short duplicate of
- * the source. It earns a place in the index only through the context Poligraph adds around a
- * single identified author, and only when at least this many context blocks carry something.
+ * the source. It earns a place in the index through what Poligraph adds around a single identified
+ * author, and that addition has to be specific to this claim: the author's record, party or
+ * candidacy is the same on every page of theirs, so it cannot tell two of those pages apart.
+ *
+ * Measured on 2026-11-22: the party block counted for 562 of the 591 fact-checks with a single
+ * author, and let 283 pages into the index on its own. A signal present nearly everywhere
+ * discriminates nothing (AGENTS.md §5), so it no longer counts.
  */
-export const FACTCHECK_MIN_CONTEXT_BLOCKS = 2;
 
 /**
- * The record block counts only when the author has another public fact-check: a record made of
- * the page's own fact-check tells the reader nothing new.
+ * The record counts as author context only when the author has another public fact-check: a
+ * record made of the page's own fact-check tells the reader nothing new.
  */
 export const FACTCHECK_RECORD_MIN_TOTAL = 2;
 
@@ -24,19 +28,18 @@ export interface FactCheckIndexSignals {
   hasCandidacy: boolean;
   /** The author voted (for, against, abstention) on the day of the claim. */
   hasClaimDayVotes: boolean;
-  /** The author has a current party (the party block). */
-  hasParty: boolean;
+  /** The claim's theme is validated in the admin and the author voted on scrutins of that theme. */
+  hasThemeVotes: boolean;
 }
 
-/** Context blocks with content, the author's identity aside. */
-export function countFactCheckContextBlocks(signals: FactCheckIndexSignals): number {
-  if (!signals.hasPublishedAuthor) return 0;
-  return [
-    signals.authorFactCheckCount >= FACTCHECK_RECORD_MIN_TOTAL,
-    signals.hasCandidacy,
-    signals.hasClaimDayVotes,
-    signals.hasParty,
-  ].filter(Boolean).length;
+/** A block that belongs to this claim: what Parliament voted the day of it, or on its theme. */
+export function hasClaimSpecificBlock(signals: FactCheckIndexSignals): boolean {
+  return signals.hasClaimDayVotes || signals.hasThemeVotes;
+}
+
+/** A block that situates the author: their record with the fact-checkers, or their candidacy. */
+export function hasAuthorContextBlock(signals: FactCheckIndexSignals): boolean {
+  return signals.authorFactCheckCount >= FACTCHECK_RECORD_MIN_TOTAL || signals.hasCandidacy;
 }
 
 /**
@@ -45,8 +48,7 @@ export function countFactCheckContextBlocks(signals: FactCheckIndexSignals): num
  */
 export function isIndexableFactCheck(signals: FactCheckIndexSignals): boolean {
   return (
-    signals.hasPublishedAuthor &&
-    countFactCheckContextBlocks(signals) >= FACTCHECK_MIN_CONTEXT_BLOCKS
+    signals.hasPublishedAuthor && hasClaimSpecificBlock(signals) && hasAuthorContextBlock(signals)
   );
 }
 

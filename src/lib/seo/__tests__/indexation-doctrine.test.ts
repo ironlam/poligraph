@@ -127,14 +127,14 @@ const FACTCHECK_NO_AUTHOR: FactCheckIndexSignals = {
   authorFactCheckCount: 0,
   hasCandidacy: false,
   hasClaimDayVotes: false,
-  hasParty: false,
+  hasThemeVotes: false,
 };
-const FACTCHECK_AUTHOR_WITH_RECORD_AND_PARTY: FactCheckIndexSignals = {
+const FACTCHECK_AUTHOR_WITH_RECORD: FactCheckIndexSignals = {
   hasPublishedAuthor: true,
   authorFactCheckCount: 6,
   hasCandidacy: false,
   hasClaimDayVotes: false,
-  hasParty: true,
+  hasThemeVotes: false,
 };
 
 describe("doctrine — strong surfaces stay indexable", () => {
@@ -230,8 +230,15 @@ describe("doctrine — strong surfaces stay indexable", () => {
   it("editorially promoted key vote", () => {
     expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, isKeyVote: true })).toEqual(INDEXABLE);
   });
-  it("fact-check whose single author has a record and a party", () => {
-    expect(factCheckRobots(FACTCHECK_AUTHOR_WITH_RECORD_AND_PARTY)).toEqual(INDEXABLE);
+  it("fact-check with a vote of its author on the day of the claim, and a record", () => {
+    expect(factCheckRobots({ ...FACTCHECK_AUTHOR_WITH_RECORD, hasClaimDayVotes: true })).toEqual(
+      INDEXABLE
+    );
+  });
+  it("fact-check with votes of its author on the validated theme, and a record", () => {
+    expect(factCheckRobots({ ...FACTCHECK_AUTHOR_WITH_RECORD, hasThemeVotes: true })).toEqual(
+      INDEXABLE
+    );
   });
 });
 
@@ -338,9 +345,19 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
   it("fact-check with no single published author (duplicate of the source)", () => {
     expect(factCheckRobots(FACTCHECK_NO_AUTHOR)).toEqual(NOINDEX_FOLLOW);
   });
-  it("fact-check whose author has only this fact-check and a party (one block)", () => {
+  it("fact-check whose author is well known but nothing is specific to the claim", () => {
+    // Record, party and candidacy repeat on every page of the author (review of 2026-11-22).
+    expect(factCheckRobots({ ...FACTCHECK_AUTHOR_WITH_RECORD, hasCandidacy: true })).toEqual(
+      NOINDEX_FOLLOW
+    );
+  });
+  it("fact-check with a claim-day vote but nothing on its author", () => {
     expect(
-      factCheckRobots({ ...FACTCHECK_AUTHOR_WITH_RECORD_AND_PARTY, authorFactCheckCount: 1 })
+      factCheckRobots({
+        ...FACTCHECK_AUTHOR_WITH_RECORD,
+        authorFactCheckCount: 1,
+        hasClaimDayVotes: true,
+      })
     ).toEqual(NOINDEX_FOLLOW);
   });
   it("scrutin with no ballot recorded, whatever its type", () => {
@@ -514,8 +531,8 @@ describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => 
   })();
 
   it.each([
-    "FACTCHECK_MIN_CONTEXT_BLOCKS",
     "FACTCHECK_RECORD_MIN_TOTAL",
+    "SCRUTIN_THEMES",
     "PUBLIC_POLITICIAN_PUBLICATION_STATUS",
     'getPublicFactCheckSqlWhere("fc")',
   ])("uses %s rather than a hardcoded value", (name) => {
@@ -528,12 +545,17 @@ describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => 
     expect(factChecksShard).toContain('m."isClaimant"');
   });
 
+  // The party sat on 95 % of the pages with a single author: it discriminated nothing.
+  it("does not count the current party any more", () => {
+    expect(factChecksShard).not.toContain("currentPartyId");
+  });
+
   it("keeps a single claimant as the precondition", () => {
     expect(factChecksShard).toContain("HAVING count(*) = 1");
   });
 
   // One condition per block counted by isIndexableFactCheck().
-  it.each(['"Candidacy"', '"Vote"', '"currentPartyId"', '"FactCheckMention" m2'])(
+  it.each(['"Candidacy"', '"Vote"', '"themeReviewedAt"', '"FactCheckMention" m2'])(
     "counts the block read from %s",
     (signal) => {
       expect(factChecksShard).toContain(signal);

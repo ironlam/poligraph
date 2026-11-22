@@ -152,7 +152,7 @@ export interface FactCheckContext {
   candidacy: AuthorCandidacy | null;
   claimDay: ClaimDay | null;
   party: PartyRecord | null;
-  /** The author's votes on the validated theme of the claim. Not counted for indexing. */
+  /** The author's votes on the validated theme of the claim: a block specific to this claim. */
   themeVotes: ThemeVotes | null;
   /** Indexing verdict, computed here once and read by the page metadata. */
   indexable: boolean;
@@ -205,7 +205,7 @@ export function isIndexableFactCheckContext(context: Omit<FactCheckContext, "ind
     authorFactCheckCount: context.record?.total ?? 0,
     hasCandidacy: context.candidacy !== null,
     hasClaimDayVotes: context.claimDay !== null,
-    hasParty: context.party !== null,
+    hasThemeVotes: context.themeVotes !== null,
   });
 }
 
