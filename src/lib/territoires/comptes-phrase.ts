@@ -91,3 +91,27 @@ export function depensesRatios(values: readonly (number | null)[]): (number | nu
   const max = Math.max(0, ...values.filter((v): v is number => v !== null));
   return values.map((v) => (v === null || max === 0 ? null : Math.max(0, v) / max));
 }
+
+// Names that open on a common noun take an article ("La Métropole de Lyon", "L'Eurométropole de
+// Strasbourg"); a name that opens on a place stands alone ("Brest Métropole"). All are feminine.
+const NOMS_COMMUNS = new Set(["Communauté", "Métropole", "Eurométropole", "Agglomération"]);
+
+/** The intercommunality as the subject of a sentence: "La Communauté de communes…", "Brest Métropole". */
+export function intercommunaliteSujet(name: string, enTete = true): string {
+  if (!NOMS_COMMUNS.has(name.split(" ")[0] ?? "")) return name;
+  const article = /^[AEIOUYÉ]/.test(name) ? "L'" : "La ";
+  return `${enTete ? article : article.toLowerCase()}${name}`;
+}
+
+/**
+ * Line under the accounts of a commune that belongs to an intercommunality: the figures are the
+ * commune's alone. No figure of the intercommunality, no sum, no adjective. Null without one.
+ */
+export function communeSeuleLigne(intercommunalites: readonly string[]): string | null {
+  if (intercommunalites.length === 0) return null;
+  const sujets = intercommunalites.map((n, i) => intercommunaliteSujet(n, i === 0));
+  const sujet =
+    sujets.length === 1 ? sujets[0] : `${sujets.slice(0, -1).join(", ")} et ${sujets.at(-1)}`;
+  const verbe = sujets.length === 1 ? "tient ses" : "tiennent leurs";
+  return `Ces comptes sont ceux de la commune seule. ${sujet} ${verbe} propres comptes, qui ne figurent pas ici.`;
+}

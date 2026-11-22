@@ -36,7 +36,10 @@ const loadBudget = cache(async (segment: string) => {
   ]);
   if (!dossier || !isCommuneSegment(segment, code, dossier.identity.name)) return null;
   if (comptes.dernierExercice === null) return null;
-  return { name: dossier.identity.name, code, comptes };
+  const interco = dossier.intercommunalite;
+  const intercommunalites =
+    interco?.state === "DISPONIBLE" ? interco.intercommunalites.map((i) => i.name) : [];
+  return { name: dossier.identity.name, code, comptes, intercommunalites };
 });
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -64,6 +67,7 @@ export default async function CommuneBudgetPage({ params }: PageProps) {
       titre={`Les comptes de la commune de ${data.name}`}
       comptes={data.comptes}
       scale="COM"
+      intercommunalites={data.intercommunalites}
     />
   );
 }

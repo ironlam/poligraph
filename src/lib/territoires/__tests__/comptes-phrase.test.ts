@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { COMPTES_ABSENCE_WORDS, type CompteAgregatKey } from "@/config/territoire-comptes";
 import type { CompteValeur, ComptesTerritoire } from "@/lib/data/territoire-comptes";
 import {
+  communeSeuleLigne,
   comptesPhrase,
   depensesRatios,
   formatEurosParHabitant,
   formatMontant,
+  intercommunaliteSujet,
 } from "@/lib/territoires/comptes-phrase";
 
 const v = (value: number | null, over: Partial<CompteValeur> = {}): CompteValeur => ({
@@ -91,5 +93,42 @@ describe("gabarit des comptes de la collectivité", () => {
     for (const t of texts) {
       expect(t).not.toMatch(/élevé|faible|endetté|bonne gestion|mauvais|lourd|excessi|[—–]/i);
     }
+  });
+});
+
+describe("ligne de la commune seule", () => {
+  it("ne dit rien sans intercommunalité", () => {
+    expect(communeSeuleLigne([])).toBeNull();
+  });
+
+  it("nomme l'intercommunalité sans article quand son nom commence par un lieu", () => {
+    expect(communeSeuleLigne(["Brest Métropole"])).toBe(
+      "Ces comptes sont ceux de la commune seule. Brest Métropole tient ses propres comptes, qui ne figurent pas ici."
+    );
+  });
+
+  it("élide l'article devant une voyelle et le garde devant une consonne", () => {
+    expect(intercommunaliteSujet("Eurométropole de Strasbourg")).toBe(
+      "L'Eurométropole de Strasbourg"
+    );
+    expect(intercommunaliteSujet("Agglomération du Grand Longwy")).toBe(
+      "L'Agglomération du Grand Longwy"
+    );
+    expect(intercommunaliteSujet("Métropole d'Aix-Marseille-Provence")).toBe(
+      "La Métropole d'Aix-Marseille-Provence"
+    );
+    expect(intercommunaliteSujet("Communauté de communes du Pays d'Iroise")).toBe(
+      "La Communauté de communes du Pays d'Iroise"
+    );
+    expect(intercommunaliteSujet("Est Ensemble")).toBe("Est Ensemble");
+  });
+
+  it("accorde au pluriel quand la commune appartient aussi à un territoire du Grand Paris", () => {
+    expect(communeSeuleLigne(["Métropole du Grand Paris", "Grand Paris Seine Ouest"])).toBe(
+      "Ces comptes sont ceux de la commune seule. La Métropole du Grand Paris et Grand Paris Seine Ouest tiennent leurs propres comptes, qui ne figurent pas ici."
+    );
+    expect(communeSeuleLigne(["Est Ensemble", "Métropole du Grand Paris"])).toContain(
+      "Est Ensemble et la Métropole du Grand Paris tiennent"
+    );
   });
 });

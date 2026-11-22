@@ -13,6 +13,7 @@ import { repereMethodePath } from "@/config/territoire-methodes";
 import type { CompteValeur, ComptesTerritoire } from "@/lib/data/territoire-comptes";
 import {
   absenceWords,
+  communeSeuleLigne,
   comptesPhrase,
   dernierExercice,
   depensesRatios,
@@ -41,11 +42,14 @@ export function BudgetResume({
   comptes,
   scale,
   budgetHref,
+  intercommunalites = [],
 }: {
   comptes: ComptesTerritoire;
   scale: RepereTerritoryKind;
   /** The territory's /budget sub-page: every exercise and one method page per aggregate. */
   budgetHref: string;
+  /** Commune scale only: names of the intercommunalities it belongs to, which keep their own accounts. */
+  intercommunalites?: readonly string[];
 }) {
   const y = comptes.dernierExercice;
   const phrase = comptesPhrase(comptes, scale);
@@ -54,6 +58,7 @@ export function BudgetResume({
   const depenses = DEPENSES.map((key) => ({ key, entry: dernierExercice(comptes, key) }));
   const ratios = depensesRatios(depenses.map((d) => d.entry?.parHabitant.value ?? null));
   const allAbsent = depenses.every((d) => d.entry?.montant.value == null);
+  const seule = scale === "COM" ? communeSeuleLigne(intercommunalites) : null;
 
   return (
     <SectionCard
@@ -130,6 +135,7 @@ export function BudgetResume({
           </dl>
         </>
       )}
+      {seule && <p className="mt-4 text-sm">{seule}</p>}
       <p className="mt-2 text-sm">
         <Link href={budgetHref} prefetch={false} className={LINK}>
           {`Les comptes année par année, depuis ${COMPTES_PREMIER_EXERCICE}`}

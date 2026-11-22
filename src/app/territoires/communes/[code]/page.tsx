@@ -123,6 +123,9 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
     { href: "#elections", label: "Élections" },
     ...(aUneMairie(identity.department.code) ? [{ href: "#agir", label: "Agir" }] : []),
   ];
+  const interco = dossier.intercommunalite;
+  const intercommunalites =
+    interco?.state === "DISPONIBLE" ? interco.intercommunalites.map((i) => i.name) : [];
   const departmentName = identity.department.name ?? identity.territoireHorsRegion?.name ?? null;
 
   return (
@@ -155,6 +158,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
               comptes={comptes}
               scale="COM"
               budgetHref={territoireCommuneBudgetPath(identity.inseeCode, identity.name)}
+              intercommunalites={intercommunalites}
             />
             <ParlementSection dossier={dossier} />
             <VotesParlementaires votes={votes} mode={votesMode} />
