@@ -19,6 +19,7 @@ import {
   isAgreementOnlyTitleDrift,
 } from "@/services/scrutin-policy-title/input-hash";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
+import { checkManualTitle } from "@/services/scrutin-policy-title/fallback-recovery";
 import type {
   EvidenceQuote,
   GenerationWarning,
@@ -244,6 +245,100 @@ export async function persistApproval(
       },
     });
   });
+}
+
+export interface ManualApprovalInput {
+  title: string;
+  subtitle?: string;
+  /** Verbatim quotes from the current official blocks: the title's grounding. */
+  evidenceQuotes: EvidenceQuote[];
+  /** Who wrote the title, e.g. "session:budget-2026". Stored on both revisions. */
+  actor: string;
+  /** Why this title is published by hand. Stored in the approved revision. */
+  reason: string;
+  dryRun?: boolean;
+}
+
+export type ManualApprovalResult = { ok: true; written: boolean } | { ok: false; reason: string };
+
+/**
+ * The only way for a one-off script to publish a hand-written title. Runs the
+ * generator's validators and the single-mode guard on the new title, then writes
+ * an "edited" revision and the title (back to NEEDS_REVIEW, so a failure before
+ * the approval leaves nothing public), then approves through persistApproval.
+ * The input hash is recomputed because the title was written against today's
+ * inputs. A STALE row stays blocked: regenerate it first.
+ */
+export async function approveManualPolicyTitle(
+  scrutinId: string,
+  input: ManualApprovalInput
+): Promise<ManualApprovalResult> {
+  if (!input.actor.trim()) return { ok: false, reason: "MISSING_ACTOR" };
+  if (!input.reason.trim()) return { ok: false, reason: "MISSING_REASON" };
+
+  const ctx = await recomputeApprovalContext(scrutinId, { readOnly: input.dryRun });
+  const { row, blocks, currentInputHash } = ctx;
+  if (await isRejectedNotRevised(row)) return { ok: false, reason: "REJECTED_NOT_REVISED" };
+
+  const check = checkManualTitle(input, blocks, ctx.scrutin.title);
+  if (!check.ok) return { ok: false, reason: check.reason };
+
+  const override = { reason: input.reason.trim(), actor: input.actor };
+  const edited = {
+    ...row,
+    policyTitle: check.title,
+    policySubtitle: check.subtitle,
+    evidenceQuotes: asJson(check.evidenceQuotes),
+    generationSource: "MANUAL" as const,
+    inputHash: currentInputHash,
+    currentWarnings: asJson(check.warnings),
+    status: row.status === "APPROVED" ? ("NEEDS_REVIEW" as const) : row.status,
+  };
+  const guard = approveGuard({
+    row: edited,
+    currentInputHash,
+    currentWarnings: check.warnings,
+    evidenceDrift: detectEvidenceDrift(check.evidenceQuotes, blocks),
+    mode: "single",
+    override,
+  });
+  if (!guard.ok) {
+    return { ok: false, reason: guard.hardBlockers.join("+") || "GUARD" };
+  }
+  if (input.dryRun) return { ok: true, written: false };
+
+  await db.$transaction(async (tx) => {
+    await tx.scrutinPolicyTitleRevision.create({
+      data: {
+        policyTitleId: row.id,
+        snapshot: {
+          ...(snapshot(row) as object),
+          previousPolicyTitle: row.policyTitle,
+          previousPolicySubtitle: row.policySubtitle,
+        } as Prisma.InputJsonValue,
+        action: "edited",
+        actorId: input.actor,
+      },
+    });
+    await tx.scrutinPolicyTitle.update({
+      where: { id: row.id },
+      data: {
+        policyTitle: edited.policyTitle,
+        policySubtitle: edited.policySubtitle,
+        evidenceQuotes: edited.evidenceQuotes,
+        generationSource: edited.generationSource,
+        inputHash: edited.inputHash,
+        currentWarnings: edited.currentWarnings,
+        status: edited.status,
+        editedFromGenerated: true,
+      },
+    });
+  });
+  await persistApproval(
+    { ...ctx, row: edited as ScrutinPolicyTitle, currentWarnings: check.warnings },
+    { actor: input.actor, approvalOverride: override }
+  );
+  return { ok: true, written: true };
 }
 
 export interface AutoApproveOptions {
