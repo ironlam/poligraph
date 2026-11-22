@@ -3065,12 +3065,15 @@ model TerritoireRepere {
 model TerritoireEvenement {
   id            String              @id @default(cuid())
   /// CHANGEMENT_MAIRE, CHANGEMENT_PRESIDENT, RESULTAT_ELECTION, ELECTION_MAIRE,
-  /// ELECTION_SENATEURS: the closed list and the payload schema of each type live in
+  /// ELECTION_SENATEURS, RAPPORT_CRC: the closed list and the payload schema of each type live in
   /// src/lib/territoires/evenements.ts.
   type          String
   territoryType RepereTerritoryType
-  /// INSEE code of the commune, department or region.
-  territoryCode String
+  /// INSEE code of the commune, department or region. Null only on a DRAFT whose territory a
+  /// person has yet to choose (a report title naming an ambiguous commune); the CHECK of
+  /// prisma/migrations/manual/2026-11-22-territoire-evenement-code-facultatif.sql forbids it on
+  /// any other status.
+  territoryCode String?
   /// Date of the fact, never the date it was imported.
   occurredOn    DateTime            @db.Date
   payload       Json

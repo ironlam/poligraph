@@ -16,6 +16,8 @@ export interface TitreRapportCrc {
     type: CollectiviteType;
     /** Name as the title writes it, preposition and lowercase article removed. */
     nom: string;
+    /** The opening of the title up to the name, as the source writes it: "Département de la Meuse". */
+    libelle: string;
     /** Department named between brackets, or the department itself. Null for a region. */
     departement: string | null;
   } | null;
@@ -80,7 +82,8 @@ export function parseTitreRapportCrc(titreBrut: string): TitreRapportCrc {
     departement = (suivante ?? parentheses.at(-1))?.texte ?? departement;
   }
 
-  resultat.collectivite = { type: tete.type, nom, departement };
+  const libelle = titre.slice(0, titre.length - reste.length) + brut;
+  resultat.collectivite = { type: tete.type, nom, libelle, departement };
   return resultat;
 }
 

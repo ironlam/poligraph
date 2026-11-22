@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getJuridictionFinanciere } from "@/config/juridictions-financieres";
 
 /**
  * Events of the "fil du territoire" (Territoires v2, lot B). Pure. An event is a type, a date
@@ -50,12 +51,37 @@ const electionSenateurs = z.strictObject({
   sieges: z.number().int().min(1).max(20),
 });
 
+/**
+ * A regional or territorial audit chamber published a final observations report on the
+ * territory. Facts only: the chamber, the report title and the opening of that title naming the
+ * body, as the source writes it. Nothing of the chamber's own assessment.
+ */
+const rapportCrc = z.strictObject({
+  type: z.literal("RAPPORT_CRC"),
+  juridictionId: z
+    .number()
+    .int()
+    .refine((id) => getJuridictionFinanciere(id) !== undefined),
+  /** Only final observations reports are kept; budget opinions are left out. */
+  document: z.literal("RAPPORT_OBSERVATIONS_DEFINITIVES"),
+  /** "Département de la Meuse", "Commune d'Aizier": the source's own preposition and article. */
+  collectivite: z
+    .string()
+    .trim()
+    .regex(/^(?:Commune|Département|Région) \S/)
+    .max(160),
+  cahier: z.number().int().min(1).max(20).nullable(),
+  /** Full title of the publication, shown to the person who checks the territory. */
+  titre: z.string().trim().min(1).max(500),
+});
+
 export const territoireEvenementSchema = z.discriminatedUnion("type", [
   changementMaire,
   changementPresident,
   resultatElection,
   electionMaire,
   electionSenateurs,
+  rapportCrc,
 ]);
 
 export type TerritoireEvenementPayload = z.infer<typeof territoireEvenementSchema>;
@@ -78,6 +104,18 @@ export function isEvenementSourceUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+const ARTICLE_COLLECTIVITE: Record<string, string> = {
+  Commune: "la commune",
+  Département: "le département",
+  Région: "la région",
+};
+
+/** "Département de la Meuse" -> "le département de la Meuse". */
+function collectiviteDansLaPhrase(libelle: string): string {
+  const [tete = "", ...reste] = libelle.split(" ");
+  return [ARTICLE_COLLECTIVITE[tete] ?? tete, ...reste].join(" ");
 }
 
 const CONSEIL_LABEL = { DEPARTEMENTAL: "conseil départemental", REGIONAL: "conseil régional" };
@@ -103,6 +141,17 @@ export function phraseEvenement(evenement: TerritoireEvenementPayload): string {
       return `${evenement.electionLabel} : résultats du ${evenement.tour === 1 ? "1er" : "2d"} tour.`;
     case "ELECTION_MAIRE":
       return `Élection du maire par le conseil municipal : ${evenement.nom}.`;
+    case "RAPPORT_CRC": {
+      const juridiction = getJuridictionFinanciere(evenement.juridictionId);
+      const chambre =
+        juridiction?.type === "CTC"
+          ? `La chambre territoriale des comptes ${juridiction.nom}`
+          : `La chambre régionale des comptes ${juridiction?.nom ?? ""}`.trimEnd();
+      const objet = evenement.cahier
+        ? `le cahier n° ${evenement.cahier} d'un rapport`
+        : "un rapport";
+      return `${chambre} a publié ${objet} sur ${collectiviteDansLaPhrase(evenement.collectivite)}.`;
+    }
     case "ELECTION_SENATEURS":
       return `${evenement.electionLabel} : ${
         evenement.sieges === 1 ? "1 siège pourvu" : `${evenement.sieges} sièges pourvus`
