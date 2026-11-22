@@ -6,18 +6,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import { safeJsonParse } from "@/lib/api/safe-json";
 
 // ─── Types ───────────────────────────────────────────────
 
 interface SocialPost {
   id: string;
   category: string;
+  /** Bluesky text, empty when the post does not go to Bluesky. */
   content: string;
+  twitterContent: string | null;
   link: string | null;
   entityId: string | null;
   status: string;
   blueskyUrl: string | null;
   twitterUrl: string | null;
+  blueskyError: string | null;
+  twitterError: string | null;
   error: string | null;
   postedAt: string | null;
   createdAt: string;
@@ -25,6 +30,9 @@ interface SocialPost {
 }
 
 type TabStatus = "PENDING_REVIEW" | "APPROVED" | "POSTED" | "REJECTED";
+
+type TextField = "content" | "twitterContent";
+type PendingEdits = Partial<Record<TextField, string>>;
 
 // ─── Constants ──────────────────────────────────────────
 
@@ -55,10 +63,25 @@ const TAB_STATUS_STYLES: Record<TabStatus, string> = {
 
 // ─── Helpers ────────────────────────────────────────────
 
-function charCountColor(length: number): string {
-  if (length >= 300) return "text-red-600";
-  if (length >= 250) return "text-amber-600";
+function charCountColor(length: number, max: number): string {
+  if (length >= max) return "text-red-600";
+  if (length >= max - 50) return "text-amber-600";
   return "text-green-600";
+}
+
+const TEXT_FIELDS: { field: TextField; label: string; max: number }[] = [
+  { field: "content", label: "Bluesky", max: 300 },
+  { field: "twitterContent", label: "X", max: 280 },
+];
+
+/** Network diagnostics are stored as JSON by the MCP server; older rows hold plain text. */
+function describeNetworkError(raw: string): string {
+  const parsed = safeJsonParse<{ message?: unknown; action?: unknown }>(raw);
+  if (parsed.success && parsed.data && typeof parsed.data.message === "string") {
+    const action = typeof parsed.data.action === "string" ? ` ${parsed.data.action}` : "";
+    return `${parsed.data.message}.${action}`;
+  }
+  return raw;
 }
 
 function formatDate(dateStr: string): string {
@@ -77,7 +100,7 @@ export default function AdminSocialPage() {
   const [activeTab, setActiveTab] = useState<TabStatus>("PENDING_REVIEW");
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editedContents, setEditedContents] = useState<Record<string, string>>({});
+  const [editedContents, setEditedContents] = useState<Record<string, PendingEdits>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const fetchPosts = useCallback(async (status: TabStatus) => {
@@ -108,17 +131,31 @@ export default function AdminSocialPage() {
     setEditedContents({});
   }
 
-  function handleContentChange(postId: string, value: string) {
-    setEditedContents((prev) => ({ ...prev, [postId]: value }));
+  function handleContentChange(postId: string, field: TextField, value: string) {
+    setEditedContents((prev) => ({ ...prev, [postId]: { ...prev[postId], [field]: value } }));
+  }
+
+  function storedText(post: SocialPost, field: TextField): string {
+    return post[field] ?? "";
+  }
+
+  function currentText(post: SocialPost, field: TextField): string {
+    return editedContents[post.id]?.[field] ?? storedText(post, field);
   }
 
   function isEdited(post: SocialPost): boolean {
-    return editedContents[post.id] !== undefined && editedContents[post.id] !== post.content;
+    return TEXT_FIELDS.some(({ field }) => currentText(post, field) !== storedText(post, field));
   }
 
   async function handleSave(post: SocialPost) {
-    const content = editedContents[post.id];
-    if (!content || content === post.content) return;
+    if (!isEdited(post)) return;
+    // The X text is sent only when it changed: an empty value removes the X version.
+    const payload: { content: string; twitterContent?: string | null } = {
+      content: currentText(post, "content"),
+    };
+    if (currentText(post, "twitterContent") !== storedText(post, "twitterContent")) {
+      payload.twitterContent = currentText(post, "twitterContent") || null;
+    }
 
     setActionLoading(post.id);
     try {
@@ -126,7 +163,7 @@ export default function AdminSocialPage() {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         toast.success("Post sauvegardé");
@@ -195,7 +232,7 @@ export default function AdminSocialPage() {
       <div>
         <h1 className="text-2xl font-display font-bold tracking-tight">Posts sociaux</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Relecture, édition et validation des posts générés
+          Relecture, édition et validation des posts. Approuver un post approuve ses deux textes.
         </p>
       </div>
 
@@ -230,7 +267,6 @@ export default function AdminSocialPage() {
       ) : (
         <div className="grid gap-4">
           {posts.map((post) => {
-            const currentContent = editedContents[post.id] ?? post.content;
             const edited = isEdited(post);
             const isLoading = actionLoading === post.id;
 
@@ -253,34 +289,52 @@ export default function AdminSocialPage() {
                     </span>
                   </div>
 
-                  {/* Content */}
-                  {activeTab === "PENDING_REVIEW" ? (
-                    <textarea
-                      value={currentContent}
-                      onChange={(e) => handleContentChange(post.id, e.target.value)}
-                      className="w-full min-h-[120px] px-3 py-2 text-sm border border-border rounded-lg bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring/50"
-                      disabled={isLoading}
-                    />
-                  ) : (
-                    <p
-                      className={`text-sm whitespace-pre-wrap ${
-                        activeTab === "REJECTED" ? "line-through text-muted-foreground" : ""
-                      }`}
-                    >
-                      {post.content}
-                    </p>
-                  )}
-
-                  {/* Character counter (Bluesky 300 max) */}
-                  {activeTab === "PENDING_REVIEW" && (
-                    <div className="flex items-center justify-end">
-                      <span
-                        className={`text-xs font-medium tabular-nums ${charCountColor(currentContent.length)}`}
-                      >
-                        {currentContent.length}/300
-                      </span>
-                    </div>
-                  )}
+                  {/* One block per network: an approval covers exactly the texts shown here. */}
+                  {TEXT_FIELDS.map(({ field, label, max }) => {
+                    const text = currentText(post, field);
+                    if (activeTab !== "PENDING_REVIEW" && text.length === 0) return null;
+                    const inputId = `social-${post.id}-${field}`;
+                    return (
+                      <div key={field} className="space-y-1">
+                        <label
+                          htmlFor={inputId}
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          {label}
+                          {activeTab === "PENDING_REVIEW" && text.length === 0
+                            ? " (pas publié sur ce réseau)"
+                            : ""}
+                        </label>
+                        {activeTab === "PENDING_REVIEW" ? (
+                          <>
+                            <textarea
+                              id={inputId}
+                              value={text}
+                              onChange={(e) => handleContentChange(post.id, field, e.target.value)}
+                              className="w-full min-h-[100px] px-3 py-2 text-sm border border-border rounded-lg bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring/50"
+                              disabled={isLoading}
+                            />
+                            <div className="flex items-center justify-end">
+                              <span
+                                className={`text-xs font-medium tabular-nums ${charCountColor(text.length, max)}`}
+                              >
+                                {text.length}/{max}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <p
+                            id={inputId}
+                            className={`text-sm whitespace-pre-wrap ${
+                              activeTab === "REJECTED" ? "line-through text-muted-foreground" : ""
+                            }`}
+                          >
+                            {text}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   {/* Link */}
                   {post.link && (
@@ -297,12 +351,21 @@ export default function AdminSocialPage() {
                     </div>
                   )}
 
-                  {/* Error message */}
-                  {post.error && (
-                    <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-md px-3 py-2">
-                      <span className="font-medium">Erreur : </span>
-                      {post.error}
-                    </div>
+                  {/* Error messages: legacy pipeline, then the last diagnostic of each network */}
+                  {[
+                    { label: "Erreur", raw: post.error },
+                    { label: "Bluesky", raw: post.blueskyError },
+                    { label: "X", raw: post.twitterError },
+                  ].map(({ label, raw }) =>
+                    raw ? (
+                      <div
+                        key={label}
+                        className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-md px-3 py-2"
+                      >
+                        <span className="font-medium">{label} : </span>
+                        {describeNetworkError(raw)}
+                      </div>
+                    ) : null
                   )}
 
                   {/* Platform URLs for posted */}
