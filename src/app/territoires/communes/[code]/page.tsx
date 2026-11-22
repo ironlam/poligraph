@@ -41,6 +41,8 @@ import {
 } from "@/lib/territoires/paths";
 import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 import { openGraph } from "@/lib/seo/open-graph";
+import { BudgetResume } from "@/components/territoires/BudgetResume";
+import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
 
 // ISR: 24 h backstop; freshness comes from the reader's cache tags.
 export const revalidate = 86400;
@@ -91,12 +93,13 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
   const { identity } = dossier;
   // The dossier knows 2026 and the presidential only: the earlier municipales come from the
   // elections reader, so the count and the lines match the dedicated page.
-  const [elections, chiffres, votes, fil, parrainages] = await Promise.all([
+  const [elections, chiffres, votes, fil, parrainages, comptes] = await Promise.all([
     getCommuneElections(identity.inseeCode),
     getCommuneChiffres(identity.inseeCode),
     getVotesDeputesDepartement(identity.department.code),
     getFilTerritoire("COM", identity.inseeCode),
     getParrainagesCommuneBlocs(identity.inseeCode),
+    getComptesTerritoire("COM", identity.inseeCode),
   ]);
   // A name only when the base establishes one deputy for the commune; otherwise no name.
   const { deputes } = dossier.parlement;
@@ -144,6 +147,8 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
           <div className="min-w-0 space-y-6">
             <FilTerritoire evenements={fil} />
             <QuiDecideSection dossier={dossier} />
+            {/* The accounts of the town hall, under the « Élus » tab (D28: not with the figures). */}
+            <BudgetResume comptes={comptes} scale="COM" />
             <ParlementSection dossier={dossier} />
             <VotesParlementaires votes={votes} mode={votesMode} />
             {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}

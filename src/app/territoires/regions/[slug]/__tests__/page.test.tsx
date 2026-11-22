@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: vi.fn(async () => []) }));
+vi.mock("@/lib/data/territoire-comptes", () => ({
+  getComptesTerritoire: vi.fn(async () => ({ dernierExercice: null, agregats: [], source: null })),
+}));
 vi.mock("@/lib/data/territoires", () => ({
   getRegionTerritoire: (slug: string) => mocks.getRegionTerritoire(slug),
 }));
