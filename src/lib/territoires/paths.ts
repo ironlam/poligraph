@@ -107,3 +107,7 @@ export function territoireRegionBudgetPath(slug: string): string {
 
 /** Exports, releases and licences of the section. */
 export const TERRITOIRES_DONNEES_PATH = "/territoires/donnees";
+
+/** How the notices of the regional audit chambers' reports are chosen and placed. */
+export const TERRITOIRES_METHODE_RAPPORTS_CRC_PATH =
+  "/territoires/methode/rapports-des-chambres-des-comptes";

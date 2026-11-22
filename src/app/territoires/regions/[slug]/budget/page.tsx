@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { BudgetPage } from "@/components/territoires/BudgetPage";
 import { REGIONS } from "@/config/regions";
 import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
+import { getRapportsCrcTerritoire } from "@/lib/data/territoire-fil";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { openGraph } from "@/lib/seo/open-graph";
 import { territoireBudgetRobotsMetadata } from "@/lib/seo/territoire-robots";
@@ -50,12 +51,14 @@ export default async function RegionBudgetPage({ params }: PageProps) {
   const { slug } = await params;
   const data = await loadBudget(slug);
   if (!data) notFound();
+  const rapports = await getRapportsCrcTerritoire("REG", data.code);
   return (
     <BudgetPage
       retour={{ label: data.name, href: territoireRegionPath(slug) }}
       titre={`Les comptes de la région : ${data.name}`}
       comptes={data.comptes}
       scale="REG"
+      rapports={rapports}
     />
   );
 }

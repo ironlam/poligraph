@@ -8,7 +8,8 @@ import { territoireRegionBudgetPath, territoireRegionPath } from "@/lib/territoi
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Agir } from "@/components/territoires/Agir";
 import { FilTerritoire } from "@/components/territoires/FilTerritoire";
-import { getFilTerritoire } from "@/lib/data/territoire-fil";
+import { getFilTerritoire, getRapportsCrcTerritoire } from "@/lib/data/territoire-fil";
+import { RapportsCrc } from "@/components/territoires/RapportsCrc";
 import { RegionBandeau } from "@/components/territoires/RegionBandeau";
 import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import {
@@ -82,10 +83,11 @@ export default async function RegionPage({ params }: PageProps) {
   if (!data) notFound();
 
   const particuliere = data.collectivitesParticulieres.length > 0;
-  const [elections, fil, comptes] = await Promise.all([
+  const [elections, fil, comptes, rapports] = await Promise.all([
     loadRegionElections(particuliere),
     getFilTerritoire("REG", data.region.code),
     getComptesTerritoire("REG", data.region.code),
+    getRapportsCrcTerritoire("REG", data.region.code),
   ]);
 
   // One word each. The first tab names the block shown for this region; the elections tab
@@ -116,6 +118,7 @@ export default async function RegionPage({ params }: PageProps) {
             scale="REG"
             budgetHref={territoireRegionBudgetPath(data.region.slug)}
           />
+          <RapportsCrc rapports={rapports} />
           <RegionDepartements data={data} />
           <RegionElections elections={elections} />
           {!particuliere && <Agir niveau="region" />}

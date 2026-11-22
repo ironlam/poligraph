@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ComptesSerie } from "@/components/territoires/ComptesSerie";
+import { RapportsCrc } from "@/components/territoires/RapportsCrc";
 import type { RepereTerritoryKind } from "@/config/territoire-reperes";
 import type { ComptesTerritoire } from "@/lib/data/territoire-comptes";
+import type { FilEvenement } from "@/lib/data/territoire-fil";
 import { communeSeuleLigne, comptesPhrase } from "@/lib/territoires/comptes-phrase";
 
 const ECHELLE: Record<RepereTerritoryKind, string> = {
@@ -17,6 +19,7 @@ export function BudgetPage({
   comptes,
   scale,
   intercommunalites = [],
+  rapports = [],
 }: {
   retour: { label: string; href: string };
   titre: string;
@@ -24,6 +27,8 @@ export function BudgetPage({
   scale: RepereTerritoryKind;
   /** Commune scale only: names of the intercommunalities it belongs to. */
   intercommunalites?: readonly string[];
+  /** Published audit chamber reports on the collectivity, listed under the series. */
+  rapports?: FilEvenement[];
 }) {
   const phrase = comptesPhrase(comptes, scale);
   const seule = scale === "COM" ? communeSeuleLigne(intercommunalites) : null;
@@ -46,6 +51,11 @@ export function BudgetPage({
       <div className="mt-6">
         <ComptesSerie comptes={comptes} territoire={`${retour.label} (${ECHELLE[scale]})`} />
       </div>
+      {rapports.length > 0 && (
+        <div className="mt-6">
+          <RapportsCrc rapports={rapports} />
+        </div>
+      )}
     </div>
   );
 }

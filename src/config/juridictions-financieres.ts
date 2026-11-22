@@ -6,6 +6,13 @@
  * named in a notice comes from here, never from the text of the feed.
  */
 
+/**
+ * Shown with every report notice (Territoires v2, lot C). Conditional on purpose: on 2026-11-22
+ * the Chartres report page carried a « Réponse » document, the Meuse one none.
+ */
+export const RAPPORT_CRC_REPONSE =
+  "La collectivité peut répondre par écrit aux observations de la chambre. Quand elle répond, sa réponse est publiée avec le rapport sur ccomptes.fr.";
+
 export interface JuridictionFinanciere {
   /** Feed id on ccomptes.fr. */
   id: number;
