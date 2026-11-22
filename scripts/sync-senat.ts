@@ -19,8 +19,7 @@ const handler: SyncHandler = {
 Politic Tracker - Senators Sync
 
 Data sources:
-  - Primary: senat.fr API (official Senate data)
-  - Secondary: archive.nossenateurs.fr (birth dates, historical data)
+  - senat.fr API (official Senate data)
     `);
   },
 

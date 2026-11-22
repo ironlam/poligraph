@@ -240,3 +240,28 @@ describe("syncPhotos : suites de la revue Codex", () => {
     for (const [args] of h.update.mock.calls) expect(args.data).not.toHaveProperty("photoUrl");
   });
 });
+
+// NosDéputés and NosSénateurs stopped answering reliably in November 2026 (#1440):
+// a current MP without an official id must fall through to Wikidata, never query them.
+describe("syncPhotos : sources retirées", () => {
+  it("never queries nosdeputes.fr or nossenateurs.fr for a current MP", async () => {
+    h.findMany.mockResolvedValue([
+      politician({
+        photoUrl: null,
+        photoSource: null,
+        mandates: [
+          { type: "DEPUTE", isCurrent: true },
+          { type: "SENATEUR", isCurrent: true },
+        ],
+      }),
+    ]);
+    // Wikidata (higher priority) has no photo: only the retired sources would answer.
+    sources({ nosdeputes: photo(), nossenateurs: photo() });
+
+    await syncPhotos();
+
+    const queried = h.getBuffer.mock.calls.map(([url]) => String(url));
+    expect(queried.some((u) => /nosdeputes|nossenateurs/.test(u))).toBe(false);
+    for (const [args] of h.update.mock.calls) expect(args.data).not.toHaveProperty("photoUrl");
+  });
+});
