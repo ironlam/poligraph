@@ -38,7 +38,11 @@ import {
   MAIRE_MIN_COMMUNE_POPULATION,
   MIN_BIOGRAPHY_LENGTH,
 } from "@/lib/seo/politician-robots";
-import { TERRITOIRE_COMMUNE_MIN_POPULATION } from "@/lib/seo/territoire-robots";
+import {
+  isIndexableTerritoireBudget,
+  TERRITOIRE_COMMUNE_MIN_POPULATION,
+} from "@/lib/seo/territoire-robots";
+import { getEchellesComptesPubliees } from "@/lib/data/territoire-comptes";
 import { parrainagesSitemapEntries } from "@/lib/seo/parrainages-robots";
 import { PARRAINAGES_ELECTIONS } from "@/config/parrainages";
 import { getParrainagesTableauDeBord } from "@/lib/data/parrainages";
@@ -62,6 +66,8 @@ import {
   territoireCommuneElectionsPath,
   territoireRegionPath,
   territoireDepartementPath,
+  territoireDepartementBudgetPath,
+  territoireRegionBudgetPath,
   TERRITOIRES_DEPARTEMENTS_PATH,
 } from "@/lib/territoires/paths";
 
@@ -1044,6 +1050,24 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
     (latest, c) => (latest === null || c.lastmod > latest ? c.lastmod : latest),
     null
   );
+  // Budget sub-pages: only those isIndexableTerritoireBudget() keeps (departments and regions with
+  // accounts of their own), and only once their scale's batch is published, so the sitemap never
+  // lists a page that answers 404.
+  const echellesComptes = await getEchellesComptesPubliees();
+  const budgetPages = [
+    ...(echellesComptes.includes("REG")
+      ? REGIONS.filter((r) => isIndexableTerritoireBudget("REG", r.code)).map((r) =>
+          territoireRegionBudgetPath(r.slug)
+        )
+      : []),
+    ...(echellesComptes.includes("DEP")
+      ? REGIONS.flatMap((r) => r.departmentCodes)
+          .filter((code) => isIndexableTerritoireBudget("DEP", code) && DEPARTMENTS[code])
+          .map((code) =>
+            territoireDepartementBudgetPath(getDepartmentSlug(DEPARTMENTS[code]!.name))
+          )
+      : []),
+  ];
 
   return [
     {
@@ -1070,6 +1094,12 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: sectionLastmod ?? new Date(),
       changeFrequency: "weekly" as const,
       priority: 0.7,
+    })),
+    ...budgetPages.map((path) => ({
+      url: `${SITE_URL}${path}`,
+      lastModified: sectionLastmod ?? new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.4,
     })),
     ...communes.map((c) => ({
       url: `${SITE_URL}${territoireCommunePath(c.id, c.name)}`,

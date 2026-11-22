@@ -32,10 +32,10 @@ describe("/territoires/regions/[slug]/budget", () => {
     expect(h.getComptesTerritoire).not.toHaveBeenCalled();
   });
 
-  it("reste hors de l'index, avec son adresse canonique", async () => {
+  it("s'indexe pour une région qui a ses propres comptes, avec son adresse canonique", async () => {
     h.getComptesTerritoire.mockResolvedValue({ ...EMPTY, dernierExercice: 2024 });
     const meta = await generateMetadata(params("bretagne"));
-    expect(meta.robots).toEqual({ index: false, follow: true });
+    expect(meta.robots).toBeUndefined();
     expect(meta.alternates?.canonical).toBe("/territoires/regions/bretagne/budget");
     expect(meta.title).toBe("Bretagne : comptes de la région");
   });
@@ -45,5 +45,13 @@ describe("/territoires/regions/[slug]/budget", () => {
     const html = renderToStaticMarkup(await RegionBudgetPage(params("bretagne")));
     expect(html).toContain('href="/territoires/regions/bretagne"');
     expect(html).toContain("Les comptes de la région : Bretagne");
+  });
+
+  it("reste hors de l'index pour Mayotte, dont la page renvoie au département", async () => {
+    h.getComptesTerritoire.mockResolvedValue({ ...EMPTY, dernierExercice: 2024 });
+    const meta = await generateMetadata(params("mayotte"));
+    // The page exists (not the « introuvable » verdict): it is withheld by the predicate.
+    expect(meta.title).toBe("Mayotte : comptes de la région");
+    expect(meta.robots).toEqual({ index: false, follow: true });
   });
 });

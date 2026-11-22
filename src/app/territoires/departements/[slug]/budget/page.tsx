@@ -6,7 +6,7 @@ import { getDepartmentBySlug } from "@/config/departments";
 import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { openGraph } from "@/lib/seo/open-graph";
-import { TERRITOIRE_BUDGET_ROBOTS } from "@/lib/seo/territoire-robots";
+import { territoireBudgetRobotsMetadata } from "@/lib/seo/territoire-robots";
 import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 import {
   territoireDepartementBudgetPath,
@@ -29,7 +29,7 @@ const loadBudget = cache(async (slug: string) => {
   const dept = getDepartmentBySlug(slug);
   if (!dept) return null;
   const comptes = await getComptesTerritoire("DEP", dept.code);
-  return comptes.dernierExercice === null ? null : { name: dept.name, comptes };
+  return comptes.dernierExercice === null ? null : { name: dept.name, code: dept.code, comptes };
 });
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    ...TERRITOIRE_BUDGET_ROBOTS,
+    ...territoireBudgetRobotsMetadata("DEP", data.code),
     openGraph: openGraph({ title, description, images: [TERRITOIRES_OG_IMAGE] }),
     alternates: { canonical: territoireDepartementBudgetPath(slug) },
   };

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { COMPTES_ABSENCES } from "@/config/territoire-comptes";
+import type { RepereTerritoryKind } from "@/config/territoire-reperes";
 import { COMMUNE_MIN_POPULATION } from "./commune-robots";
 
 const NOINDEX_FOLLOW = { index: false, follow: true } as const;
@@ -33,12 +35,25 @@ export function isIndexableTerritoireCommune(signals: TerritoireCommuneIndexSign
 }
 
 /**
- * Budget sub-pages (/territoires/.../budget, lot C): noindex,follow until their indexing is
- * decided on production counts once the accounts are published (AGENTS.md §5). Out of the
- * sitemap meanwhile. A series of figures repeated on 10 000 commune pages is the near-duplicate
- * case the doctrine warns about, so the default is to withhold them.
+ * Budget sub-pages (/territoires/.../budget, lot C), decided on 2026-11-22 on production counts
+ * after publication: 10 218 pages, 10 099 of them communes. The 101 departments and 18 regions
+ * are indexable: few, each the accounts of a distinct collectivity. The communes stay
+ * noindex,follow: one series template repeated on 10 000 pages is the near-duplicate case the
+ * doctrine warns about (AGENTS.md §5). A department or region whose page only says why it has no
+ * accounts of its own (single collectivity, Mayotte) is thin and stays out too. The sitemap reads
+ * this predicate.
  */
-export const TERRITOIRE_BUDGET_ROBOTS = { robots: { index: false, follow: true } } as const;
+export function isIndexableTerritoireBudget(scale: RepereTerritoryKind, code: string): boolean {
+  return scale !== "COM" && !(code in COMPTES_ABSENCES[scale]);
+}
+
+/** `robots` fragment for a /budget sub-page: {} when indexable, noindex,follow otherwise. */
+export function territoireBudgetRobotsMetadata(
+  scale: RepereTerritoryKind,
+  code: string
+): Pick<Metadata, "robots"> {
+  return isIndexableTerritoireBudget(scale, code) ? {} : { robots: NOINDEX_FOLLOW };
+}
 
 /** `robots` fragment for a Territoires commune page: {} when indexable, noindex,follow otherwise. */
 export function territoireCommuneRobotsMetadata(
