@@ -6,7 +6,7 @@ import { REGIONS } from "@/config/regions";
 import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { openGraph } from "@/lib/seo/open-graph";
-import { TERRITOIRE_BUDGET_ROBOTS } from "@/lib/seo/territoire-robots";
+import { territoireBudgetRobotsMetadata } from "@/lib/seo/territoire-robots";
 import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 import { territoireRegionBudgetPath, territoireRegionPath } from "@/lib/territoires/paths";
 
@@ -26,7 +26,9 @@ const loadBudget = cache(async (slug: string) => {
   const region = REGIONS.find((r) => r.slug === slug);
   if (!region) return null;
   const comptes = await getComptesTerritoire("REG", region.code);
-  return comptes.dernierExercice === null ? null : { name: region.name, comptes };
+  return comptes.dernierExercice === null
+    ? null
+    : { name: region.name, code: region.code, comptes };
 });
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -38,7 +40,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    ...TERRITOIRE_BUDGET_ROBOTS,
+    ...territoireBudgetRobotsMetadata("REG", data.code),
     openGraph: openGraph({ title, description, images: [TERRITOIRES_OG_IMAGE] }),
     alternates: { canonical: territoireRegionBudgetPath(slug) },
   };

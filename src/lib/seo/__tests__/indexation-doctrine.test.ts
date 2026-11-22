@@ -15,8 +15,8 @@ import {
 } from "../parrainages-robots";
 import { communeRobotsMetadata, COMMUNE_MIN_POPULATION } from "../commune-robots";
 import {
+  territoireBudgetRobotsMetadata,
   territoireCommuneRobotsMetadata,
-  TERRITOIRE_BUDGET_ROBOTS,
   TERRITOIRE_COMMUNE_MIN_POPULATION,
 } from "../territoire-robots";
 import { hasActiveListingFilter, listingRobotsMetadata } from "../listing-robots";
@@ -200,6 +200,10 @@ describe("doctrine — strong surfaces stay indexable", () => {
       })
     ).toEqual(INDEXABLE);
   });
+  it("Territoires /budget of a department or region with accounts of its own", () => {
+    expect(territoireBudgetRobotsMetadata("DEP", "29")).toEqual({});
+    expect(territoireBudgetRobotsMetadata("REG", "53")).toEqual({});
+  });
   it("bare /affaires listing", () => {
     expect(listingRobots({}, AFFAIRES_LISTING_FILTER_KEYS)).toEqual(INDEXABLE);
   });
@@ -254,21 +258,12 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
       NOINDEX_FOLLOW
     );
   });
-  it("Territoires /budget sub-pages, until their indexing is decided on production counts", () => {
-    expect(TERRITOIRE_BUDGET_ROBOTS).toEqual(NOINDEX_FOLLOW);
-    // Withheld pages stay out of the sitemap, comments stripped so prose cannot keep this green.
-    const code = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8").replace(
-      /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
-      ""
-    );
-    expect(code).not.toMatch(/budget/i);
-    for (const route of ["communes/[code]", "departements/[slug]", "regions/[slug]"]) {
-      const page = readFileSync(
-        join(process.cwd(), `src/app/territoires/${route}/budget/page.tsx`),
-        "utf8"
-      );
-      expect(page, route).toContain("...TERRITOIRE_BUDGET_ROBOTS");
-    }
+  it("Territoires /budget of a commune: one series template on 10 000 pages", () => {
+    expect(territoireBudgetRobotsMetadata("COM", "29019")).toEqual(NOINDEX_FOLLOW);
+  });
+  it("Territoires /budget whose page only explains why it has no accounts of its own", () => {
+    expect(territoireBudgetRobotsMetadata("DEP", "2A")).toEqual(NOINDEX_FOLLOW);
+    expect(territoireBudgetRobotsMetadata("REG", "06")).toEqual(NOINDEX_FOLLOW);
   });
   it("filtered /affaires (?parti)", () => {
     expect(listingRobots({ parti: "rn" }, AFFAIRES_LISTING_FILTER_KEYS)).toEqual(NOINDEX_FOLLOW);
@@ -425,6 +420,24 @@ describe("doctrine — /parlement/votes sort stays out of the canonical", () => 
 });
 
 describe("doctrine — sitemap shares the indexability thresholds (no drift)", () => {
+  it("Territoires /budget: the sitemap and the three pages read the same predicate", () => {
+    const strip = (f: string) =>
+      readFileSync(join(process.cwd(), f), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    const sitemap = strip("src/app/sitemap.ts");
+    expect(sitemap).toContain('isIndexableTerritoireBudget("REG"');
+    expect(sitemap).toContain('isIndexableTerritoireBudget("DEP"');
+    expect(sitemap).not.toMatch(/territoireCommuneBudgetPath/);
+    for (const [route, scale] of [
+      ["communes/[code]", "COM"],
+      ["departements/[slug]", "DEP"],
+      ["regions/[slug]", "REG"],
+    ] as const) {
+      expect(strip(`src/app/territoires/${route}/budget/page.tsx`), route).toContain(
+        `...territoireBudgetRobotsMetadata("${scale}"`
+      );
+    }
+  });
+
   const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
 
   it("imports the predicate constants from the shared helper", () => {

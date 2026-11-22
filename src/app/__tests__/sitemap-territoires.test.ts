@@ -6,13 +6,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => {
   const queryRaw = vi.fn();
+  // Published accounts batches read by getEchellesComptesPubliees(); none by default.
+  const repereImportFindMany = vi.fn(async () => [] as unknown[]);
   const fallback: ProxyHandler<Record<string, unknown>> = {
     get(_t, model: string) {
       if (model === "$queryRaw") return queryRaw;
+      if (model === "repereImport") return { findMany: repereImportFindMany };
       return new Proxy({}, { get: () => async () => [] });
     },
   };
-  return { queryRaw, db: new Proxy({}, fallback), cacheTag: vi.fn() };
+  return { queryRaw, repereImportFindMany, db: new Proxy({}, fallback), cacheTag: vi.fn() };
 });
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
@@ -127,5 +130,35 @@ describe("sitemap : protocole des décisions des conseils", () => {
   it("annonce la page de méthodologie dans le shard des pages statiques", async () => {
     const urls = (await shard0()).map((e) => path(e.url));
     expect(urls).toContain("/methodologie/decisions-territoires");
+  });
+
+  it("annonce les comptes des départements et régions publiés, sans ceux qui n'en ont pas", async () => {
+    h.queryRaw.mockResolvedValueOnce([]);
+    h.repereImportFindMany.mockResolvedValueOnce([
+      {
+        source: {
+          resourceUrl: "https://data.ofgl.fr/explore/dataset/ofgl-base-regions-consolidee/",
+        },
+      },
+      {
+        source: {
+          resourceUrl: "https://data.ofgl.fr/explore/dataset/ofgl-base-departements-consolidee/",
+        },
+      },
+      {
+        source: {
+          resourceUrl: "https://data.ofgl.fr/explore/dataset/ofgl-base-communes-consolidee/",
+        },
+      },
+    ]);
+    const urls = (await shard5()).map((e) => path(e.url));
+    const budget = urls.filter((u) => u.endsWith("/budget"));
+    expect(budget).toContain("/territoires/regions/bretagne/budget");
+    expect(budget).toContain("/territoires/departements/finistere/budget");
+    // Mayotte (region) and the single collectivities (departments) only say why: left out.
+    expect(budget).not.toContain("/territoires/regions/mayotte/budget");
+    expect(budget.filter((u) => u.startsWith("/territoires/regions/"))).toHaveLength(17);
+    expect(budget.filter((u) => u.startsWith("/territoires/departements/"))).toHaveLength(97);
+    expect(budget.some((u) => u.startsWith("/territoires/communes/"))).toBe(false);
   });
 });

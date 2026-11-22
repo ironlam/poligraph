@@ -6,7 +6,7 @@ import { getCommuneDossier } from "@/lib/data/territoires";
 import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { openGraph } from "@/lib/seo/open-graph";
-import { TERRITOIRE_BUDGET_ROBOTS } from "@/lib/seo/territoire-robots";
+import { territoireBudgetRobotsMetadata } from "@/lib/seo/territoire-robots";
 import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 import {
   communeCodeFromSegment,
@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    ...TERRITOIRE_BUDGET_ROBOTS,
+    ...territoireBudgetRobotsMetadata("COM", data.code),
     openGraph: openGraph({ title, description, images: [TERRITOIRES_OG_IMAGE] }),
     alternates: { canonical: territoireCommuneBudgetPath(data.code, data.name) },
   };
