@@ -12,6 +12,13 @@ export const SCRUTIN_VIDEOS: Readonly<Record<string, string>> = {
   "2026-10-30-l-amendement-n-1358-de-m-lhardit-apres-l-article-15-examen-prioritair": "0D3Oys-MlEs",
 };
 
+/** Short « Pourquoi faut-il 500 signatures pour être candidat ? », lié depuis la méthode des parrainages. */
+export const PARRAINAGES_VIDEO_ID = "nuOkvIa2V2I";
+
+export function youtubeShortUrl(videoId: string): string {
+  return `https://www.youtube.com/shorts/${videoId}`;
+}
+
 export function getScrutinVideoId(slug: string | null | undefined): string | null {
   if (!slug || !Object.hasOwn(SCRUTIN_VIDEOS, slug)) return null;
   return SCRUTIN_VIDEOS[slug] ?? null;

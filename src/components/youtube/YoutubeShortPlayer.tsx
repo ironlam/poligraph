@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
+import { youtubeShortUrl } from "@/config/youtube";
 
 interface YoutubeShortPlayerProps {
   videoId: string;
@@ -43,7 +44,7 @@ export function YoutubeShortPlayer({ videoId, title }: YoutubeShortPlayerProps) 
         )}
       </div>
       <a
-        href={`https://www.youtube.com/shorts/${videoId}`}
+        href={youtubeShortUrl(videoId)}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-2 inline-block text-sm text-primary hover:underline"
