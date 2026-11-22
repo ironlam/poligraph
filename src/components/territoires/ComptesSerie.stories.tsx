@@ -48,7 +48,7 @@ const COMPTES: ComptesTerritoire = {
 const meta: Meta<typeof ComptesSerie> = {
   title: "Territoires/ComptesSerie",
   component: ComptesSerie,
-  args: { comptes: COMPTES },
+  args: { comptes: COMPTES, territoire: "Brest (commune)" },
 };
 
 export default meta;

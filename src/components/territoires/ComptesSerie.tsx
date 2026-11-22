@@ -43,7 +43,34 @@ function porteurs(serie: { exercice: number; montant: CompteValeur }[]): string[
   });
 }
 
-export function ComptesSerie({ comptes }: { comptes: ComptesTerritoire }) {
+type Exercice = ComptesTerritoire["agregats"][number]["serie"][number];
+
+/**
+ * Consecutive exercises carried by the same collectivity. More than one run means the perimeter
+ * changes inside the table (Bas-Rhin then the Collectivité européenne d'Alsace), whatever the
+ * territory: the trigger is the scope label, never a territory code.
+ */
+export function perimetres(
+  serie: readonly Exercice[]
+): { label: string | null; exercices: Exercice[] }[] {
+  const runs: { label: string | null; exercices: Exercice[] }[] = [];
+  for (const e of serie) {
+    const label = e.montant.scopeLabel ?? e.parHabitant.scopeLabel;
+    const last = runs.at(-1);
+    if (last && last.label === label) last.exercices.push(e);
+    else runs.push({ label, exercices: [e] });
+  }
+  return runs;
+}
+
+export function ComptesSerie({
+  comptes,
+  territoire,
+}: {
+  comptes: ComptesTerritoire;
+  /** Name of the territory itself, heading the exercises it carries when the perimeter changes. */
+  territoire: string;
+}) {
   return (
     <div className="space-y-6">
       {comptes.agregats.map(({ key, serie }) => {
@@ -91,19 +118,32 @@ export function ComptesSerie({ comptes }: { comptes: ComptesTerritoire }) {
                     </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {serie.map((e) => (
-                    <tr key={e.exercice} className="border-b last:border-b-0">
-                      <th scope="row" className="py-2 pr-2 text-left font-normal">
-                        {e.exercice}
-                      </th>
-                      <td className="py-2 pr-2 text-right font-bold">
-                        {cell(e.parHabitant, formatEurosParHabitant)}
-                      </td>
-                      <td className="py-2 text-right">{cell(e.montant, formatMontant)}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                {perimetres(serie).map((run, i, runs) => (
+                  <tbody key={`${run.label}-${run.exercices[0]!.exercice}`}>
+                    {runs.length > 1 && (
+                      <tr className={i > 0 ? "border-t-2 border-foreground" : undefined}>
+                        <th
+                          scope="rowgroup"
+                          colSpan={3}
+                          className="pt-3 pb-1 text-left text-xs font-bold"
+                        >
+                          {run.label ?? territoire}
+                        </th>
+                      </tr>
+                    )}
+                    {run.exercices.map((e) => (
+                      <tr key={e.exercice} className="border-b last:border-b-0">
+                        <th scope="row" className="py-2 pr-2 text-left font-normal">
+                          {e.exercice}
+                        </th>
+                        <td className="py-2 pr-2 text-right font-bold">
+                          {cell(e.parHabitant, formatEurosParHabitant)}
+                        </td>
+                        <td className="py-2 text-right">{cell(e.montant, formatMontant)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                ))}
               </table>
             )}
             {[...porteurs(serie), ...reasons].map((note) => (
