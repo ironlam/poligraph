@@ -60,8 +60,17 @@ describe("parseTitreRapportCrc, collectivités", () => {
       null,
     ],
   ])("%s", (titre, type, nom, departement) => {
-    expect(parseTitreRapportCrc(titre).collectivite).toEqual({ type, nom, departement });
+    expect(parseTitreRapportCrc(titre).collectivite).toMatchObject({ type, nom, departement });
   });
+});
+
+it.each([
+  ["Département de la Meuse", "Département de la Meuse"],
+  ["Commune d’Augirein (Ariège)", "Commune d'Augirein"],
+  ["Commune de Voiron : les dépenses de rémunération du personnel (Isère)", "Commune de Voiron"],
+  ["Région Réunion - Le réseau Car Jaune - Cahier n° 1 : La gestion", "Région Réunion"],
+])("libellé de la source : %s", (titre, libelle) => {
+  expect(parseTitreRapportCrc(titre).collectivite?.libelle).toBe(libelle);
 });
 
 describe("parseTitreRapportCrc, hors périmètre", () => {
