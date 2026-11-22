@@ -48,7 +48,7 @@ export const PATCH = withAdminAuth(
       data: {
         action: "UPDATE",
         entityType: "SocialPost",
-        entityId: id,
+        entityId: post.id,
         changes: { content: nextBluesky, twitterContent: nextX },
         ipAddress: meta.ip,
         userAgent: meta.userAgent,
