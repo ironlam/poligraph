@@ -3,18 +3,24 @@ import { render, screen } from "@testing-library/react";
 import { BandeauFilterForm } from "@/components/ui/BandeauFilterForm";
 
 describe("BandeauFilterForm", () => {
-  it("nomme le bouton réduit à une icône et lie chaque liste à son libellé", () => {
+  it("place le bouton de validation après les filtres et lie chaque liste à son libellé", () => {
     render(
       <BandeauFilterForm
         action="/affaires"
         idPrefix="affaires"
         searchPlaceholder="Nom"
-        selects={[{ name: "parti", label: "Parti", options: [{ value: "", label: "Tous" }] }]}
+        selects={[
+          { name: "parti", label: "Parti", options: [{ value: "", label: "Tous" }] },
+          { name: "sort", label: "Tri", options: [{ value: "", label: "Récent" }] },
+        ]}
       />
     );
     const button = screen.getByRole("button", { name: "Rechercher" });
-    expect(button).toHaveAttribute("aria-label", "Rechercher");
-    expect(button).toHaveAttribute("title", "Rechercher");
     expect(screen.getByLabelText("Parti")).toHaveAttribute("name", "parti");
+
+    const fields = Array.from(
+      button.closest("form")!.querySelectorAll("input, select, button")
+    ).map((el) => el.getAttribute("name") ?? el.getAttribute("type"));
+    expect(fields).toEqual(["search", "parti", "sort", "submit"]);
   });
 });
