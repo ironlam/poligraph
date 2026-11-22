@@ -11,13 +11,13 @@ import { getJuridictionFinanciere } from "@/config/juridictions-financieres";
  * and a document carrying a DOCTYPE is refused before parsing, so no entity it declares is ever
  * expanded.
  *
- * Only facts leave this module: title, address, publication date. The description is the
- * chamber's own text and is not read. Items that are not a publication (the chambers' news,
+ * Only facts leave this module: title, address, publication date, and the raw page of a report
+ * for its kind of document. The description is the chamber's own text and is not read. Items that are not a publication (the chambers' news,
  * under `/fr/actualites/`) are dropped and counted.
  */
 
 export const CCOMPTES_ORIGIN = "https://www.ccomptes.fr";
-/** A feed of ten items weighs 8 to 22 kB (2026-11-22). */
+/** A feed of ten items weighs 8 to 22 kB (2026-11-22); a report page, a few hundred kB. */
 export const CCOMPTES_MAX_BYTES = 1_000_000;
 export const CCOMPTES_TIMEOUT_MS = 20_000;
 
@@ -130,11 +130,41 @@ async function readBounded(response: Response, max: number): Promise<string> {
     size += value.byteLength;
     if (size > max) {
       await reader.cancel();
-      throw new CcomptesError("LIMITE", `Flux ccomptes.fr au-delà de ${max} octets.`);
+      throw new CcomptesError("LIMITE", `Réponse ccomptes.fr au-delà de ${max} octets.`);
     }
     chunks.push(value);
   }
   return new TextDecoder("utf-8").decode(Buffer.concat(chunks));
+}
+
+/**
+ * GET on the fixed origin, no redirect followed, body bounded. `url` is always built here or
+ * checked by `publicationUrl`, never taken raw from a caller.
+ */
+async function telecharger(
+  url: string,
+  accept: string,
+  typeAttendu: RegExp,
+  maxBytes: number
+): Promise<string> {
+  try {
+    const response = await fetch(url, {
+      redirect: "error",
+      signal: AbortSignal.timeout(CCOMPTES_TIMEOUT_MS),
+      headers: { "User-Agent": USER_AGENT, Accept: accept },
+    });
+    if (!response.ok) {
+      throw new CcomptesError("RESEAU", `${url} : HTTP ${response.status}.`);
+    }
+    if (!typeAttendu.test(response.headers.get("content-type") ?? "")) {
+      throw new CcomptesError("REPONSE", `${url} : type de réponse inattendu.`);
+    }
+    return await readBounded(response, maxBytes);
+  } catch (error) {
+    if (error instanceof CcomptesError) throw error;
+    // Network failure, refused redirect, timeout, or body cut short.
+    throw new CcomptesError("RESEAU", `${url} injoignable : ${String(error)}`, { cause: error });
+  }
 }
 
 /** Downloads and reads the feed of one chamber of the closed list. */
@@ -145,27 +175,24 @@ export async function fetchFluxJuridiction(
   if (!getJuridictionFinanciere(juridictionId)) {
     throw new CcomptesError("REQUETE", `Juridiction ${juridictionId} absente du registre.`);
   }
-  const url = `${CCOMPTES_ORIGIN}/fr/rss/juridiction/${juridictionId}`;
-  let xml: string;
-  try {
-    const response = await fetch(url, {
-      redirect: "error",
-      signal: AbortSignal.timeout(CCOMPTES_TIMEOUT_MS),
-      headers: { "User-Agent": USER_AGENT, Accept: "application/rss+xml, application/xml" },
-    });
-    if (!response.ok) {
-      throw new CcomptesError("RESEAU", `Flux ${juridictionId} : HTTP ${response.status}.`);
-    }
-    if (!/xml/i.test(response.headers.get("content-type") ?? "")) {
-      throw new CcomptesError("REPONSE", `Flux ${juridictionId} : la réponse n'est pas du XML.`);
-    }
-    xml = await readBounded(response, options.maxBytes ?? CCOMPTES_MAX_BYTES);
-  } catch (error) {
-    if (error instanceof CcomptesError) throw error;
-    // Network failure, refused redirect, timeout, or body cut short.
-    throw new CcomptesError("RESEAU", `Flux ${juridictionId} injoignable : ${String(error)}`, {
-      cause: error,
-    });
-  }
+  const xml = await telecharger(
+    `${CCOMPTES_ORIGIN}/fr/rss/juridiction/${juridictionId}`,
+    "application/rss+xml, application/xml",
+    /xml/i,
+    options.maxBytes ?? CCOMPTES_MAX_BYTES
+  );
   return parseFluxCcomptes(xml);
+}
+
+/**
+ * The HTML of one report page, read only for the kind of document it carries (the labels of its
+ * download buttons). Refused without a network call when the address is not a report page.
+ */
+export async function fetchPagePublication(
+  url: string,
+  options: { maxBytes?: number } = {}
+): Promise<string> {
+  const sure = publicationUrl(url);
+  if (!sure) throw new CcomptesError("REQUETE", "Adresse hors des pages de publication.");
+  return telecharger(sure, "text/html", /text\/html/i, options.maxBytes ?? CCOMPTES_MAX_BYTES);
 }

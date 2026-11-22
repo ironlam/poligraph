@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseDocumentRapportCrc, parseTitreRapportCrc } from "../rapports-crc";
+import {
+  departementParNom,
+  parseDocumentRapportCrc,
+  parseTitreRapportCrc,
+  rattacherRapport,
+} from "../rapports-crc";
 
 /**
  * Titles read on the per-chamber feeds of ccomptes.fr on 22 November 2026, spelled as published,
@@ -133,5 +138,46 @@ describe("parseDocumentRapportCrc", () => {
   it("classe un autre document à part et rend null sans document", () => {
     expect(parseDocumentRapportCrc('<a data-document="Communiqué de presse">')).toBe("AUTRE");
     expect(parseDocumentRapportCrc("<html><body>Page introuvable</body></html>")).toBeNull();
+  });
+});
+
+describe("rattacherRapport", () => {
+  const COMMUNES: Record<string, Array<{ id: string; name: string }>> = {
+    "71": [{ id: "71306", name: "Montceau-les-Mines" }],
+    "54": [{ id: "54370", name: "Minorville" }],
+    // Two communes of the same name in one department: no proposal.
+    "02": [
+      { id: "02001", name: "Bucy" },
+      { id: "02002", name: "Bucy" },
+    ],
+  };
+  const rattacher = (titre: string) =>
+    rattacherRapport(parseTitreRapportCrc(titre).collectivite!, (dep) => COMMUNES[dep] ?? []);
+
+  it.each([
+    ["Département de la Meuse", "DEP", "55"],
+    ["Département de La Réunion - Cahier n°2 : x", "DEP", "974"],
+    ["Région Réunion - Le réseau Car Jaune", "REG", "04"],
+    ["Région Bourgogne-Franche-Comté - alimentation durable", "REG", "27"],
+    ["Commune de Montceau-les Mines (Saône-et-Loire)", "COM", "71306"],
+    ["Commune de Minorville (Meurthe-et-Moselle)", "COM", "54370"],
+  ])("propose %s", (titre, territoryType, territoryCode) => {
+    expect(rattacher(titre)).toEqual({ territoryType, territoryCode, motif: "PROPOSE" });
+  });
+
+  it.each([
+    ["Commune de Bucy (Aisne)", "AMBIGU"],
+    ["Commune de Montceau (Saône-et-Loire)", "INTROUVABLE"],
+    ["Commune de Minorville (Rapport public annuel 2027)", "DEPARTEMENT_INCONNU"],
+    ["Commune de Minorville", "DEPARTEMENT_INCONNU"],
+    ["Région Sud", "INTROUVABLE"],
+  ])("laisse %s sans territoire", (titre, motif) => {
+    expect(rattacher(titre)).toMatchObject({ territoryCode: null, motif });
+  });
+
+  it("ne rapproche pas un nom approchant du département", () => {
+    expect(departementParNom("Savoie")).toBe("73");
+    expect(departementParNom("Saone-et-Loire")).toBeNull();
+    expect(departementParNom("Loire")).toBe("42");
   });
 });

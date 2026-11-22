@@ -160,6 +160,14 @@ const entries: readonly AdminNavigationEntry[] = [
     icon: Landmark,
   },
   {
+    id: "audit-reports",
+    href: "/admin/territoires/rapports-crc",
+    label: "Rapports des chambres des comptes",
+    description: "Notices en brouillon : territoire, publication, rejet.",
+    group: "content",
+    icon: Landmark,
+  },
+  {
     id: "factchecks",
     href: "/admin/factchecks",
     label: "Fact-checks",
