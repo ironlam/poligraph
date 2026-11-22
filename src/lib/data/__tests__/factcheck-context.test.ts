@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   mentionFindMany: vi.fn(),
   candidacyFindFirst: vi.fn(),
   voteFindMany: vi.fn(),
+  voteGroupBy: vi.fn(),
   scrutinGroupBy: vi.fn(),
   dossierFindMany: vi.fn(),
   queryRaw: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock("@/lib/db", () => ({
     politician: { findFirst: mocks.politicianFindFirst },
     factCheckMention: { findMany: mocks.mentionFindMany },
     candidacy: { findFirst: mocks.candidacyFindFirst },
-    vote: { findMany: mocks.voteFindMany },
+    vote: { findMany: mocks.voteFindMany, groupBy: mocks.voteGroupBy },
     scrutin: { groupBy: mocks.scrutinGroupBy },
     legislativeDossier: { findMany: mocks.dossierFindMany },
     election: { findUnique: mocks.electionFindUnique },
@@ -33,6 +34,7 @@ import {
   EMPTY_FACTCHECK_CONTEXT,
   factCheckContextInput,
   getFactCheckContext,
+  validatedTheme,
   groupClaimDayScrutins,
   queryFactCheckContext,
   summarizeParticipation,
@@ -356,6 +358,97 @@ describe("queryFactCheckContext", () => {
   });
 });
 
+describe("bloc des votes sur le thème", () => {
+  const withTheme = { ...INPUT, theme: "SANTE" as const };
+  const themeVote = (slug: string, position: string, day: string) => ({
+    position,
+    votingDate: new Date(day),
+    scrutin: { slug, title: `Scrutin ${slug}`, result: "ADOPTED" },
+  });
+
+  it("compte les positions de l'auteur sur les scrutins du thème validé", async () => {
+    mocks.voteGroupBy.mockResolvedValue([
+      { position: "POUR", _count: { _all: 12 } },
+      { position: "CONTRE", _count: { _all: 3 } },
+    ]);
+    mocks.voteFindMany.mockImplementation(async (args: { where: { scrutin: unknown } }) =>
+      "theme" in (args.where.scrutin as object)
+        ? [themeVote("s-1", "POUR", "2026-10-01"), themeVote("s-2", "CONTRE", "2026-09-01")]
+        : []
+    );
+    const ctx = await queryFactCheckContext(withTheme);
+    expect(ctx.themeVotes?.theme).toBe("SANTE");
+    expect(ctx.themeVotes?.participation).toEqual({
+      POUR: 12,
+      CONTRE: 3,
+      ABSTENTION: 0,
+      total: 15,
+    });
+    expect(ctx.themeVotes?.recent.map((v) => v.scrutinSlug)).toEqual(["s-1", "s-2"]);
+    expect(ctx.themeVotes?.recentExcludesAmendments).toBe(true);
+    // The first read leaves amendments out.
+    const themedReads = mocks.voteFindMany.mock.calls.filter(
+      ([args]) => "theme" in (args.where.scrutin as object)
+    );
+    expect(themedReads[0]![0].where.scrutin).toEqual({
+      theme: "SANTE",
+      type: { not: "AMENDEMENT" },
+    });
+    const where = mocks.voteGroupBy.mock.calls[0]![0].where;
+    expect(where).toMatchObject({ politicianId: "pol-1", scrutin: { theme: "SANTE" } });
+    expect(where.position.in).toEqual(["POUR", "CONTRE", "ABSTENTION"]);
+  });
+
+  it("montre les derniers amendements quand l'auteur n'a voté sur aucun texte du thème", async () => {
+    mocks.voteGroupBy.mockResolvedValue([{ position: "POUR", _count: { _all: 2 } }]);
+    mocks.voteFindMany.mockImplementation(
+      async (args: { where: { scrutin: { theme?: string; type?: unknown } } }) => {
+        if (!args.where.scrutin.theme) return [];
+        return args.where.scrutin.type ? [] : [themeVote("amdt-1", "POUR", "2026-10-01")];
+      }
+    );
+    const ctx = await queryFactCheckContext(withTheme);
+    expect(ctx.themeVotes?.recent.map((v) => v.scrutinSlug)).toEqual(["amdt-1"]);
+    expect(ctx.themeVotes?.recentExcludesAmendments).toBe(false);
+  });
+
+  it("n'a pas de bloc quand l'auteur n'a pris part à aucun scrutin du thème", async () => {
+    mocks.voteGroupBy.mockResolvedValue([]);
+    const ctx = await queryFactCheckContext(withTheme);
+    expect(ctx.themeVotes).toBeNull();
+  });
+
+  it("ne lit rien sans thème validé, et ne compte pas le bloc pour l'indexation", async () => {
+    const ctx = await queryFactCheckContext(INPUT);
+    expect(ctx.themeVotes).toBeNull();
+    expect(mocks.voteGroupBy).not.toHaveBeenCalled();
+    mocks.voteGroupBy.mockResolvedValue([{ position: "POUR", _count: { _all: 4 } }]);
+    const themed = await queryFactCheckContext(withTheme);
+    expect(themed.themeVotes).not.toBeNull();
+    expect(themed.indexable).toBe(ctx.indexable);
+  });
+
+  it("transmet le thème validé à la lecture en cache", async () => {
+    mocks.voteGroupBy.mockResolvedValue([]);
+    await getFactCheckContext(withTheme);
+    expect(mocks.voteGroupBy.mock.calls[0]![0].where.scrutin).toEqual({ theme: "SANTE" });
+  });
+});
+
+describe("validatedTheme", () => {
+  it("ne retient qu'un thème validé dans l'admin", () => {
+    expect(validatedTheme("SANTE", new Date())).toBe("SANTE");
+    // A proposal of the model alone never reaches the public block.
+    expect(validatedTheme("SANTE", null)).toBeNull();
+    // Validated as "no theme".
+    expect(validatedTheme(null, new Date())).toBeNull();
+  });
+
+  it("écarte un thème que les scrutins ne portent pas", () => {
+    expect(validatedTheme("RETRAITES", new Date())).toBeNull();
+  });
+});
+
 describe("factCheckContextInput", () => {
   const mention = (slug: string, isClaimant: boolean) => ({ isClaimant, politician: { slug } });
 
@@ -366,7 +459,12 @@ describe("factCheckContextInput", () => {
         claimDate: new Date("2026-10-09T22:30:00.000Z"),
         mentions: [mention("panot", true), mention("attal", false)],
       })
-    ).toEqual({ factCheckSlug: "fc", authorSlug: "panot", claimDay: "2026-10-09" });
+    ).toEqual({
+      factCheckSlug: "fc",
+      authorSlug: "panot",
+      claimDay: "2026-10-09",
+      theme: null,
+    });
   });
 
   it("ne retient aucun auteur quand il y en a plusieurs ou aucun", () => {
