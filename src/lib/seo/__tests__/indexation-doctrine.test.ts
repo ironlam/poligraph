@@ -16,6 +16,7 @@ import {
 import { communeRobotsMetadata, COMMUNE_MIN_POPULATION } from "../commune-robots";
 import {
   territoireCommuneRobotsMetadata,
+  TERRITOIRE_BUDGET_ROBOTS,
   TERRITOIRE_COMMUNE_MIN_POPULATION,
 } from "../territoire-robots";
 import { hasActiveListingFilter, listingRobotsMetadata } from "../listing-robots";
@@ -252,6 +253,22 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
     expect(territoireCommuneRobotsMetadata({ population: 500_000, maireEtabli: false })).toEqual(
       NOINDEX_FOLLOW
     );
+  });
+  it("Territoires /budget sub-pages, until their indexing is decided on production counts", () => {
+    expect(TERRITOIRE_BUDGET_ROBOTS).toEqual(NOINDEX_FOLLOW);
+    // Withheld pages stay out of the sitemap, comments stripped so prose cannot keep this green.
+    const code = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8").replace(
+      /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
+      ""
+    );
+    expect(code).not.toMatch(/budget/i);
+    for (const route of ["communes/[code]", "departements/[slug]", "regions/[slug]"]) {
+      const page = readFileSync(
+        join(process.cwd(), `src/app/territoires/${route}/budget/page.tsx`),
+        "utf8"
+      );
+      expect(page, route).toContain("...TERRITOIRE_BUDGET_ROBOTS");
+    }
   });
   it("filtered /affaires (?parti)", () => {
     expect(listingRobots({ parti: "rn" }, AFFAIRES_LISTING_FILTER_KEYS)).toEqual(NOINDEX_FOLLOW);

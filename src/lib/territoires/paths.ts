@@ -89,5 +89,21 @@ export function territoireCommuneElectionsPath(inseeCode: string, name?: string 
   return `${territoireCommunePath(inseeCode, name)}/elections`;
 }
 
+/**
+ * Series of "Les comptes de la collectivité" (Territoires v2, lot C). Exists only while the
+ * territory has published accounts.
+ */
+export function territoireCommuneBudgetPath(inseeCode: string, name?: string | null): string {
+  return `${territoireCommunePath(inseeCode, name)}/budget`;
+}
+
+export function territoireDepartementBudgetPath(slug: string): string {
+  return `${territoireDepartementPath(slug)}/budget`;
+}
+
+export function territoireRegionBudgetPath(slug: string): string {
+  return `${territoireRegionPath(slug)}/budget`;
+}
+
 /** Exports, releases and licences of the section. */
 export const TERRITOIRES_DONNEES_PATH = "/territoires/donnees";
