@@ -195,6 +195,15 @@ const allSteps: SyncStep[] = [
     command: `npx tsx scripts/index-embeddings.ts --type=FACTCHECK --limit=200`,
   },
   {
+    // Drafts only, published by a person in /admin/territoires/rapports-crc; no cache to purge.
+    // Here on GitHub Actions only, never in the Inngest copy of the daily sync, which runs on
+    // Vercel functions. Non-blocking: ccomptes.fr is a third-party site.
+    name: "Rapports des chambres régionales des comptes",
+    group: "factchecks",
+    command: `npx tsx scripts/sync-rapports-crc.ts${DRY_RUN ? "" : " --write"}`,
+    allowFailure: true,
+  },
+  {
     name: "Embeddings presse (delta)",
     group: "factchecks",
     command: `npx tsx scripts/index-embeddings.ts --type=PRESS_ARTICLE --limit=200`,
