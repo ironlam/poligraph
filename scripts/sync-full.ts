@@ -93,10 +93,6 @@ const steps: SyncStep[] = [
     name: "Photos",
     command: `npx tsx scripts/sync-photos.ts${dryRunFlag}`,
   },
-  {
-    name: "Historique des mandats",
-    command: `npx tsx scripts/sync-mandate-history.ts${dryRunFlag}`,
-  },
 
   // ── Phase 4: Votes & Legislation ───────────────────────────
   {

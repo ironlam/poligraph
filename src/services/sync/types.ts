@@ -77,30 +77,6 @@ export interface SenateurAPI {
   };
 }
 
-// From archive.nossenateurs.fr/senateurs/json (for birth dates)
-export interface NosSenateursAPI {
-  id: string;
-  nom: string;
-  nom_de_famille: string;
-  prenom: string;
-  sexe: string;
-  date_naissance?: string;
-  lieu_naissance?: string;
-  num_deptmt?: string;
-  nom_circo?: string;
-  groupe_sigle?: string;
-  parti_ratt_financier?: string;
-  mandat_debut?: string;
-  mandat_fin?: string;
-  ancien_senateur?: number;
-  nb_mandats?: number;
-  profession?: string;
-  place_en_hemicycle?: string;
-  url_institution?: string;
-  id_institution?: string;
-  slug?: string;
-}
-
 export interface SenatSyncResult {
   success: boolean;
   groupsCreated: number;
