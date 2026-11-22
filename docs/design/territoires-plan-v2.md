@@ -110,6 +110,20 @@ Unité : une PR de moins de 400 lignes avec ses tests.
 - Fil : 68 219 événements en base (PR #1394). Fiches des présidents de conseil : PR #1395.
 - Prochain lot : C, comptes de la collectivité (OFGL), pages de méthode d'abord (D28).
 
+### État au 22 novembre 2026
+
+- Lot C, comptes : en production (PR #1409 à #1427). 715 260 lignes OFGL, exercices 2018 à 2024,
+  cinq agrégats en euros par habitant et en montant, pour 10 010 communes, 97 départements et 17
+  régions. Chiffres 2024 de Brest, du Finistère et de la Bretagne identiques à data.ofgl.fr.
+- D21 sans objet pour l'instant : l'OFGL ne publie pas de moyenne de strate et celle de la DGFiP
+  porte sur le budget principal seul. Aucun repère affiché, la méthode le dit.
+- Indexation : sous-pages `/budget` des départements et des régions au sitemap (114), celles des
+  communes en `noindex,follow`.
+- À faire : passer à l'exercice 2025 après la mise à jour OFGL de fin décembre 2026 ; rappeler sur
+  le bloc d'une commune que l'intercommunalité tient ses propres comptes ; page commune de Brest
+  remontée à 8 657 px à 390 px de large.
+- Reste du lot C : notices des rapports des chambres régionales des comptes.
+
 ### Parrainages, liste 2022 (vérifiée le 17 novembre 2026)
 
 Jeu « Parrainages des candidats à l'élection présidentielle française de 2022 », Conseil
