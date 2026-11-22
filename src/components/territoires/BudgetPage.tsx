@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ComptesSerie } from "@/components/territoires/ComptesSerie";
 import type { RepereTerritoryKind } from "@/config/territoire-reperes";
 import type { ComptesTerritoire } from "@/lib/data/territoire-comptes";
-import { comptesPhrase } from "@/lib/territoires/comptes-phrase";
+import { communeSeuleLigne, comptesPhrase } from "@/lib/territoires/comptes-phrase";
 
 /** Body of the three /budget sub-pages: back link, title, answer sentence, series. */
 export function BudgetPage({
@@ -10,13 +10,17 @@ export function BudgetPage({
   titre,
   comptes,
   scale,
+  intercommunalites = [],
 }: {
   retour: { label: string; href: string };
   titre: string;
   comptes: ComptesTerritoire;
   scale: RepereTerritoryKind;
+  /** Commune scale only: names of the intercommunalities it belongs to. */
+  intercommunalites?: readonly string[];
 }) {
   const phrase = comptesPhrase(comptes, scale);
+  const seule = scale === "COM" ? communeSeuleLigne(intercommunalites) : null;
   return (
     <div className="container mx-auto max-w-3xl px-4 py-6 md:py-8">
       <nav aria-label="Fil d'Ariane" className="text-sm">
@@ -32,6 +36,7 @@ export function BudgetPage({
         {titre}
       </h1>
       {phrase && <p className="mt-3 text-base">{phrase}</p>}
+      {seule && <p className="mt-3 text-sm">{seule}</p>}
       <div className="mt-6">
         <ComptesSerie comptes={comptes} />
       </div>

@@ -120,6 +120,36 @@ describe("BudgetResume", () => {
     expect(out).not.toContain("Dépenses 2024");
   });
 
+  it("rappelle sous les chiffres que l'intercommunalité tient ses propres comptes", () => {
+    const sans = text(html);
+    expect(sans).not.toContain("commune seule");
+    const out = text(
+      renderToStaticMarkup(
+        <BudgetResume
+          comptes={BREST}
+          scale="COM"
+          budgetHref="/territoires/communes/brest-29019/budget"
+          intercommunalites={["Brest Métropole"]}
+        />
+      )
+    );
+    expect(out).toContain(
+      "16,7 millions d'euros au total Ces comptes sont ceux de la commune seule. Brest Métropole tient ses propres comptes, qui ne figurent pas ici. Les comptes année par année"
+    );
+  });
+
+  it("ne porte cette ligne qu'à l'échelle de la commune", () => {
+    const out = renderToStaticMarkup(
+      <BudgetResume
+        comptes={BREST}
+        scale="DEP"
+        budgetHref="/territoires/departements/finistere/budget"
+        intercommunalites={["Brest Métropole"]}
+      />
+    );
+    expect(text(out)).not.toContain("commune seule");
+  });
+
   it("ne rend rien tant que rien n'est publié", () => {
     expect(
       renderToStaticMarkup(
