@@ -32,6 +32,14 @@ export function isIndexableTerritoireCommune(signals: TerritoireCommuneIndexSign
   return signals.population >= TERRITOIRE_COMMUNE_MIN_POPULATION && signals.maireEtabli;
 }
 
+/**
+ * Budget sub-pages (/territoires/.../budget, lot C): noindex,follow until their indexing is
+ * decided on production counts once the accounts are published (AGENTS.md §5). Out of the
+ * sitemap meanwhile. A series of figures repeated on 10 000 commune pages is the near-duplicate
+ * case the doctrine warns about, so the default is to withhold them.
+ */
+export const TERRITOIRE_BUDGET_ROBOTS = { robots: { index: false, follow: true } } as const;
+
 /** `robots` fragment for a Territoires commune page: {} when indexable, noindex,follow otherwise. */
 export function territoireCommuneRobotsMetadata(
   signals: TerritoireCommuneIndexSignals
