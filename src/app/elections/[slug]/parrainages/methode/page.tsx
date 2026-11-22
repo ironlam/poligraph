@@ -11,6 +11,7 @@ import {
   parrainagesMethodePath,
   parrainagesPath,
 } from "@/config/parrainages";
+import { PARRAINAGES_VIDEO_ID, youtubeShortUrl } from "@/config/youtube";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 
 export const revalidate = 86400;
@@ -129,6 +130,18 @@ export default async function ParrainagesMethodePage({ params }: PageProps) {
           <p className="text-sm">
             <a href={LOI_URL} target="_blank" rel="noopener noreferrer" className={LIEN_LIGNE}>
               Loi du 6 novembre 1962, article 3, sur le site du Conseil constitutionnel
+              <span className="sr-only"> (nouvel onglet)</span>
+            </a>
+          </p>
+          <p className="text-sm">
+            Pourquoi cinq cents élus, et pas cent ou deux mille ?{" "}
+            <a
+              href={youtubeShortUrl(PARRAINAGES_VIDEO_ID)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-primary"
+            >
+              L{"'"}histoire de la règle en vidéo, sur YouTube
               <span className="sr-only"> (nouvel onglet)</span>
             </a>
           </p>

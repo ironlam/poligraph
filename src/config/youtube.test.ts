@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  PARRAINAGES_VIDEO_ID,
   SCRUTIN_VIDEOS,
   YOUTUBE_CHANNEL_URL,
   YOUTUBE_ID_PATTERN,
   getScrutinVideoId,
+  youtubeShortUrl,
 } from "./youtube";
 
 describe("youtube config", () => {
@@ -34,5 +36,12 @@ describe("youtube config", () => {
     const [slug, id] = Object.entries(SCRUTIN_VIDEOS)[0] ?? [];
     expect(slug).toBeDefined();
     expect(getScrutinVideoId(slug)).toBe(id);
+  });
+
+  it("a un identifiant valide pour la vidéo des parrainages", () => {
+    expect(YOUTUBE_ID_PATTERN.test(PARRAINAGES_VIDEO_ID)).toBe(true);
+    expect(youtubeShortUrl(PARRAINAGES_VIDEO_ID)).toBe(
+      "https://www.youtube.com/shorts/nuOkvIa2V2I"
+    );
   });
 });
