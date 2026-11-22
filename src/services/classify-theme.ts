@@ -17,25 +17,12 @@
 import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
 import { MISTRAL_SMALL_MODEL } from "@/config/mistral-models";
+import { SCRUTIN_THEMES } from "@/config/scrutin-themes";
 
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 const MISTRAL_MODEL = MISTRAL_SMALL_MODEL;
 
-const THEME_VALUES = [
-  "ECONOMIE_BUDGET",
-  "SOCIAL_TRAVAIL",
-  "SECURITE_JUSTICE",
-  "ENVIRONNEMENT_ENERGIE",
-  "SANTE",
-  "EDUCATION_CULTURE",
-  "INSTITUTIONS",
-  "AFFAIRES_ETRANGERES_DEFENSE",
-  "NUMERIQUE_TECH",
-  "IMMIGRATION",
-  "AGRICULTURE_ALIMENTATION",
-  "LOGEMENT_URBANISME",
-  "TRANSPORTS",
-] as const;
+const THEME_VALUES = SCRUTIN_THEMES;
 
 export type ThemeCategoryValue = (typeof THEME_VALUES)[number];
 
