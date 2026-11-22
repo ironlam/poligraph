@@ -12,6 +12,8 @@ import {
 import { isFicheCandidatPublishable } from "@/config/publication-gates";
 import { VERDICT_GROUPS } from "@/config/labels";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { SCRUTIN_THEMES, type ScrutinTheme } from "@/config/scrutin-themes";
+import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import { isIndexableFactCheck } from "@/lib/seo/factcheck-robots";
 import { getPoliticianFactcheckContext } from "./factchecks";
 
@@ -36,6 +38,7 @@ const PARLIAMENTARY_MANDATES: MandateType[] = ["DEPUTE", "SENATEUR", "DEPUTE_EUR
 export const RECENT_FACTCHECKS_LIMIT = 5;
 export const CLAIM_DAY_MAX_DOSSIERS = 3;
 export const CLAIM_DAY_SAMPLE_VOTES = 3;
+export const THEME_RECENT_VOTES = 3;
 
 export type VerdictGroup = keyof typeof VERDICT_GROUPS;
 export type VerdictBreakdown = Record<VerdictGroup, number>;
@@ -46,6 +49,8 @@ export interface FactCheckContextInput {
   authorSlug: string | null;
   /** `YYYY-MM-DD` of the claim, `null` when the source gives no date. */
   claimDay: string | null;
+  /** Theme validated in the admin. A proposal of the model alone never reaches this field. */
+  theme?: ScrutinTheme | null;
 }
 
 export interface AuthorIdentity {
@@ -115,6 +120,24 @@ export interface ClaimDay {
   sample: ClaimDayVote[];
 }
 
+export interface ThemeVote {
+  position: ParticipationPosition;
+  votingDate: Date;
+  scrutinSlug: string | null;
+  scrutinTitle: string;
+  result: "ADOPTED" | "REJECTED";
+}
+
+export interface ThemeVotes {
+  theme: ScrutinTheme;
+  /** The author's positions on the scrutins of the theme: always at least one, or no block. */
+  participation: Record<ParticipationPosition, number> & { total: number };
+  recent: ThemeVote[];
+  /** False when the author has no vote on a text, an article or a motion of the theme, and the
+   *  recent votes shown are amendments. */
+  recentExcludesAmendments: boolean;
+}
+
 export interface PartyRecord {
   slug: string | null;
   name: string;
@@ -129,6 +152,8 @@ export interface FactCheckContext {
   candidacy: AuthorCandidacy | null;
   claimDay: ClaimDay | null;
   party: PartyRecord | null;
+  /** The author's votes on the validated theme of the claim. Not counted for indexing. */
+  themeVotes: ThemeVotes | null;
   /** Indexing verdict, computed here once and read by the page metadata. */
   indexable: boolean;
 }
@@ -139,6 +164,7 @@ export const EMPTY_FACTCHECK_CONTEXT: FactCheckContext = {
   candidacy: null,
   claimDay: null,
   party: null,
+  themeVotes: null,
   indexable: false,
 };
 
@@ -150,6 +176,8 @@ export const EMPTY_FACTCHECK_CONTEXT: FactCheckContext = {
 export function factCheckContextInput(factCheck: {
   slug: string;
   claimDate: Date | null;
+  theme?: string | null;
+  themeReviewedAt?: Date | null;
   mentions: ReadonlyArray<{ isClaimant: boolean; politician: { slug: string } }>;
 }): FactCheckContextInput {
   const claimants = factCheck.mentions.filter((m) => m.isClaimant);
@@ -157,7 +185,17 @@ export function factCheckContextInput(factCheck: {
     factCheckSlug: factCheck.slug,
     authorSlug: claimants.length === 1 ? claimants[0]!.politician.slug : null,
     claimDay: factCheck.claimDate ? factCheck.claimDate.toISOString().slice(0, 10) : null,
+    theme: validatedTheme(factCheck.theme, factCheck.themeReviewedAt),
   };
+}
+
+/** A theme counts once validated in the admin, and only among the themes scrutins carry. */
+export function validatedTheme(
+  theme: string | null | undefined,
+  reviewedAt: Date | null | undefined
+): ScrutinTheme | null {
+  if (!reviewedAt || !theme) return null;
+  return (SCRUTIN_THEMES as readonly string[]).includes(theme) ? (theme as ScrutinTheme) : null;
 }
 
 /** The indexing verdict of a context: the author's identity, then the blocks that carry content. */
@@ -418,6 +456,63 @@ async function queryClaimDay(politicianId: string, day: string): Promise<ClaimDa
   };
 }
 
+async function queryThemeVotes(
+  politicianId: string,
+  theme: ScrutinTheme
+): Promise<ThemeVotes | null> {
+  const where = {
+    politicianId,
+    position: { in: [...PARTICIPATION_POSITIONS] },
+    scrutin: { theme },
+  };
+  const grouped = await db.vote.groupBy({ by: ["position"], where, _count: { _all: true } });
+  const participation = { POUR: 0, CONTRE: 0, ABSTENTION: 0, total: 0 };
+  for (const g of grouped) {
+    if ((PARTICIPATION_POSITIONS as readonly string[]).includes(g.position)) {
+      participation[g.position as ParticipationPosition] += g._count._all;
+      participation.total += g._count._all;
+    }
+  }
+  // Never "did not vote": the author may have held no seat when those scrutins were held.
+  if (participation.total === 0) return null;
+
+  // Amendments are about four scrutins in five: the latest votes of a theme are nearly always
+  // amendments to a single text. Votes on a whole text, an article or a motion come first.
+  const select = {
+    position: true,
+    votingDate: true,
+    scrutin: { select: { slug: true, title: true, result: true } },
+  } as const;
+  const onTexts = await db.vote.findMany({
+    where: { ...where, scrutin: { theme, type: { not: "AMENDEMENT" as const } } },
+    orderBy: VOTE_RECENT_FIRST,
+    take: THEME_RECENT_VOTES,
+    select,
+  });
+  const recent =
+    onTexts.length > 0
+      ? onTexts
+      : await db.vote.findMany({
+          where,
+          orderBy: VOTE_RECENT_FIRST,
+          take: THEME_RECENT_VOTES,
+          select,
+        });
+
+  return {
+    theme,
+    participation,
+    recent: recent.map((v) => ({
+      position: v.position as ParticipationPosition,
+      votingDate: v.votingDate,
+      scrutinSlug: v.scrutin.slug,
+      scrutinTitle: v.scrutin.title,
+      result: v.scrutin.result,
+    })),
+    recentExcludesAmendments: onTexts.length > 0,
+  };
+}
+
 async function queryParty(
   party: NonNullable<AuthorIdentity["party"]>
 ): Promise<PartyRecord | null> {
@@ -451,8 +546,9 @@ export async function queryFactCheckContext(
   const candidacy = await queryCandidacy(author.id);
   const claimDay = input.claimDay ? await queryClaimDay(author.id, input.claimDay) : null;
   const party = author.identity.party ? await queryParty(author.identity.party) : null;
+  const themeVotes = input.theme ? await queryThemeVotes(author.id, input.theme) : null;
 
-  const blocks = { author: author.identity, record, candidacy, claimDay, party };
+  const blocks = { author: author.identity, record, candidacy, claimDay, party, themeVotes };
   return { ...blocks, indexable: isIndexableFactCheckContext(blocks) };
 }
 
@@ -465,13 +561,19 @@ export async function queryFactCheckContext(
  */
 export async function getFactCheckContext(input: FactCheckContextInput): Promise<FactCheckContext> {
   if (!input.authorSlug) return EMPTY_FACTCHECK_CONTEXT;
-  return getFactCheckContextCached(input.factCheckSlug, input.authorSlug, input.claimDay ?? "");
+  return getFactCheckContextCached(
+    input.factCheckSlug,
+    input.authorSlug,
+    input.claimDay ?? "",
+    input.theme ?? ""
+  );
 }
 
 async function getFactCheckContextCached(
   factCheckSlug: string,
   authorSlug: string,
-  claimDay: string
+  claimDay: string,
+  theme: ScrutinTheme | ""
 ): Promise<FactCheckContext> {
   "use cache";
   cacheTag("factchecks", `politician:${authorSlug}`, "votes", "elections");
@@ -481,5 +583,10 @@ async function getFactCheckContextCached(
     select: { id: true },
   });
   if (election) cacheTag(`election-candidacies:${election.id}`);
-  return queryFactCheckContext({ factCheckSlug, authorSlug, claimDay: claimDay || null });
+  return queryFactCheckContext({
+    factCheckSlug,
+    authorSlug,
+    claimDay: claimDay || null,
+    theme: theme || null,
+  });
 }

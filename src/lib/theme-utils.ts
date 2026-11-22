@@ -1,4 +1,5 @@
 import { ThemeCategory } from "@/generated/prisma";
+import { SCRUTIN_THEMES } from "@/config/scrutin-themes";
 
 const THEME_SLUGS: Record<string, ThemeCategory> = {
   "economie-budget": "ECONOMIE_BUDGET",
@@ -20,22 +21,11 @@ const THEME_SLUGS: Record<string, ThemeCategory> = {
   transports: "TRANSPORTS",
 };
 
-/** Historical broad taxonomy used by legislative dossiers, scrutins and promises. */
-export const LEGACY_THEME_CATEGORIES = [
-  "ECONOMIE_BUDGET",
-  "SOCIAL_TRAVAIL",
-  "SECURITE_JUSTICE",
-  "ENVIRONNEMENT_ENERGIE",
-  "SANTE",
-  "EDUCATION_CULTURE",
-  "INSTITUTIONS",
-  "AFFAIRES_ETRANGERES_DEFENSE",
-  "NUMERIQUE_TECH",
-  "IMMIGRATION",
-  "AGRICULTURE_ALIMENTATION",
-  "LOGEMENT_URBANISME",
-  "TRANSPORTS",
-] as const satisfies readonly ThemeCategory[];
+/**
+ * Historical broad taxonomy used by legislative dossiers, scrutins and promises. The list itself
+ * lives in src/config/scrutin-themes.ts, a module without imports that client components can read.
+ */
+export const LEGACY_THEME_CATEGORIES = SCRUTIN_THEMES satisfies readonly ThemeCategory[];
 
 const LEGACY_THEME_SET = new Set<ThemeCategory>(LEGACY_THEME_CATEGORIES);
 
