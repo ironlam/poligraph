@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { parseScrutinTitle } from "@/services/sync/link-scrutins-to-amendments/parse-title";
+import {
+  parseScrutinTitle,
+  titleCitesAuthorForNumber,
+} from "@/services/sync/link-scrutins-to-amendments/parse-title";
 
 describe("parseScrutinTitle", () => {
   it("parses a principal amendment with a number and an author", () => {
@@ -111,5 +114,70 @@ describe("parseScrutinTitle", () => {
     expect(c).toEqual(a);
     expect(a.subAmendmentNumber).toBe("2368");
     expect(a.parentAmendmentNumber).toBe("2058");
+  });
+});
+
+describe("titleCitesAuthorForNumber", () => {
+  const falcon5 =
+    "l'amendement n° 5 de M. Falcon à l'article premier de la proposition de loi pour retrouver la confiance et l'équilibre dans les rapports locatifs (deuxième lecture).";
+
+  it("matches the first author of the cited number (PPL 53069, deuxième lecture)", () => {
+    expect(
+      titleCitesAuthorForNumber(falcon5, "5", "M. Falcon, M. Amblard, M. Casterman et M. Vos")
+    ).toBe(true);
+  });
+
+  it("rejects a candidate of the same number by another author (première lecture)", () => {
+    expect(titleCitesAuthorForNumber(falcon5, "5", "M. Peu, M. Brugerolles et M. Tjibaou")).toBe(
+      false
+    );
+  });
+
+  it("rejects an author named in the title but not as author of this number", () => {
+    expect(titleCitesAuthorForNumber(falcon5, "20", "M. Falcon, M. Allisio")).toBe(false);
+  });
+
+  it("does not match a longer name sharing the prefix", () => {
+    expect(titleCitesAuthorForNumber(falcon5, "5", "M. Falconi")).toBe(false);
+  });
+
+  it("matches an author followed by an identical-amendment clause", () => {
+    const t =
+      "l'amendement n° 20 de Mme Rey-Rinchet et les amendements identiques suivants de suppression de l'article premier";
+    expect(titleCitesAuthorForNumber(t, "20", "Mme Rey-Rinchet, M. Boucard et Mme Blin")).toBe(
+      true
+    );
+  });
+
+  it("keeps particles and accents in the name", () => {
+    const t = "l'amendement n° 12 de M. de Lépinau après l'article 3";
+    expect(titleCitesAuthorForNumber(t, "12", "M. de Lepinau")).toBe(true);
+  });
+
+  it("matches a rectified number and a Government author", () => {
+    expect(
+      titleCitesAuthorForNumber(
+        "l'amendement n° 2190 (rect.) de M. Patrice Martin à l'article 9",
+        "2190",
+        "M. Patrice Martin"
+      )
+    ).toBe(true);
+    expect(
+      titleCitesAuthorForNumber(
+        "l'amendement n° 8 du Gouvernement au projet de loi",
+        "8",
+        "Gouvernement"
+      )
+    ).toBe(true);
+  });
+
+  it("matches the feed's 'le Gouvernement' against the title's 'du Gouvernement' (PJL 54085)", () => {
+    const t = "l'amendement n° 8 du Gouvernement au projet de loi d'urgence";
+    expect(titleCitesAuthorForNumber(t, "8", "le Gouvernement")).toBe(true);
+    expect(titleCitesAuthorForNumber(t, "8", "Mme Blin, Mme Corneloup")).toBe(false);
+  });
+
+  it("returns false on an empty author", () => {
+    expect(titleCitesAuthorForNumber(falcon5, "5", "")).toBe(false);
   });
 });

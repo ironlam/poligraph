@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import type { ParsedTitle, LinkResolution, ResolvedLink, ParserWarning } from "./types";
-import { budgetPartNumbers, parseArticleTarget } from "./parse-title";
+import { budgetPartNumbers, parseArticleTarget, titleCitesAuthorForNumber } from "./parse-title";
 
 const PARSER_FLOOR = 0.2;
 
@@ -200,6 +200,30 @@ export async function resolveLinks(
               {
                 code: "DELIBERATION_DISAMBIGUATED",
                 message: `n° ${number} (${role}) resolved to délibération ${parsed.deliberation} candidate ${picked.externalId}${requireGovernment ? " (Government-authored, per title)" : ""}`,
+              },
+            ],
+          });
+          continue;
+        }
+      } else {
+        // Same number in two texts of the dossier (first and second reading):
+        // the author the title cites names the text, when exactly one
+        // candidate's first author matches. Not used when the title cites a
+        // délibération, so a D2 vote never falls back to a D1 amendment.
+        const byAuthor = exact.filter(
+          (c) => c.authorName && titleCitesAuthorForNumber(scrutin.title, number, c.authorName)
+        );
+        if (byAuthor.length === 1) {
+          const picked = byAuthor[0]!;
+          links.push({
+            scrutinId: scrutin.id,
+            amendmentId: picked.id,
+            role,
+            parserConfidence: Math.max(PARSER_FLOOR, confidence - 0.1),
+            parserWarnings: [
+              {
+                code: "AUTHOR_DISAMBIGUATED",
+                message: `n° ${number} (${role}) resolved to candidate ${picked.externalId} (texte ${picked.texteRef ?? "?"}) by the author cited in the title`,
               },
             ],
           });
