@@ -23,6 +23,8 @@ import {
 } from "@/components/territoires/RegionSections";
 import { formatCompte } from "@/lib/territoires/format";
 import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
+import { BudgetResume } from "@/components/territoires/BudgetResume";
+import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
 
 // The 18 regions are a closed list: every page is prerendered, any other slug is a 404.
 export const dynamicParams = false;
@@ -80,9 +82,10 @@ export default async function RegionPage({ params }: PageProps) {
   if (!data) notFound();
 
   const particuliere = data.collectivitesParticulieres.length > 0;
-  const [elections, fil] = await Promise.all([
+  const [elections, fil, comptes] = await Promise.all([
     loadRegionElections(particuliere),
     getFilTerritoire("REG", data.region.code),
+    getComptesTerritoire("REG", data.region.code),
   ]);
 
   // One word each. The first tab names the block shown for this region; the elections tab
@@ -107,6 +110,8 @@ export default async function RegionPage({ params }: PageProps) {
           <FilTerritoire evenements={fil} />
           <RegionCollectivites data={data} />
           <RegionConseil data={data} />
+          {/* Under the first tab (« Conseil » or « Collectivité »), after the council. */}
+          <BudgetResume comptes={comptes} scale="REG" />
           <RegionDepartements data={data} />
           <RegionElections elections={elections} />
           {!particuliere && <Agir niveau="region" />}

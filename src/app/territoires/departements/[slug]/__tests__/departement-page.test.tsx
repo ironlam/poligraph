@@ -16,6 +16,9 @@ const deputesMock = vi.fn();
 const senateursMock = vi.fn();
 
 vi.mock("@/lib/data/territoire-fil", () => ({ getFilTerritoire: vi.fn(async () => []) }));
+vi.mock("@/lib/data/territoire-comptes", () => ({
+  getComptesTerritoire: vi.fn(async () => ({ dernierExercice: null, agregats: [], source: null })),
+}));
 vi.mock("@/lib/data/parrainages", () => ({
   getParrainagesCommuneBlocs: async () => [],
   getParrainagesDepartementResumes: async () => [],

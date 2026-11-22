@@ -22,6 +22,8 @@ import {
   remplaceLeDepartement,
 } from "@/components/territoires/DepartementConseil";
 import { DepartementParlement } from "@/components/territoires/DepartementParlement";
+import { BudgetResume } from "@/components/territoires/BudgetResume";
+import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
 
 /**
  * Body shared by `/territoires/departements/[slug]` and its commune-list variants
@@ -40,7 +42,7 @@ export async function DepartementPageBody({
 
   // The bare page opens on the largest communes; the A to Z views list them all.
   const accueil = query.letter === null && query.page === 1;
-  const [territoire, deputies, senators, grandes, votes, votesSenat, fil, parrainages] =
+  const [territoire, deputies, senators, grandes, votes, votesSenat, fil, parrainages, comptes] =
     await Promise.all([
       getDepartementTerritoire(dept.code, query),
       getDeputesByDepartment(dept.code),
@@ -50,6 +52,7 @@ export async function DepartementPageBody({
       getVotesSenateursDepartement(dept.code),
       getFilTerritoire("DEP", dept.code),
       getParrainagesDepartementResumes(dept.code),
+      getComptesTerritoire("DEP", dept.code),
     ]);
 
   if (!territoire) notFound();
@@ -102,6 +105,8 @@ export async function DepartementPageBody({
         <div className="flex min-w-0 flex-col gap-5">
           <FilTerritoire evenements={fil} />
           <DepartementConseil territoire={territoire} />
+          {/* Under the first tab: the accounts of the collectivity that holds the council. */}
+          <BudgetResume comptes={comptes} scale="DEP" />
           <CommuneIndex slug={slug} territoire={territoire} grandes={grandes} />
           <VotesParlementaires votes={votes} mode={{ kind: "decompte" }} senat={votesSenat} />
           <ParrainagesDepartement resumes={parrainages} departmentSlug={slug} />

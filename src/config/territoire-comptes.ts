@@ -144,6 +144,10 @@ export const COMPTES_DEP_BY_SIREN: Readonly<Record<string, readonly string[]>> =
 export const COMPTES_SCOPE_LABELS: Readonly<Record<string, string>> = {
   "200094332": "Collectivité européenne d'Alsace",
   "217500016": "Ville de Paris",
+  // Single collectivities filed in the regions dataset (read on 2026-11-22).
+  "200076958": "Collectivité de Corse",
+  "200055507": "Collectivité territoriale de Martinique",
+  "200052678": "Collectivité territoriale de Guyane",
 };
 
 /** Why a territory has no accounts row; never shown as a zero. */
@@ -179,3 +183,24 @@ export const ARRONDISSEMENT_PLM = /^(751(0[1-9]|1[0-9]|20)|6938[1-9]|132(0[1-9]|
 
 /** Overseas collectivities outside the OFGL datasets: Saint-Pierre-et-Miquelon, Saint-Barthélemy, Saint-Martin and the Pacific (975, 977, 978, 98x). */
 export const HORS_PERIMETRE_OFGL = /^(97[578]|98)/;
+
+/** Said in place of a figure that is not established, one sentence per reason. */
+export const COMPTES_ABSENCE_WORDS: Record<CompteAbsenceReason, string> = {
+  COMPTE_NON_PUBLIE: "L'OFGL ne publie pas de compte de cette collectivité pour cet exercice.",
+  COMMUNE_FORMEE_APRES:
+    "La commune a été formée après cet exercice : les comptes des communes qui l'ont précédée ne sont pas les siens.",
+  COMMUNE_INCONNUE_OFGL: "L'OFGL ne publie pas de compte sous le code de cette commune.",
+  COLLECTIVITE_UNIQUE:
+    "Ce département n'a pas de conseil départemental : une collectivité unique en exerce les compétences, et ses comptes figurent sur la page de la région.",
+  COMPTES_AU_DEPARTEMENT:
+    "Le département de Mayotte exerce aussi les compétences de la région : ses comptes figurent sur la page du département.",
+  ARRONDISSEMENT_SANS_COMPTE:
+    "Un arrondissement n'a pas de compte propre : ses dépenses figurent dans les comptes de la ville.",
+  HORS_PERIMETRE_OFGL:
+    "Les comptes des collectivités de ce territoire ne figurent pas dans les données de l'OFGL.",
+  POPULATION_NULLE: "Pas de montant par habitant : la commune n'a pas d'habitant recensé.",
+  VALEUR_NEGATIVE_SOURCE: "Montant négatif dans les données de l'OFGL, non affiché.",
+};
+
+/** Attribution the OFGL datasets carry (« calcul OFGL - source DGFiP »), for the source line. */
+export const COMPTES_ATTRIBUTION_LIGNE = "Calcul OFGL, source DGFiP";
