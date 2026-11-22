@@ -31,6 +31,8 @@ type ContextProps = { context: Promise<FactCheckContext> };
 const VERDICT_GROUP_ORDER: VerdictGroup[] = ["vrai", "trompeur", "faux", "inverifiable"];
 
 const linkClass = "inline-flex items-center min-h-11 font-medium text-primary hover:underline";
+/** A scrutin link in a vote list: 44 px tall even when its title fits on one line (AGENTS.md). */
+const voteLinkClass = "inline-flex min-h-11 items-center text-primary hover:underline";
 const buttonClass =
   "inline-flex items-center justify-center min-h-11 px-4 rounded-lg border text-sm font-medium hover:bg-muted transition-colors";
 
@@ -250,7 +252,7 @@ export async function ClaimDayBlock({ context }: ContextProps) {
       {claimDay.sample.length > 0 && (
         <ul className="space-y-1.5 text-sm">
           {claimDay.sample.map((vote, i) => (
-            <li key={vote.scrutinSlug ?? i} className="flex flex-wrap items-baseline gap-x-2.5">
+            <li key={vote.scrutinSlug ?? i} className="flex flex-wrap items-center gap-x-2.5">
               <span className="font-bold text-xs rounded-md border px-2">
                 {VOTE_POSITION_LABELS[vote.position]}
               </span>
@@ -258,7 +260,7 @@ export async function ClaimDayBlock({ context }: ContextProps) {
                 <Link
                   prefetch={false}
                   href={ROUTES.voteDetail(vote.scrutinSlug)}
-                  className="text-primary hover:underline"
+                  className={voteLinkClass}
                 >
                   {vote.scrutinTitle}
                 </Link>
@@ -310,7 +312,7 @@ export async function ThemeVotesBlock({ context }: ContextProps) {
           </h3>
           <ul className="space-y-1.5 text-sm">
             {themeVotes.recent.map((vote, i) => (
-              <li key={vote.scrutinSlug ?? i} className="flex flex-wrap items-baseline gap-x-2.5">
+              <li key={vote.scrutinSlug ?? i} className="flex flex-wrap items-center gap-x-2.5">
                 <span className="font-bold text-xs rounded-md border px-2">
                   {VOTE_POSITION_LABELS[vote.position]}
                 </span>
@@ -318,7 +320,7 @@ export async function ThemeVotesBlock({ context }: ContextProps) {
                   <Link
                     prefetch={false}
                     href={ROUTES.voteDetail(vote.scrutinSlug)}
-                    className="text-primary hover:underline"
+                    className={voteLinkClass}
                   >
                     {vote.scrutinTitle}
                   </Link>
