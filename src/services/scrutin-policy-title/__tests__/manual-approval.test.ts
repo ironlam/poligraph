@@ -56,6 +56,12 @@ vi.mock("@/services/scrutin-policy-title/substance-resolver", () => ({
 vi.mock("@/services/scrutin-policy-title", () => ({
   buildInputHashInput: vi.fn(() => ({ fixed: true })),
 }));
+// The profile document embeds the approved title of a politician's latest votes.
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileRefresh: vi.fn(async (target: Record<string, unknown>) => {
+    writes.push({ op: "refresh", data: target });
+  }),
+}));
 vi.mock("@/services/scrutin-policy-title/input-hash", () => ({
   computeInputHash: vi.fn(() => "current-hash"),
   isAgreementOnlyTitleDrift: vi.fn(() => false),
@@ -142,9 +148,16 @@ describe("approveManualPolicyTitle", () => {
   it("edits, unpublishes, then approves with an approved revision", async () => {
     const res = await approveManualPolicyTitle("s1", INPUT);
     expect(res).toEqual({ ok: true, written: true });
-    expect(writes.map((w) => w.op)).toEqual(["revision", "update", "revision", "update"]);
+    expect(writes.map((w) => w.op)).toEqual([
+      "revision",
+      "update",
+      "revision",
+      "update",
+      "refresh",
+    ]);
 
-    const [editRev, edit, approveRev, approve] = writes;
+    const [editRev, edit, approveRev, approve, refresh] = writes;
+    expect(refresh!.data).toEqual({ scrutinIds: ["s1"] });
     expect(editRev!.data).toMatchObject({ action: "edited", actorId: "session:test" });
     expect(edit!.data).toMatchObject({
       policyTitle: INPUT.title,

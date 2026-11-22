@@ -20,6 +20,7 @@ import {
 } from "@/services/scrutin-policy-title/input-hash";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
 import { checkManualTitle } from "@/services/scrutin-policy-title/fallback-recovery";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import type {
   EvidenceQuote,
   GenerationWarning,
@@ -338,6 +339,8 @@ export async function approveManualPolicyTitle(
     { ...ctx, row: edited as ScrutinPolicyTitle, currentWarnings: check.warnings },
     { actor: input.actor, approvalOverride: override }
   );
+  // The profile document embeds the approved title of a politician's latest votes.
+  await requestProfileRefresh({ scrutinIds: [scrutinId] }, "script:titre-scrutin-approuvé");
   return { ok: true, written: true };
 }
 
