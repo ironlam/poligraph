@@ -55,7 +55,9 @@ const BAS_RHIN = groupComptes([
 ]);
 
 describe("série des comptes", () => {
-  const html = renderToStaticMarkup(<ComptesSerie comptes={BAS_RHIN} />);
+  const html = renderToStaticMarkup(
+    <ComptesSerie comptes={BAS_RHIN} territoire="Bas-Rhin (département)" />
+  );
 
   it("donne un tableau de trois colonnes par agrégat, l'exercice le plus récent en premier", () => {
     expect(html.match(/<table/g)).toHaveLength(1);
@@ -80,5 +82,49 @@ describe("série des comptes", () => {
 
   it("porte la période de la série dans la ligne de source", () => {
     expect(text(html)).toContain("Comptes 2020 à 2024 · Source : Calcul OFGL, source DGFiP");
+  });
+
+  it("sépare d'un intertitre les exercices dont la collectivité change", () => {
+    const groups = [...html.matchAll(/<tbody>([\s\S]*?)<\/tbody>/g)].map((m) =>
+      text(m[1]!).replace(/\u00a0/g, " ")
+    );
+    expect(groups).toEqual([
+      "Collectivité européenne d'Alsace 2024 267 € 520,6 millions d'euros 2021 371 € 719 millions d'euros",
+      "Bas-Rhin (département) 2020 Non établi 476,9 millions d'euros",
+    ]);
+    // An intertitle names the rows under it for a screen reader.
+    expect(html.match(/<th scope="rowgroup" colSpan="3"/g)).toHaveLength(2);
+  });
+});
+
+describe("série sans changement de périmètre", () => {
+  it("n'ajoute aucun intertitre, avec ou sans collectivité porteuse", () => {
+    for (const over of [{}, { scopeLabel: "Ville de Paris" }]) {
+      const html = renderToStaticMarkup(
+        <ComptesSerie
+          comptes={groupComptes([
+            row("encours_dette_montant", 2024, 1, over),
+            row("encours_dette_montant", 2023, 2, over),
+          ])}
+          territoire="Paris (commune)"
+        />
+      );
+      expect(html).not.toContain("rowgroup");
+      expect(html.match(/<tbody>/g)).toHaveLength(1);
+    }
+  });
+
+  it("se déclenche sur le libellé, quel que soit le territoire", () => {
+    const html = renderToStaticMarkup(
+      <ComptesSerie
+        comptes={groupComptes([
+          row("encours_dette_montant", 2024, 1, { scopeLabel: "Ville de Paris" }),
+          row("encours_dette_montant", 2018, 2),
+        ])}
+        territoire="Paris (commune)"
+      />
+    );
+    expect(text(html)).toContain("Ville de Paris 2024");
+    expect(text(html)).toContain("Paris (commune) 2018");
   });
 });
