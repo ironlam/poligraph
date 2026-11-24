@@ -95,3 +95,31 @@ describe("compteurs dynamiques", () => {
     );
   });
 });
+
+describe("sortCandidacies, dernières mises à jour", () => {
+  const row = (name: string, measure: string | null, status: string | null) => ({
+    name,
+    measureCount: 0,
+    lastMeasurePublishedAt: measure === null ? null : new Date(measure),
+    statusChangedAt: status === null ? null : new Date(status),
+  });
+
+  it("compte un changement de statut comme une mise à jour, même sans mesure publiée", async () => {
+    const { sortCandidacies } = await import("../candidacy-filters");
+    const sorted = sortCandidacies(
+      [
+        row("sans rien", null, null),
+        row("mesure du 17", "2026-11-17", null),
+        row("déclarée le 20, sans mesure", null, "2026-11-20"),
+        row("mesure du 1er, statut du 19", "2026-11-01", "2026-11-19"),
+      ],
+      "recentes"
+    );
+    expect(sorted.map((c) => c.name)).toEqual([
+      "déclarée le 20, sans mesure",
+      "mesure du 1er, statut du 19",
+      "mesure du 17",
+      "sans rien",
+    ]);
+  });
+});

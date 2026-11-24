@@ -315,6 +315,7 @@ describe("statut politique d'une candidature", () => {
         status: "DECLARE",
         sourceUrl: "https://example.org/declaration",
         sourceLabel: "Déclaration officielle",
+        statusChangedAt: expect.any(Date),
       },
     });
     expect(dbMock.auditLog.create).toHaveBeenCalledWith(
@@ -333,6 +334,27 @@ describe("statut politique d'une candidature", () => {
         }),
       })
     );
+  });
+
+  it("ne date pas un changement de statut quand seule la source est corrigée", async () => {
+    dbMock.candidacy.findUnique.mockResolvedValue({ ...SOURCED_CANDIDACY, status: "DECLARE" });
+    const a = await actions();
+
+    await a.setCandidacyStatusAction({
+      candidacyId: "cand-1",
+      status: "DECLARE",
+      sourceUrl: "https://example.org/source-corrigee",
+      sourceLabel: "Déclaration officielle",
+    });
+
+    expect(dbMock.candidacy.update).toHaveBeenCalledWith({
+      where: { id: "cand-1" },
+      data: {
+        status: "DECLARE",
+        sourceUrl: "https://example.org/source-corrigee",
+        sourceLabel: "Déclaration officielle",
+      },
+    });
   });
 });
 

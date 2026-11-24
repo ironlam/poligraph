@@ -14,14 +14,30 @@ function getListId(): number {
   return n;
 }
 
+function isContactAlreadyExists(e: unknown): boolean {
+  const err = (e ?? {}) as { statusCode?: unknown; ErrorMessage?: unknown };
+  return (
+    err.statusCode === 400 &&
+    typeof err.ErrorMessage === "string" &&
+    /\bMJ18\b/.test(err.ErrorMessage)
+  );
+}
+
 /**
  * Add a contact to the newsletter list with double opt-in.
  */
 export async function subscribeToNewsletter(email: string): Promise<{ success: boolean }> {
   const listId = getListId();
 
-  // Create or retrieve contact
-  const contactRes = await mailjet.post("contact").request({ Email: email });
+  // POST /contact refuses an address Mailjet already knows (400, MJ18). The
+  // contact exists but is not on the list yet, so look it up and carry on.
+  let contactRes;
+  try {
+    contactRes = await mailjet.post("contact").request({ Email: email });
+  } catch (e) {
+    if (!isContactAlreadyExists(e)) throw e;
+    contactRes = await mailjet.get(`contact/${encodeURIComponent(email)}`).request();
+  }
   const contactData = (contactRes.body as { Data: { ID: number }[] }).Data[0];
   if (!contactData) {
     throw new Error("Mailjet: failed to create or retrieve contact");

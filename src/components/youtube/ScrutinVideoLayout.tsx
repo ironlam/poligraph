@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { YoutubeBanner } from "./YoutubeBanner";
 import { YoutubeShortPlayer } from "./YoutubeShortPlayer";
 
 interface ScrutinVideoLayoutProps {
@@ -11,8 +10,7 @@ interface ScrutinVideoLayoutProps {
 
 // Avec vidéo : à partir de `lg`, l'en-tête et le contenu à gauche, le Short sur les deux rangées de
 // droite. En dessous de `lg`, une seule colonne dans l'ordre du document : en-tête, vidéo, contenu.
-// Sans vidéo : le bandeau de la chaîne vient après le contenu. Placé entre l'en-tête et le résultat,
-// il repoussait le résultat du vote hors du premier écran d'un téléphone.
+// Sans vidéo : l'en-tête et le contenu, rien d'autre.
 export function ScrutinVideoLayout({
   videoId,
   videoTitle,
@@ -24,9 +22,6 @@ export function ScrutinVideoLayout({
       <>
         {header}
         {children}
-        <div className="mb-8">
-          <YoutubeBanner />
-        </div>
       </>
     );
   }

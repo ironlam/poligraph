@@ -8,24 +8,44 @@ const h = vi.hoisted(() => ({
   mentionFindMany: vi.fn(),
   mentionFindUnique: vi.fn(),
   mentionCreate: vi.fn(),
+  mentionUpdate: vi.fn(),
+  mentionDeleteMany: vi.fn(),
+  auditLogFindMany: vi.fn(),
   searchClaims: vi.fn(),
   requestProfileRefresh: vi.fn(),
 }));
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    factCheck: {
-      findUnique: h.factCheckFindUnique,
-      findFirst: h.factCheckFindFirst,
-      create: h.factCheckCreate,
-      upsert: h.factCheckUpsert,
-    },
+// The forced rewrite goes through the transaction client only: the top-level client exposes no
+// upsert, update or deleteMany, so a write made outside the transaction fails the test.
+vi.mock("@/lib/db", () => {
+  const tx = {
+    factCheck: { upsert: h.factCheckUpsert },
     factCheckMention: {
       findMany: h.mentionFindMany,
-      findUnique: h.mentionFindUnique,
       create: h.mentionCreate,
+      update: h.mentionUpdate,
+      deleteMany: h.mentionDeleteMany,
     },
-  },
+    auditLog: { findMany: h.auditLogFindMany },
+  };
+  return {
+    db: {
+      factCheck: {
+        findUnique: h.factCheckFindUnique,
+        findFirst: h.factCheckFindFirst,
+        create: h.factCheckCreate,
+      },
+      factCheckMention: {
+        findUnique: h.mentionFindUnique,
+        create: h.mentionCreate,
+      },
+      $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+    },
+  };
+});
+// The theme classifier calls Mistral: never from a test.
+vi.mock("@/services/classify-theme", () => ({
+  classifyFactCheckTheme: vi.fn().mockResolvedValue({ status: "theme", theme: "SANTE" }),
 }));
 vi.mock("@/lib/api", () => ({
   searchClaims: h.searchClaims,
@@ -84,6 +104,7 @@ describe("syncFactchecks et les fiches précalculées", () => {
     h.factCheckUpsert.mockResolvedValue({ id: "f-reecrit" });
     h.mentionFindMany.mockResolvedValue([]);
     h.mentionFindUnique.mockResolvedValue(null);
+    h.auditLogFindMany.mockResolvedValue([]);
     h.requestProfileRefresh.mockResolvedValue({ sent: 1, mode: "targeted" });
   });
 
@@ -132,15 +153,17 @@ describe("syncFactchecks et les fiches précalculées", () => {
 
   it("avec --force, demande aussi le recalcul des politiciens retirés des mentions", async () => {
     // The stored fact-check mentions p-retire; this run only matches the target, p1.
-    h.mentionFindMany.mockResolvedValue([{ politicianId: "p-retire" }]);
+    h.mentionFindMany.mockResolvedValue([
+      { id: "m-retire", politicianId: "p-retire", isClaimant: false },
+    ]);
 
     await syncFactchecks({ politician: "exemple", force: true });
 
     expect(h.mentionFindMany).toHaveBeenCalledWith({
       where: { factCheck: { sourceUrl: "https://example.org/verif-fictive" } },
-      select: { politicianId: true },
+      select: { id: true, politicianId: true, isClaimant: true },
     });
-    // Read before the upsert drops them.
+    // Read before the upsert.
     expect(h.mentionFindMany.mock.invocationCallOrder[0]).toBeLessThan(
       h.factCheckUpsert.mock.invocationCallOrder[0]!
     );
@@ -148,6 +171,43 @@ describe("syncFactchecks et les fiches précalculées", () => {
       { factCheckIds: ["f-reecrit"], politicianIds: ["p-retire"] },
       "sync:factchecks"
     );
+  });
+
+  it("avec --force, conserve une mention corrigée dans l'admin que le run ne retrouve pas", async () => {
+    h.mentionFindMany.mockResolvedValue([
+      { id: "m-admin", politicianId: "p-admin", isClaimant: true },
+      { id: "m-auto", politicianId: "p-auto", isClaimant: false },
+    ]);
+    h.auditLogFindMany.mockResolvedValue([{ entityId: "m-admin" }]);
+
+    await syncFactchecks({ politician: "exemple", force: true });
+
+    expect(h.auditLogFindMany).toHaveBeenCalledWith({
+      where: { entityType: "FactCheckMention", entityId: { in: ["m-admin", "m-auto"] } },
+      select: { entityId: true },
+    });
+    expect(h.mentionDeleteMany).toHaveBeenCalledExactlyOnceWith({
+      where: { id: { in: ["m-auto"] } },
+    });
+    // The target is linked as the fallback mention, created rather than replacing the others.
+    expect(h.mentionCreate).toHaveBeenCalledExactlyOnceWith({
+      data: {
+        factCheckId: "f-reecrit",
+        politicianId: "p1",
+        matchedName: "Camille Exemple",
+        isClaimant: false,
+      },
+    });
+    expect(h.factCheckUpsert.mock.calls[0]![0].update).not.toHaveProperty("mentions");
+  });
+
+  it("avec --force, ne demande aucun recalcul quand la réécriture échoue", async () => {
+    h.mentionCreate.mockRejectedValueOnce(new Error("écriture refusée"));
+
+    const stats = await syncFactchecks({ politician: "exemple", force: true });
+
+    expect(stats.apiErrors).toBe(1);
+    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
   });
 
   it("sans --force, ne lit pas les mentions existantes et ne demande que les fact-checks", async () => {

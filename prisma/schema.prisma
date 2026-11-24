@@ -103,11 +103,12 @@ model Politician {
   factCheckMentions         FactCheckMention[] // Mentions in fact-checks
   promises                  Promise[] // Tracker promesses 2027 (Q4 prototype)
   candidacies               Candidacy[] // Election candidacies
+  parrainages               Parrainage[] // Presidential presentations made as an elected official
   candidates                Candidate[] // Local election candidates linked to this politician
   participation             PoliticianParticipation? // Pre-computed participation stats
   profileSnapshot           PoliticianProfileSnapshot? // Pre-computed politician profile document
   identityDecisions         IdentityDecision[] // Identity resolution audit trail
-  affairPoliticianDecisions AffairPoliticianDecision[] @relation("AffairDecisionPolitician")
+  affairPoliticianDecisions AffairPoliticianDecision[]     @relation("AffairDecisionPolitician")
   newsletterEditions        NewsletterEdition[] // Weeks featured as "politician of the week"
   dossierAuthors            DossierAuthor[] // Dossiers authored/initiated by this politician
   measures                  Measure[] // Programme measures attributed to this politician (lot 1)
@@ -237,6 +238,9 @@ enum DataSource {
   FACTCHECK
   JUDILIBRE
   OPENSANCTIONS
+  // Presidential presentations list. Added by
+  // prisma/migrations/manual/2026-11-18-datasource-conseil-constitutionnel.sql.
+  CONSEIL_CONSTITUTIONNEL
 }
 
 enum MatchMethod {
@@ -1353,17 +1357,17 @@ model ChangelogEntry {
 // ============================================
 
 model Scrutin {
-  id          String   @id @default(cuid())
-  externalId  String   @unique // ID NosDéputés/NosSénateurs (ex: "VTANR5L17V1234" ou "2024-63")
-  slug        String?  @unique // SEO-friendly URL slug (e.g., "2025-01-15-projet-loi-finances")
-  publicId    String?  @unique // "SC-000542" — stable public identifier (poligraphId, see /docs/api)
-  title       String   @db.Text
-  description String?  @db.Text
+  id                String   @id @default(cuid())
+  externalId        String   @unique // ID NosDéputés/NosSénateurs (ex: "VTANR5L17V1234" ou "2024-63")
+  slug              String?  @unique // SEO-friendly URL slug (e.g., "2025-01-15-projet-loi-finances")
+  publicId          String?  @unique // "SC-000542" — stable public identifier (poligraphId, see /docs/api)
+  title             String   @db.Text
+  description       String?  @db.Text
   officialSeanceRef String? // Official AN meeting UID, never inferred from a date
-  votingDate  DateTime
-  sequence    Int      @default(0) // numéro final de l'externalId : départage les scrutins d'un même jour
-  legislature Int
-  chamber     Chamber  @default(AN) // AN = Assemblée Nationale, SENAT = Sénat
+  votingDate        DateTime
+  sequence          Int      @default(0) // numéro final de l'externalId : départage les scrutins d'un même jour
+  legislature       Int
+  chamber           Chamber  @default(AN) // AN = Assemblée Nationale, SENAT = Sénat
 
   // Global results
   votesFor     Int
@@ -1391,7 +1395,7 @@ model Scrutin {
   votesHash String?
 
   // Official AN voting procedure and independent historical group snapshot (#564).
-  officialDossierRef             String?
+  officialDossierRef            String?
   codeTypeVote                  String?
   libelleTypeVote               String?
   officialGroupsHash            String?
@@ -1408,12 +1412,12 @@ model Scrutin {
   dossierLegislatif     LegislativeDossier?         @relation(fields: [dossierLegislatifId], references: [id])
 
   // Parlement-riche reverse relations
-  importance        ScrutinImportance?
-  groupPositions    ScrutinGroupPosition[]
-  analysis          ScrutinAnalysis?
+  importance         ScrutinImportance?
+  groupPositions     ScrutinGroupPosition[]
+  analysis           ScrutinAnalysis?
   impactRegeneration ImpactRegenerationLog?
-  measureVoteLinks  MeasureVoteLink[]
-  debateTranscripts DebateTranscript[]
+  measureVoteLinks   MeasureVoteLink[]
+  debateTranscripts  DebateTranscript[]
 
   // Policy-title feature
   policyTitle    ScrutinPolicyTitle?
@@ -1568,10 +1572,10 @@ model ScrutinAnalysis {
   argumentsAgainst String             @db.Text
   sourceType       AnalysisSourceType
   modelVersion     String
-  sourceUrl String?
-  commonDiscussion Boolean @default(false)
-  evidence Json? // Exact input passage, source hash, paragraph citations and prompt version
-  reasons Json? // Public: reasons of each side { v, for[], against[] }, speakers and exact quotes (never read from evidence)
+  sourceUrl        String?
+  commonDiscussion Boolean            @default(false)
+  evidence         Json? // Exact input passage, source hash, paragraph citations and prompt version
+  reasons          Json? // Public: reasons of each side { v, for[], against[] }, speakers and exact quotes (never read from evidence)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
@@ -1579,24 +1583,24 @@ model ScrutinAnalysis {
 }
 
 model DebateTranscript {
-  id          String    @id @default(cuid())
-  scrutinId   String?
-  scrutin     Scrutin?  @relation(fields: [scrutinId], references: [id], onDelete: SetNull)
-  seanceRef   String
-  date        DateTime
+  id            String    @id @default(cuid())
+  scrutinId     String?
+  scrutin       Scrutin?  @relation(fields: [scrutinId], references: [id], onDelete: SetNull)
+  seanceRef     String
+  date          DateTime
   // Séance start timestamp parsed from AN <dateSeance> (YYYYMMDDHHmmss). Enables
   // ordering same-day sittings; votes carry no time so it is metadata, not a join key.
-  startTime   DateTime?
+  startTime     DateTime?
   // Sitting order within the day, from AN <numSeanceJour> (Unique -> 1, else the int).
-  seanceOrder Int?
-  paragraphs Json? // Ordered Syceron paragraphs with source IDs and amendment metadata
-  sourceHash String? // SHA-256 of the source XML
+  seanceOrder   Int?
+  paragraphs    Json? // Ordered Syceron paragraphs with source IDs and amendment metadata
+  sourceHash    String? // SHA-256 of the source XML
   parserVersion Int?
   // Full séance text. Load explicitly only for diagnostics, never by default.
-  content     String    @db.Text
-  sourceUrl   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  content       String    @db.Text
+  sourceUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([scrutinId])
   @@index([seanceRef])
@@ -1714,17 +1718,17 @@ enum DossierOrigin {
 }
 
 model LegislativeDossier {
-  id         String         @id @default(cuid())
-  externalId String         @unique // DLR5L17N12345
-  slug       String?        @unique // SEO-friendly URL slug (e.g., "2024-12-03-reforme-retraites")
-  previousSlugs String[]    @default([]) // anciens slugs, redirigés en 301 vers le slug courant
-  publicId   String?        @unique // "DO-000542" — stable public identifier (poligraphId, see /docs/api)
-  title      String         @db.Text
-  shortTitle String? // Titre court pour affichage
-  number     String? // PJL 1234, PPL 5678
-  status     DossierStatus
-  category   String? // Budget, Santé, Économie... (procedure type)
-  theme      ThemeCategory? // Subject theme (AI-classified)
+  id            String         @id @default(cuid())
+  externalId    String         @unique // DLR5L17N12345
+  slug          String?        @unique // SEO-friendly URL slug (e.g., "2024-12-03-reforme-retraites")
+  previousSlugs String[]       @default([]) // anciens slugs, redirigés en 301 vers le slug courant
+  publicId      String?        @unique // "DO-000542" — stable public identifier (poligraphId, see /docs/api)
+  title         String         @db.Text
+  shortTitle    String? // Titre court pour affichage
+  number        String? // PJL 1234, PPL 5678
+  status        DossierStatus
+  category      String? // Budget, Santé, Économie... (procedure type)
+  theme         ThemeCategory? // Subject theme (AI-classified)
 
   filingDate      DateTime?
   examinationDate DateTime?
@@ -1750,10 +1754,10 @@ model LegislativeDossier {
   originSourceUrl   String?
   originFetchedAt   DateTime?
 
-  amendments Amendment[]
-  scrutins   Scrutin[]
-  authors    DossierAuthor[]
-  aliases    LegislativeDossierAlias[]
+  amendments   Amendment[]
+  scrutins     Scrutin[]
+  authors      DossierAuthor[]
+  aliases      LegislativeDossierAlias[]
   measureLinks MeasureDossierLink[]
 
   createdAt DateTime @default(now())
@@ -2198,6 +2202,11 @@ model FactCheck {
   languageCode      String? // "fr", "en"
   publicationStatus PublicationStatus @default(DRAFT)
 
+  // Thème de la déclaration, parmi ceux des scrutins (lot 4). Nul = aucun thème.
+  theme             ThemeCategory?
+  themeClassifiedAt DateTime? // Classé par le modèle ; nul = jamais classé
+  themeReviewedAt   DateTime? // Validé dans l'admin ; nul = proposition du modèle seulement
+
   mentions  FactCheckMention[]
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
@@ -2345,6 +2354,7 @@ model Election {
   platforms             Platform[]
   measures              Measure[]
   programEditions       ProgramEdition[]
+  parrainages           Parrainage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2370,12 +2380,16 @@ model Candidacy {
 
   measures        Measure[]
   programEditions ProgramEdition[]
+  parrainages     Parrainage[]
   partyLabel      String?
 
   // Pre-campaign editorial status (used for présidentielle 2027 and future open elections)
-  status      CandidacyStatus?
-  sourceUrl   String?
-  sourceLabel String?
+  status          CandidacyStatus?
+  sourceUrl       String?
+  sourceLabel     String?
+  // When `status` last took a different value. Null for a status never changed since its import.
+  // Not `updatedAt`, which also moves on a source or label correction.
+  statusChangedAt DateTime?
 
   // Candidate entity (lightweight, for local elections)
   candidate   Candidate? @relation(fields: [candidateId], references: [id])
@@ -2406,6 +2420,11 @@ model Candidacy {
   round2Votes Int?
   round2Pct   Decimal? @db.Decimal(5, 2)
   isElected   Boolean  @default(false)
+
+  /// Seats won by the list at the municipal council, as published by the ministry. Written on
+  /// the head of the list only (listPosition = 1), null on the other members and until imported. Never a criterion
+  /// for a win: proportional representation gives seats to losing lists too.
+  municipalSeats Int?
 
   presidentialData CandidacyPresidential?
   communeResults   CommuneCandidacyResult[]
@@ -2863,22 +2882,36 @@ enum AffairReviewAction {
 }
 
 model SocialPost {
-  id         String           @id @default(cuid())
-  category   String
-  content    String           @db.Text
-  link       String?
-  entityId   String?
-  status     SocialPostStatus @default(PENDING_REVIEW)
-  blueskyUrl String?
-  twitterUrl String?
-  error      String?
-  postedAt   DateTime?
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id              String           @id @default(cuid())
+  category        String
+  /// Bluesky text. Empty when the post does not go to Bluesky.
+  content         String           @db.Text
+  /// X text, written separately from the Bluesky one. Null when the post does not go to X.
+  twitterContent  String?          @db.Text
+  link            String?
+  entityId        String?
+  status          SocialPostStatus @default(PENDING_REVIEW)
+  blueskyUrl      String?
+  twitterUrl      String?
+  /// Set when a publication on the network starts: the atomic claim, then the date the daily cap
+  /// counts. Cleared again if the network refuses the post.
+  blueskyPostedAt DateTime?
+  twitterPostedAt DateTime?
+  /// Last diagnostic (JSON) of the network, cleared on the next attempt.
+  blueskyError    String?
+  twitterError    String?
+  /// Legacy single-text pipeline error.
+  error           String?
+  /// First publication on any network.
+  postedAt        DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@index([status])
   @@index([createdAt])
   @@index([entityId])
+  @@index([blueskyPostedAt])
+  @@index([twitterPostedAt])
 }
 
 // ============================================
@@ -2959,6 +2992,8 @@ enum RepereScopeKind {
   UDI
   STATION
   DEPARTEMENT
+  /// The accounting entity of a collectivity, identified by its SIREN (Territoires v2, lot C).
+  COLLECTIVITE
 }
 
 /// A missing figure is a state, never a zero.
@@ -2978,8 +3013,10 @@ model RepereSource {
   licenceUrl  String
   /// Attribution line the licence requires, shown with every figure of this source.
   attribution String
-  /// Slug of the public method page, /territoires/methode/[methodSlug].
-  methodSlug  String
+  /// Slug of the public method page, /territoires/methode/[methodSlug]. Null when the resource
+  /// feeds several method pages (an OFGL accounts dataset feeds five): each indicator then
+  /// carries its own page in its config.
+  methodSlug  String?
   createdAt   DateTime @default(now())
 
   imports RepereImport[]
@@ -3034,6 +3071,82 @@ model TerritoireRepere {
   /// Also serves the page read: one territory, every indicator.
   @@unique([territoryType, territoryCode, indicatorKey, periodEnd, scopeKind, scopeId])
   @@index([importId])
+}
+
+/// One dated fact of the "fil du territoire" (Territoires v2, lot B). The sentence shown to the
+/// reader is rendered from `payload` by a tested template: it is never stored, and never written
+/// by a language model. Created by prisma/migrations/manual/2026-11-15-territoire-evenements.sql.
+model TerritoireEvenement {
+  id            String              @id @default(cuid())
+  /// CHANGEMENT_MAIRE, CHANGEMENT_PRESIDENT, RESULTAT_ELECTION, ELECTION_MAIRE,
+  /// ELECTION_SENATEURS, RAPPORT_CRC: the closed list and the payload schema of each type live in
+  /// src/lib/territoires/evenements.ts.
+  type          String
+  territoryType RepereTerritoryType
+  /// INSEE code of the commune, department or region. Null only on a DRAFT whose territory a
+  /// person has yet to choose (a report title naming an ambiguous commune), or on such a draft
+  /// once rejected; the CHECK of
+  /// prisma/migrations/manual/2026-11-22-territoire-evenement-code-facultatif.sql forbids it on
+  /// IN_REVIEW and PUBLISHED.
+  territoryCode String?
+  /// Date of the fact, never the date it was imported.
+  occurredOn    DateTime            @db.Date
+  payload       Json
+  sourceLabel   String
+  sourceUrl     String
+  /// Public surfaces read PUBLISHED only. A producer publishes directly only a fact the site
+  /// already shows; everything else is written as DRAFT.
+  status        CurationStatus      @default(DRAFT)
+  /// Idempotence key of the producer: the same fact is never written twice.
+  dedupeKey     String              @unique
+  createdAt     DateTime            @default(now())
+
+  @@index([territoryType, territoryCode, status, occurredOn])
+}
+
+/// One presentation ("parrainage") of a presidential candidate by an elected official, as published
+/// by the Conseil constitutionnel. One row per presentation. The published columns are written
+/// once by the importer and never updated; only the resolved columns (communeCode, departmentCode,
+/// candidacyId, politicianId) are filled afterwards, each by its own tested step.
+/// A presentation is not a political endorsement: no surface may read it as one.
+/// Created by prisma/migrations/manual/2026-11-18-parrainages.sql.
+model Parrainage {
+  id                String   @id @default(cuid())
+  electionId        String
+  /// Candidate as published, e.g. "ARTHAUD Nathalie".
+  candidateName     String
+  /// Null when the published candidate has no candidacy in base: shown as published, no link.
+  candidacyId       String?
+  civility          String
+  lastName          String
+  firstName         String
+  /// Mandate label as published, feminine and masculine forms kept apart.
+  mandateLabel      String
+  /// "Circonscription" column as published: a commune name for a mayor, otherwise a canton, a
+  /// constituency or an empty string.
+  constituencyLabel String
+  /// Department or collectivity name as published. The file carries no INSEE code.
+  departmentLabel   String
+  /// Resolved by exact match only. Null when the name is ambiguous or not found, never guessed.
+  communeCode       String?
+  departmentCode    String?
+  /// Publication date of this presentation by the Conseil constitutionnel, never the import date.
+  publishedOn       DateTime @db.Date
+  sourceUrl         String
+  /// Set only on a SAME verdict of the identity resolver (src/lib/identity/).
+  politicianId      String?
+  /// Idempotence key of the importer, derived from the election and the published columns.
+  dedupeKey         String   @unique
+  createdAt         DateTime @default(now())
+
+  election   Election    @relation(fields: [electionId], references: [id], onDelete: Restrict)
+  candidacy  Candidacy?  @relation(fields: [candidacyId], references: [id], onDelete: SetNull)
+  politician Politician? @relation(fields: [politicianId], references: [id], onDelete: SetNull)
+
+  @@index([electionId, candidateName])
+  @@index([electionId, departmentCode])
+  @@index([communeCode])
+  @@index([politicianId])
 }
 
 /// Nature of an intercommunal body, as coded by INSEE and BANATIC. MET69 is the Métropole de
@@ -3807,8 +3920,8 @@ model Measure {
   precedingMeasureId String?
   followingMeasures  Measure[] @relation("MeasureLineage")
 
-  revisions MeasureRevision[] @relation("MeasureRevisions")
-  voteLinks MeasureVoteLink[] @relation("MeasureVoteLinks")
+  revisions    MeasureRevision[]    @relation("MeasureRevisions")
+  voteLinks    MeasureVoteLink[]    @relation("MeasureVoteLinks")
   dossierLinks MeasureDossierLink[] @relation("MeasureDossierLinks")
 
   latestRevision      MeasureRevision? @relation("MeasureLatest", fields: [latestRevisionId], references: [id], onDelete: SetNull)
@@ -4067,17 +4180,17 @@ model MeasureSource {
   measureRevision   MeasureRevision @relation(fields: [measureRevisionId], references: [id], onDelete: Cascade)
   measureRevisionId String
 
-  sourceKind  MeasureSourceKind
-  tier        SourceTier
-  url         String
-  page        String?
+  sourceKind     MeasureSourceKind
+  tier           SourceTier
+  url            String
+  page           String?
   // Where the passage starts in an audio-visual source, in seconds. `page` stays free text for
   // documents; a video source carries this instead so the public link can jump to the passage.
   startAtSeconds Int?
   // Short verbatim passage of a written source (programme, proposals), 100 to 520 characters, set by
   // setSourceExcerpt() after a mechanical check against the document. Null for speeches, press and video.
-  excerpt String? @db.Text
-  publishedAt DateTime
+  excerpt        String?           @db.Text
+  publishedAt    DateTime
 
   createdAt DateTime @default(now())
 
@@ -4691,15 +4804,15 @@ model ScrutinOrganPosition {
 /// Retour d'un visiteur via /signaler. Table privée : jamais exposée par une page ou une API
 /// publique. `contactEmail` est effacé quand le retour est clos.
 model VisitorFeedback {
-  id             String           @id @default(cuid())
-  category       FeedbackCategory
-  message        String
+  id           String           @id @default(cuid())
+  category     FeedbackCategory
+  message      String
   /// Chemin relatif de la page d'origine, sans paramètres de requête.
-  pagePath       String?
-  contactEmail   String?
-  status         FeedbackStatus   @default(NEW)
-  createdAt      DateTime         @default(now())
-  resolvedAt     DateTime?
+  pagePath     String?
+  contactEmail String?
+  status       FeedbackStatus   @default(NEW)
+  createdAt    DateTime         @default(now())
+  resolvedAt   DateTime?
 
   @@index([status, createdAt])
 }

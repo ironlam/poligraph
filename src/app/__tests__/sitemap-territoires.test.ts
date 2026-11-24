@@ -6,13 +6,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => {
   const queryRaw = vi.fn();
+  // Published accounts batches read by getEchellesComptesPubliees(); none by default.
+  const repereImportFindMany = vi.fn(async () => [] as unknown[]);
   const fallback: ProxyHandler<Record<string, unknown>> = {
     get(_t, model: string) {
       if (model === "$queryRaw") return queryRaw;
+      if (model === "repereImport") return { findMany: repereImportFindMany };
       return new Proxy({}, { get: () => async () => [] });
     },
   };
-  return { queryRaw, db: new Proxy({}, fallback), cacheTag: vi.fn() };
+  return { queryRaw, repereImportFindMany, db: new Proxy({}, fallback), cacheTag: vi.fn() };
 });
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
@@ -34,28 +37,32 @@ beforeEach(() => {
 describe("sitemap : rubrique Territoires", () => {
   it("annonce l'entrée, la page des données, les 18 régions et les communes retenues", async () => {
     h.queryRaw.mockResolvedValueOnce([
-      { id: "75056", lastmod: new Date("2026-10-01T00:00:00Z") },
-      { id: "2A004", lastmod: new Date("2026-09-01T00:00:00Z") },
+      { id: "75056", name: "Paris", lastmod: new Date("2026-10-01T00:00:00Z") },
+      { id: "2A004", name: "Ajaccio", lastmod: new Date("2026-09-01T00:00:00Z") },
     ]);
     const urls = (await shard5()).map((e) => path(e.url));
 
     expect(urls[0]).toBe("/territoires");
     expect(REGIONS).toHaveLength(18);
     for (const region of REGIONS) expect(urls).toContain(`/territoires/regions/${region.slug}`);
-    expect(urls).toContain("/territoires/communes/75056");
-    expect(urls).toContain("/territoires/communes/2A004");
+    expect(urls).toContain("/territoires/communes/paris-75056");
+    expect(urls).toContain("/territoires/communes/ajaccio-2A004");
     expect(urls).toContain("/territoires/donnees");
-    expect(urls).toHaveLength(2 + 4 + 18 + 2);
+    expect(urls).toContain("/territoires/methode/epargne-brute");
+    expect(urls).toContain("/territoires/methode/rapports-des-chambres-des-comptes");
+    expect(urls).toHaveLength(2 + 9 + 1 + 18 + 2);
   });
 
   it("date chaque commune du dernier changement du mandat de son maire", async () => {
     h.queryRaw.mockResolvedValueOnce([
-      { id: "75056", lastmod: new Date("2026-10-01T00:00:00Z") },
-      { id: "13055", lastmod: new Date("2026-08-01T00:00:00Z") },
+      { id: "75056", name: "Paris", lastmod: new Date("2026-10-01T00:00:00Z") },
+      { id: "13055", name: "Marseille", lastmod: new Date("2026-08-01T00:00:00Z") },
     ]);
     const entries = await shard5();
     const lastmod = (suffix: string) => entries.find((e) => e.url.endsWith(suffix))?.lastModified;
-    expect(lastmod("/territoires/communes/13055")).toEqual(new Date("2026-08-01T00:00:00Z"));
+    expect(lastmod("/territoires/communes/marseille-13055")).toEqual(
+      new Date("2026-08-01T00:00:00Z")
+    );
     expect(lastmod("/territoires")).toEqual(new Date("2026-10-01T00:00:00Z"));
   });
 
@@ -63,24 +70,30 @@ describe("sitemap : rubrique Territoires", () => {
     h.queryRaw.mockResolvedValueOnce([
       {
         id: "35238",
+        name: "Rennes",
         lastmod: new Date("2026-10-01T00:00:00Z"),
         electionsLastmod: new Date("2026-10-12T00:00:00Z"),
       },
-      { id: "13055", lastmod: new Date("2026-08-01T00:00:00Z"), electionsLastmod: null },
+      {
+        id: "13055",
+        name: "Marseille",
+        lastmod: new Date("2026-08-01T00:00:00Z"),
+        electionsLastmod: null,
+      },
     ]);
     const entries = await shard5();
     const find = (suffix: string) => entries.find((e) => e.url.endsWith(suffix));
-    expect(find("/territoires/communes/35238/elections")?.lastModified).toEqual(
+    expect(find("/territoires/communes/rennes-35238/elections")?.lastModified).toEqual(
       new Date("2026-10-12T00:00:00Z")
     );
-    expect(find("/territoires/communes/13055/elections")).toBeUndefined();
-    expect(find("/territoires/communes/13055")).toBeDefined();
+    expect(find("/territoires/communes/marseille-13055/elections")).toBeUndefined();
+    expect(find("/territoires/communes/marseille-13055")).toBeDefined();
   });
 
   it("garde l'entrée, la page des données et les régions sans aucune commune indexable", async () => {
     h.queryRaw.mockResolvedValueOnce([]);
     const urls = (await shard5()).map((e) => path(e.url));
-    expect(urls).toHaveLength(2 + 4 + 18);
+    expect(urls).toHaveLength(2 + 9 + 1 + 18);
     expect(urls.some((u) => u.startsWith("/territoires/communes/"))).toBe(false);
   });
 
@@ -118,5 +131,35 @@ describe("sitemap : protocole des décisions des conseils", () => {
   it("annonce la page de méthodologie dans le shard des pages statiques", async () => {
     const urls = (await shard0()).map((e) => path(e.url));
     expect(urls).toContain("/methodologie/decisions-territoires");
+  });
+
+  it("annonce les comptes des départements et régions publiés, sans ceux qui n'en ont pas", async () => {
+    h.queryRaw.mockResolvedValueOnce([]);
+    h.repereImportFindMany.mockResolvedValueOnce([
+      {
+        source: {
+          resourceUrl: "https://data.ofgl.fr/explore/dataset/ofgl-base-regions-consolidee/",
+        },
+      },
+      {
+        source: {
+          resourceUrl: "https://data.ofgl.fr/explore/dataset/ofgl-base-departements-consolidee/",
+        },
+      },
+      {
+        source: {
+          resourceUrl: "https://data.ofgl.fr/explore/dataset/ofgl-base-communes-consolidee/",
+        },
+      },
+    ]);
+    const urls = (await shard5()).map((e) => path(e.url));
+    const budget = urls.filter((u) => u.endsWith("/budget"));
+    expect(budget).toContain("/territoires/regions/bretagne/budget");
+    expect(budget).toContain("/territoires/departements/finistere/budget");
+    // Mayotte (region) and the single collectivities (departments) only say why: left out.
+    expect(budget).not.toContain("/territoires/regions/mayotte/budget");
+    expect(budget.filter((u) => u.startsWith("/territoires/regions/"))).toHaveLength(17);
+    expect(budget.filter((u) => u.startsWith("/territoires/departements/"))).toHaveLength(97);
+    expect(budget.some((u) => u.startsWith("/territoires/communes/"))).toBe(false);
   });
 });

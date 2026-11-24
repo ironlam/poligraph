@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { Prisma, type DataSource } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { functionRank } from "@/lib/territoires/executif";
 import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
@@ -299,6 +300,11 @@ export interface MunicipalesListe {
   electionAuPremierTour: PremierTourVerdict;
   /** Elected at the second round, as recorded by the results import. */
   elueAuSecondTour: boolean;
+  /**
+   * Seats won at the municipal council, as published by the ministry. Null when unknown; the
+   * import writes the seats of a commune whole or not at all, so known seats add up to the council.
+   */
+  sieges: number | null;
 }
 
 export type PremierTourVerdict = "ELUE" | "NON_ELUE" | "NON_ETABLI";
@@ -524,6 +530,7 @@ async function readMunicipales2026(inseeCode: string): Promise<MunicipalesBlock 
       round2Votes: true,
       round2Pct: true,
       isElected: true,
+      municipalSeats: true,
       politician: { select: { ...PERSON_SELECT, publicationStatus: true } },
     },
     orderBy: { round1Pct: { sort: "desc", nulls: "last" } },
@@ -570,6 +577,7 @@ async function readMunicipales2026(inseeCode: string): Promise<MunicipalesBlock 
       elueAuPremierTour,
       electionAuPremierTour,
       elueAuSecondTour: !elueAuPremierTour && round2Pct != null && h.isElected,
+      sieges: h.municipalSeats,
     };
   });
 
@@ -817,9 +825,9 @@ export interface PresidenceBlock {
 }
 
 /**
- * Executive mandates are entered by hand, not synced: on 2026-10-11 the base held one current
- * PRESIDENT_REGION (Martinique) and one PRESIDENT_DEPARTEMENT (Bouches-du-Rhône). An empty
- * result therefore means "not recorded", never "no president": it is NON_ETABLI, not ABSENT.
+ * Executive mandates exist only for the presidents `sync:executifs` could link to a profile
+ * with certainty, plus a few entered by hand. An empty result therefore means "not recorded",
+ * never "no president": it is NON_ETABLI, not ABSENT.
  */
 async function readPresidence(where: Prisma.MandateWhereInput): Promise<PresidenceBlock> {
   const holders = await db.mandate.findMany({
@@ -870,15 +878,6 @@ const RNE_CONSEILS_SOURCE: SourceRef = {
   label: "Répertoire national des élus, ministère de l'Intérieur",
   url: "https://www.data.gouv.fr/datasets/repertoire-national-des-elus-1",
 };
-
-/** "Président" first, then "1er", "2ème"... Vice-présidents, then any other function. */
-export function functionRank(label: string | null): number {
-  if (!label) return 1000;
-  if (/^présidente?\b/i.test(label) || /^maire$/i.test(label)) return 0;
-  const m = label.match(/^(\d+)(?:er|ère|ème|e)\b/i);
-  if (m) return Number(m[1]);
-  return 500;
-}
 
 async function readConseil(
   niveau: "MUNICIPAL" | "DEPARTEMENTAL" | "REGIONAL",
@@ -1134,6 +1133,73 @@ export async function getDepartementTerritoire(
 
 const FIRST_LETTER = Prisma.sql`upper(left(unaccent(c."name"), 1))`;
 
+type CommuneListRow = { id: string; name: string; population: number | null };
+
+/** Rows of a commune list, each with its mayor as the base establishes it. */
+async function withMaires(communeRows: CommuneListRow[]): Promise<DepartementCommuneRow[]> {
+  const ids = communeRows.map((c) => c.id);
+  const mayors = ids.length
+    ? await db.mandate.findMany({
+        where: {
+          type: "MAIRE",
+          isCurrent: true,
+          localData: { communeId: { in: ids }, sectorLabel: null },
+        },
+        select: {
+          localData: { select: { communeId: true } },
+          politician: { select: { ...PERSON_SELECT, publicationStatus: true } },
+        },
+        // At most a handful of conflicts on top of one mayor per commune.
+        take: DEPARTEMENT_PAGE_SIZE * 3,
+      })
+    : [];
+
+  const mayorsByCommune = new Map<string, (typeof mayors)[number]["politician"][]>();
+  for (const m of mayors) {
+    const communeId = m.localData?.communeId;
+    if (!communeId) continue;
+    mayorsByCommune.set(communeId, [...(mayorsByCommune.get(communeId) ?? []), m.politician]);
+  }
+
+  return communeRows.map((c) => {
+    const { state, holder } = resolveTitulaire(mayorsByCommune.get(c.id) ?? []);
+    return {
+      inseeCode: c.id,
+      name: c.name,
+      population: c.population,
+      maire: { state, person: holder ? personRef(holder) : null },
+    };
+  });
+}
+
+/** Communes shown on the department page before the reader asks for the full A to Z list. */
+export const DEPARTEMENT_GRANDES_COMMUNES = 8;
+
+/** The most populated communes of a department, largest first. Empty for an unknown code. */
+export async function getDepartementGrandesCommunes(
+  code: string
+): Promise<DepartementCommuneRow[]> {
+  const departmentCode = normalizeDepartmentCode(code);
+  return departmentCode ? readDepartementGrandesCommunes(departmentCode) : [];
+}
+
+async function readDepartementGrandesCommunes(
+  departmentCode: string
+): Promise<DepartementCommuneRow[]> {
+  "use cache";
+  cacheLife("synced");
+  cacheTag(...TERRITOIRE_TAGS, `territoire:${departmentCode}`);
+
+  const communeRows = await db.$queryRaw<CommuneListRow[]>(Prisma.sql`
+    SELECT c."id", c."name", c."population"
+    FROM "Commune" c
+    WHERE c."departmentCode" = ${departmentCode}
+    ORDER BY c."population" DESC NULLS LAST, unaccent(c."name"), c."id"
+    LIMIT ${DEPARTEMENT_GRANDES_COMMUNES}
+  `);
+  return withMaires(communeRows);
+}
+
 async function readDepartementTerritoire(
   departmentCode: string,
   letter: string | null,
@@ -1160,7 +1226,7 @@ async function readDepartementTerritoire(
 
   const communeRows =
     offset < total
-      ? await db.$queryRaw<{ id: string; name: string; population: number | null }[]>(Prisma.sql`
+      ? await db.$queryRaw<CommuneListRow[]>(Prisma.sql`
           SELECT c."id", c."name", c."population"
           FROM "Commune" c
           WHERE c."departmentCode" = ${departmentCode}
@@ -1170,39 +1236,7 @@ async function readDepartementTerritoire(
         `)
       : [];
 
-  const ids = communeRows.map((c) => c.id);
-  const mayors = ids.length
-    ? await db.mandate.findMany({
-        where: {
-          type: "MAIRE",
-          isCurrent: true,
-          localData: { communeId: { in: ids }, sectorLabel: null },
-        },
-        select: {
-          localData: { select: { communeId: true } },
-          politician: { select: { ...PERSON_SELECT, publicationStatus: true } },
-        },
-        // At most a handful of conflicts on top of one mayor per commune.
-        take: DEPARTEMENT_PAGE_SIZE * 3,
-      })
-    : [];
-
-  const mayorsByCommune = new Map<string, (typeof mayors)[number]["politician"][]>();
-  for (const m of mayors) {
-    const communeId = m.localData?.communeId;
-    if (!communeId) continue;
-    mayorsByCommune.set(communeId, [...(mayorsByCommune.get(communeId) ?? []), m.politician]);
-  }
-
-  const rows: DepartementCommuneRow[] = communeRows.map((c) => {
-    const { state, holder } = resolveTitulaire(mayorsByCommune.get(c.id) ?? []);
-    return {
-      inseeCode: c.id,
-      name: c.name,
-      population: c.population,
-      maire: { state, person: holder ? personRef(holder) : null },
-    };
-  });
+  const rows = await withMaires(communeRows);
 
   const mandatePresidence = await readPresidence({ type: "PRESIDENT_DEPARTEMENT", departmentCode });
   const conseil = await readConseil("DEPARTEMENTAL", departmentCode);
@@ -1415,6 +1449,55 @@ export function matchRegions(query: string): RegionRef[] {
   return REGIONS.filter((r) => fold(r.name).includes(folded))
     .slice(0, SEARCH_GROUP_LIMIT)
     .map((r) => regionRef(r)!);
+}
+
+export interface CommuneSuggestion {
+  inseeCode: string;
+  name: string;
+  postalCodes: string[];
+  population: number | null;
+}
+
+/** Suggestions returned for one keystroke. */
+export const COMMUNE_SUGGESTIONS_LIMIT = 8;
+const SUGGESTION_QUERY_MAX = 80;
+
+/**
+ * Communes of one department matching what is being typed, for the search field of the
+ * department page. Accents, case and hyphens are folded; a name starting with the text comes
+ * before a name that only contains it, then the larger commune first. A 5-digit text is read as a
+ * postal code. Never cached (free text), always bounded, and scoped to a known department so the
+ * accent-folding scan reads a few hundred rows at most.
+ */
+export async function suggestCommunesInDepartement(
+  departmentCode: string,
+  rawQuery: string
+): Promise<CommuneSuggestion[]> {
+  const query = rawQuery.trim().slice(0, SUGGESTION_QUERY_MAX);
+  if (!Object.hasOwn(DEPARTMENTS, departmentCode) || query.length < 2) return [];
+
+  const rows = /^\d{5}$/.test(query)
+    ? await db.commune.findMany({
+        where: { departmentCode, postalCodes: { has: query } },
+        select: COMMUNE_SEARCH_SELECT,
+        orderBy: [{ population: { sort: "desc", nulls: "last" } }, { name: "asc" }],
+        take: COMMUNE_SUGGESTIONS_LIMIT,
+      })
+    : await db.$queryRaw<CommuneSearchRow[]>(Prisma.sql`
+        SELECT c."id", c."name", c."postalCodes", c."population", c."departmentCode"
+        FROM "Commune" c
+        WHERE c."departmentCode" = ${departmentCode}
+          AND unaccent(replace(c."name", '-', ' ')) ILIKE unaccent(${`%${escapeLike(query.replace(/-/g, " "))}%`})
+        ORDER BY (unaccent(replace(c."name", '-', ' ')) ILIKE unaccent(${`${escapeLike(query.replace(/-/g, " "))}%`})) DESC,
+                 c."population" DESC NULLS LAST, c."name" ASC
+        LIMIT ${COMMUNE_SUGGESTIONS_LIMIT}
+      `);
+  return rows.map((row) => ({
+    inseeCode: row.id,
+    name: row.name,
+    postalCodes: row.postalCodes,
+    population: row.population,
+  }));
 }
 
 /**

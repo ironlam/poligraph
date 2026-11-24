@@ -92,9 +92,18 @@ describe("architecture d'invalidation du cache des votes", () => {
     // "factchecks" belongs in the final purge because the Daily runs the Google
     // Fact Check step; without it a freshly imported fact-check waited out the
     // listing's 24h cache window before appearing.
-    expect(dailyScript).toContain(
-      'revalidateRemoteCache(["dossiers", "stats", "politicians", "factchecks"])'
-    );
+    const finalPurge = dailyScript.slice(dailyScript.indexOf('name: "Cache revalidation"'));
+    for (const tag of ["dossiers", "stats", "factchecks", "press"]) {
+      expect(finalPurge, `${tag} n'est plus purgé à chaque passage`).toContain(`"${tag}",`);
+    }
+    // "politicians" spans every territory page and listing: it goes through the gate, which
+    // purges on a change of politicians or mandates and at least once a day.
+    expectInOrder(finalPurge, [
+      "await politiciansPurgeGate.decide()",
+      "await revalidateRemoteCache([",
+      '...(politicians.purge ? ["politicians"] : [])',
+      "await politiciansPurgeGate.recordPurge()",
+    ]);
     expect(dailyScript).toContain("...(!DRY_RUN");
   });
 

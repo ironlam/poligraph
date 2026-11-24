@@ -12,10 +12,11 @@ import {
 import { getUpstashCredentials } from "@/lib/ratelimit/upstash-credentials";
 import { recordApiCall } from "@/lib/api/usage-stats";
 import { buildVotesListingRedirect } from "@/lib/parlement-votes-redirect";
+import { buildFactchecksPoliticianRedirect } from "@/lib/factchecks-politician-redirect";
 import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/auth-token";
 import { getLegacyMeasureId } from "@/lib/presidentielle/measure-route";
 import { departementCommunesRewritePath } from "@/lib/territoires/departement-communes";
-import { TERRITOIRES_SEARCH_PATH } from "@/lib/territoires/paths";
+import { legacyCommunePath, TERRITOIRES_SEARCH_PATH } from "@/lib/territoires/paths";
 
 // ─── Rate limit tiers ────────────────────────────────────────────
 
@@ -382,6 +383,14 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
+  // The per-politician view of the fact-check listing moved to its own page (HTTP 301).
+  if (pathname === "/factchecks") {
+    const target = buildFactchecksPoliticianRedirect(request.nextUrl.searchParams);
+    if (target) {
+      return NextResponse.redirect(new URL(target, request.url), 301);
+    }
+  }
+
   const vercelEnv = process.env.VERCEL_ENV;
 
   // Protect non-production environments (preview, staging) with Basic Auth
@@ -445,8 +454,23 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // Protect admin pages.
   if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
     if (!hasValidAdminSession(request)) {
-      return NextResponse.redirect(new URL("/admin/login", request.url));
+      const login = new URL("/admin/login", request.url);
+      // The OAuth consent screen must survive the login detour: its query is the whole request.
+      if (pathname.startsWith("/admin/oauth/")) {
+        login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+      }
+      return NextResponse.redirect(login);
     }
+  }
+
+  // Commune addresses written with the bare INSEE code: a real 308 to the readable address,
+  // answered by a Route Handler (a page cannot). No query here, the handler does the lookup.
+  const legacyCommune = legacyCommunePath(pathname);
+  if (legacyCommune) {
+    const target = new URL("/api/territoires/commune-redirect", request.url);
+    target.searchParams.set("code", legacyCommune.code);
+    target.searchParams.set("suite", legacyCommune.suite);
+    return NextResponse.rewrite(target);
   }
 
   // Per-IP rate limiting for /api routes.

@@ -57,16 +57,85 @@ gabarit qu'il faut corriger, pas la règle.
 Nommer la source par ce qui l'établit. Une date de scrutin est indicative tant que le texte qui la
 fixe n'est pas publié ; une fois publié, c'est lui qu'on cite.
 
-## 5. Le judiciaire entre par la pédagogie
+## 5. Probité : nommer ce qui est documenté
 
-Les affaires judiciaires ne font pas l'objet de publications nominatives. Ce qui se publie, c'est la
-grammaire : comment lire une mise en examen, ce que change un non-lieu, pourquoi relaxe et
-acquittement ne sont pas synonymes.
+Un manquement à la probité ou à la transparence, documenté chez un responsable politique, peut faire
+l'objet d'une publication nominative. Le public attend de Poligraph qu'il rende la vie politique
+lisible, et un mécanisme de contrôle ne se comprend jamais aussi bien qu'à travers un cas réel.
+S'en tenir à la grammaire judiciaire laissait ce terrain à des comptes qui n'ont ni nos sources ni
+nos règles.
 
-La raison tient au format autant qu'au fond. Un visuel se repartage hors contexte : la mention de
-présomption d'innocence ne suit pas la capture d'écran de celui qui la précédait, et l'espace de
-commentaires se transforme en tribunal. Aucun décompte de condamnations n'est publié, et aucune
-comparaison entre personnes sur ce terrain.
+Cette règle remplace celle de novembre 2026, qui limitait le judiciaire à la pédagogie. Le risque
+qu'elle visait reste entier : un visuel se repartage hors contexte, la mention de présomption
+d'innocence ne suit pas une légende, et l'espace de commentaires devient un tribunal. Les conditions
+ci-dessous existent pour y répondre.
+
+### 5.1 Ce qui peut être nommé
+
+**Une publication ne va jamais plus loin que le site.** Une affaire n'est nommée sur un réseau que si
+elle est publiée sur poligraph.fr, donc passée par la validation humaine décrite dans
+[`docs/LEGAL.md`](../LEGAL.md) §7.3. Tout fait cité dans la publication figure sur la fiche vers
+laquelle elle renvoie, avec la même source. Une information trouvée en préparant la publication
+entre d'abord sur le site.
+
+Hors affaires judiciaires, un manquement à la transparence se nomme quand une autorité l'a constaté
+par écrit : avis, rapport ou décision de la HATVP, de la Commission nationale des comptes de campagne,
+du Conseil constitutionnel, de la Cour des comptes ou d'une juridiction financière.
+
+### 5.2 Le statut se dit tel qu'il est
+
+- **Condamnation définitive** : on nomme et on écrit « condamné », avec la juridiction et la date.
+- **Procédure en cours** : le terme exact (« mis en examen », « renvoyé devant le tribunal »,
+  « condamné en première instance, appel en cours »), jamais « coupable ».
+- **Issue favorable** : une relaxe, un non-lieu ou un acquittement se publie aussi quand il clôt un
+  sujet déjà traité, avec la même visibilité que la publication d'origine.
+- **Prescription** : elle clôt la procédure sans décision sur le fond, et se dit comme telle.
+- **Manquement de transparence** : une déclaration en retard ou incomplète se décrit comme telle. Le
+  vocabulaire pénal n'y entre pas.
+
+**La présomption d'innocence figure dans le visuel**, pas seulement dans la légende, dès qu'une
+procédure n'est pas définitivement jugée. C'est la seule façon qu'elle suive une capture d'écran.
+
+### 5.3 Le cas est l'accroche, le mécanisme est le sujet
+
+Chaque publication nominative explique la règle en jeu : ce qu'elle prévoit, ce qui aurait dû se
+passer, la sanction prévue et la sanction prononcée. Un cas sans mécanisme est une dénonciation,
+pas une explication.
+
+Le ton reste celui du §3 : aucun adjectif de jugement, aucune intention prêtée, aucune ironie,
+aucune musique choisie pour dramatiser. Pas de portrait ni d'illustration de la personne (voir
+[`instagram/README.md`](instagram/README.md)) : le fait sourcé porte seul.
+
+### 5.4 Le choix des cas
+
+Un cas est retenu selon des critères fixés avant de regarder qui il concerne :
+
+1. **Gravité** : la hiérarchie du site, qui suit la logique Sapin II (atteintes à la probité et
+   financement politique illégal d'abord, voir `AGENTS.md` §2).
+2. **Lien avec le mandat** : un fait commis dans l'exercice ou à l'occasion d'une fonction publique
+   passe avant un fait de vie privée.
+3. **Actualité** : une décision récente ou un fait nouveau documenté.
+
+Aucun critère ne dépend du parti. La répartition des cas publiés par famille politique se suit pour
+détecter un biais de sélection, jamais pour équilibrer par quota : un équilibre artificiel serait
+lui-même un choix éditorial déguisé.
+
+### 5.5 Agrégats et listes
+
+Un décompte de condamnations peut se publier s'il respecte les catégories des compteurs du site
+(condamnation définitive, procédure validée par un juge, enquête préliminaire, issue favorable) et
+la règle du §2 : il mesure ce que Poligraph a documenté, pas l'ensemble des faits réels.
+
+Une liste nominative couvre un périmètre défini par une fonction et une période, jamais par un
+camp : tous les gouvernements depuis une date, tous les élus d'une assemblée. Restreinte à une
+famille politique, elle se lit comme partisane, quelle que soit l'exactitude de chaque ligne. Le §3
+continue de s'appliquer : aucun classement entre personnes.
+
+### 5.6 Après publication
+
+La légende porte le contact (`contact@poligraph.fr`). Une demande de droit de réponse ou une erreur
+signalée suit la procédure de [`docs/LEGAL.md`](../LEGAL.md) §5. Une erreur avérée donne lieu à une
+correction publique sur le même compte, avec la même visibilité que la publication corrigée.
 
 ## 6. Fact-checks
 
@@ -150,20 +219,20 @@ Quand un terme désignant des personnes est nécessaire, il vit dans une phrase,
 
 ## 12. Du site vers la chaîne YouTube
 
-Le site invite à suivre la chaîne `@poligraph_fr`. C'est un appel posé en bordure de page, pas une
-publicité, et il suit ses propres règles. Le « sans publicité » de `/soutenir` vaut pour le site :
-la chaîne est monétisée, et la page le dit.
+Le site renvoie vers la chaîne `@poligraph_fr` par un lien, comme vers les autres comptes. Il n'y a
+plus de bandeau d'appel à l'abonnement dans les pages : il repoussait le contenu, surtout sur
+téléphone. Le « sans publicité » de `/soutenir` vaut pour le site : la chaîne est monétisée, et la
+page le dit.
 
-**Où l'appel apparaît.** Le bandeau (`YoutubeBanner`) figure sur l'accueil, le dossier présidentielle
-2027 et les pages de mesure. Sur la page d'un scrutin, il cède la place à la vidéo quand elle existe.
-Il n'apparaît jamais à côté d'une affaire judiciaire, sur `/soutenir` ni sur les pages juridiques :
-une demande d'abonnement n'a rien à faire là où le lecteur lit une procédure ou ce que devient sa
-donnée. Pour l'étendre à une page, on ajoute le composant dans cette page, pas dans le layout
-partagé.
+**Où les liens apparaissent.** Trois endroits, tous alimentés par `SOCIAL_LINKS`
+(`src/config/navigation.ts`) : le pied de page, le groupe « Suivre Poligraph » du menu mobile, et les
+logos à droite du titre de l'accueil à partir de `lg`. Ajouter un compte, c'est ajouter une ligne à
+cette liste. Sur la page d'un scrutin, la vidéo s'affiche quand elle existe ; sinon la page ne dit
+rien de la chaîne.
 
-**Ce que le texte dit.** Il énonce ce que l'abonnement, le like et le commentaire apportent au projet.
-Il ne promet aucun résultat, n'emprunte pas les formules d'un influenceur et ne cite pas
-l'algorithme.
+**Ce que le lien dit.** Le nom du réseau, et pour YouTube ce qu'on y trouve (« Un vote expliqué en
+une minute »). Pas de demande d'abonnement, de like ou de commentaire dans l'interface, pas de
+formule d'influenceur.
 
 **Rien ne part avant le clic.** Le lecteur ne crée l'iframe `youtube-nocookie.com` qu'après un clic
 sur « Lire la vidéo », et n'affiche aucune image tirée de YouTube. Un changement qui ferait contacter
@@ -179,7 +248,7 @@ YouTube plus tôt modifie aussi la page de confidentialité et la directive `fra
 3. Ajouter une ligne à `SCRUTIN_VIDEOS` dans `src/config/youtube.ts` : le slug en clé, l'identifiant
    de la vidéo en valeur (11 caractères, jamais l'URL), avec un commentaire d'une ligne.
 4. Lancer `npx vitest run src/config/youtube.test.ts`, qui refuse un identifiant mal formé.
-5. Passer par une PR. Sans déploiement manuel depuis le dashboard Vercel, la page garde le bandeau.
+5. Passer par une PR. Sans déploiement manuel depuis le dashboard Vercel, la page reste sans vidéo.
 
 Les pages de mesure n'ont pas encore de table équivalente. On la crée sur le même modèle le jour où
 une vidéo s'y rattache. Quand un déploiement par vidéo devient pesant, la suite prévue est un champ

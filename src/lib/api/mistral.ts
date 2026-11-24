@@ -1,3 +1,4 @@
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 const MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions";
@@ -34,10 +35,18 @@ export interface MistralMessage {
   content: string;
 }
 
+/**
+ * A block of a reply. A model that reasons returns its answer as blocks, a `thinking` one followed
+ * by the `text` ones, where it used to return a plain string.
+ */
+export type MistralContentBlock =
+  | { type: "text"; text: string }
+  | { type: string; [key: string]: unknown };
+
 export interface MistralResponse {
   model?: string;
   choices: Array<{
-    message: { role: string; content: string };
+    message: { role: string; content: string | MistralContentBlock[] };
     finish_reason: string;
   }>;
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -80,7 +89,7 @@ export async function callMistral(
   options: MistralOptions = {}
 ): Promise<MistralResponse> {
   const {
-    model = "mistral-large-latest",
+    model = MISTRAL_LARGE_MODEL,
     maxTokens = 2000,
     system,
     temperature,
@@ -128,8 +137,22 @@ export function getMistralTokensUsed(): number {
   return _mistralTokensUsed;
 }
 
+/**
+ * The answer as text, whatever shape the API gave it. `mistral-large-latest` started returning
+ * blocks on 2026-11-12: every caller read `[object Object]` or failed on `.trim()` until then.
+ * Only the `text` blocks are the answer; the reasoning is never part of it.
+ */
 export function extractMistralText(response: MistralResponse): string {
-  return response.choices[0]?.message.content ?? "";
+  const content = response.choices[0]?.message.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter(
+      (block): block is { type: "text"; text: string } =>
+        block.type === "text" && typeof block.text === "string"
+    )
+    .map((block) => block.text)
+    .join("");
 }
 
 export function parseMistralJSON<T = unknown>(text: string): T {

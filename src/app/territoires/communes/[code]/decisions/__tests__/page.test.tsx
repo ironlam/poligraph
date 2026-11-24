@@ -94,7 +94,7 @@ describe("/territoires/communes/[code]/decisions", () => {
     mocks.getCommuneDecisions.mockResolvedValue(data());
     const indexable = await generateMetadata({ params: Promise.resolve({ code: "35238" }) });
     expect(indexable.robots).toBeUndefined();
-    expect(indexable.alternates?.canonical).toBe("/territoires/communes/35238/decisions");
+    expect(indexable.alternates?.canonical).toBe("/territoires/communes/rennes-35238/decisions");
 
     mocks.getCommuneDossier.mockResolvedValue({
       ...dossier(),

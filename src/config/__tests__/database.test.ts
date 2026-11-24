@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  POOL_IDLE_TIMEOUT_MS,
   PRISMA_TRANSACTION_OPTIONS,
   resolvePoolMax,
   DEFAULT_POOL_MAX,
@@ -19,6 +20,21 @@ describe("configuration des transactions Prisma", () => {
     expect(PRISMA_TRANSACTION_OPTIONS.timeout).toBe(15_000);
     expect(PRISMA_TRANSACTION_OPTIONS.timeout).toBeGreaterThan(6_000);
     expect(PRISMA_TRANSACTION_OPTIONS.timeout).toBeLessThan(30_000);
+  });
+});
+
+describe("délai d'inactivité du pool", () => {
+  // Sur Vercel, l'instance reste éveillée jusqu'à la fermeture des connexions inactives : ce délai
+  // s'ajoute donc à la durée de chaque exécution qui touche la base. Dix secondes, la valeur
+  // d'avant, multipliait la durée d'une requête ordinaire.
+  it("reste court devant la durée d'une requête, sans fermer entre deux requêtes d'une page", () => {
+    expect(POOL_IDLE_TIMEOUT_MS).toBeLessThanOrEqual(2_000);
+    expect(POOL_IDLE_TIMEOUT_MS).toBeGreaterThanOrEqual(1_000);
+  });
+
+  it("est bien la valeur passée au pool", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../../lib/db.ts"), "utf8");
+    expect(source).toMatch(/idleTimeoutMillis:\s*POOL_IDLE_TIMEOUT_MS/);
   });
 });
 

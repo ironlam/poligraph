@@ -321,9 +321,11 @@ describe("checkEventPublishable : listes blanches de sources", () => {
     "https://france3-regions.franceinfo.fr/a",
     "https://la1ere.franceinfo.fr/a",
     "https://www.sudouest.fr/a",
+    "https://www.oxygeneradio.com/a",
     "https://mesinfos.fr/auvergne-rhone-alpes/a",
     "https://www.lnc.nc/article/a",
     "https://outremers360.com/bassin-pacifique-appli/a",
+    "https://lejournaldemayotte.yt/articles/lex-depute-abdoulatifou-ali-pourrait-passer-par-la-case-prison",
   ])("accepte %s comme presse", (sourceUrl) => {
     expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toEqual([]);
   });

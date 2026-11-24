@@ -152,3 +152,32 @@ export function parseArticleTarget(text: string | null | undefined): ArticleTarg
   const position = m[1] ? (m[1].toLowerCase() === "avant" ? "before" : "after") : "at";
   return { position, article: m[2].toLowerCase().replace(/\s+/g, " ") };
 }
+
+function normalizeForAuthorMatch(text: string): string {
+  return text.normalize("NFD").replace(DIACRITICS_RE, "").toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Whether the title attributes amendment `number` to the first author of
+ * `authorName` ("l'amendement n° 5 de M. Falcon à l'article…" matches
+ * "M. Falcon, M. Amblard et M. Vos"). The candidate's name is searched in the
+ * title rather than a name extracted from it, so particles ("M. de Courson")
+ * cannot cut the name short. A name followed by more letters ("M. Falconi")
+ * does not match.
+ */
+export function titleCitesAuthorForNumber(
+  title: string,
+  number: string,
+  authorName: string
+): boolean {
+  // "le Gouvernement" in the feed, "du Gouvernement" in the title.
+  const firstAuthor = normalizeForAuthorMatch(authorName.split(/,|\s+et\s+/)[0] ?? "")
+    .trim()
+    .replace(/^le\s+/, "");
+  if (!firstAuthor) return false;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(
+    String.raw`n[°o]\s*${esc(number.toLowerCase())}(?:\s*\(rect\.?\))?\s+(?:de|du)\s+${esc(firstAuthor)}(?=[\s,.;()]|$)`
+  );
+  return re.test(normalizeForAuthorMatch(title));
+}

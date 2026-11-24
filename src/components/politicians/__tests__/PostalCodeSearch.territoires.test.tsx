@@ -45,7 +45,7 @@ describe("PostalCodeSearch : lien vers Territoires", () => {
     await search();
     expect(
       screen.getByRole("link", { name: /Voir tout ce qui concerne Carcassonne/ })
-    ).toHaveAttribute("href", "/territoires/communes/11069");
+    ).toHaveAttribute("href", "/territoires/communes/carcassonne-11069");
   });
 
   it("n'affiche pas de lien sans code de commune", async () => {

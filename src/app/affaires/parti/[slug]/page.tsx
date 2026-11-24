@@ -21,6 +21,7 @@ import {
   getPublishedAffairWhere,
 } from "@/lib/affairs/public-filters";
 import type { AffairStatus, Involvement } from "@/types";
+import { openGraph } from "@/lib/seo/open-graph";
 
 export const revalidate = 300;
 
@@ -234,11 +235,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `Affaires judiciaires — ${party.name} (${party.shortName})`,
     description,
-    openGraph: {
+    openGraph: openGraph({
       title: `Affaires judiciaires — ${party.name} (${party.shortName}) | Poligraph`,
       description,
-      type: "website",
-    },
+    }),
     alternates: { canonical: `/affaires/parti/${slug}` },
   };
 }

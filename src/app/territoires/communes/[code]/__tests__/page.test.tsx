@@ -14,6 +14,21 @@ const mocks = vi.hoisted(() => ({
   }),
 }));
 
+vi.mock("@/lib/data/territoire-fil", () => ({
+  getFilTerritoire: vi.fn(async () => []),
+  getRapportsCrcTerritoire: vi.fn(async () => []),
+}));
+vi.mock("@/lib/data/territoire-comptes", () => ({
+  getEchellesComptesPubliees: vi.fn(async () => []),
+  getComptesTerritoire: vi.fn(async () => ({ dernierExercice: null, agregats: [], source: null })),
+}));
+vi.mock("@/lib/data/parrainages", () => ({
+  getParrainagesCommuneBlocs: async () => [],
+  getParrainagesDepartementResumes: async () => [],
+}));
+vi.mock("@/lib/data/territoire-votes", () => ({
+  getVotesDeputesDepartement: vi.fn(async () => ({ scrutins: [], deputeSlugs: [] })),
+}));
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
   notFound: mocks.notFound,
@@ -31,6 +46,8 @@ vi.mock("@/lib/data/territoire-elections", () => ({
 }));
 
 import Page, { generateMetadata, generateStaticParams } from "../page";
+
+const BANDEAU = 'section[aria-labelledby="commune-titre"]';
 
 async function render(data: CommuneDossier | null, code = data?.identity.inseeCode ?? "35238") {
   mocks.getCommuneDossier.mockResolvedValue(data);
@@ -54,14 +71,16 @@ describe("/territoires/communes/[code]", () => {
 
   it("ne lie aucune page de décisions tant qu'aucune n'est publiée", async () => {
     const { document, text } = await render(dossier());
-    expect(document.querySelector('a[href="/territoires/communes/35238/decisions"]')).toBeNull();
+    expect(
+      document.querySelector('a[href="/territoires/communes/rennes-35238/decisions"]')
+    ).toBeNull();
     expect(text).not.toContain("Décisions");
   });
 
   it("lie la page des décisions dès qu'une décision est publiée", async () => {
     const { document } = await render({ ...dossier(), decisionsPubliees: 2 });
     expect(
-      document.querySelector('a[href="/territoires/communes/35238/decisions"]')?.textContent
+      document.querySelector('a[href="/territoires/communes/rennes-35238/decisions"]')?.textContent
     ).toBe("Décisions");
   });
 
@@ -95,28 +114,146 @@ describe("/territoires/communes/[code]", () => {
     expect(text).toContain("Composition actuelle non établie");
   });
 
+  it("détaille les adjoints par rang, repliés, dans une commune indexable, et pas en dessous du seuil", async () => {
+    const base = dossier();
+    const membre = (lastName: string, functionLabel: string | null) => ({
+      lastName,
+      firstName: "A",
+      subdivisionLabel: null,
+      functionLabel,
+    });
+    const conseilMunicipal = {
+      state: "DISPONIBLE" as const,
+      recordedCount: 3,
+      membres: [
+        membre("Maire", "Maire"),
+        membre("Un", "1er adjoint au Maire"),
+        membre("Deux", "2ème adjoint au Maire"),
+      ],
+      registerDate: "2026-08-11T00:00:00.000Z",
+      source: { label: "Répertoire national des élus", url: null },
+    };
+    const titre = (document: Document) =>
+      [...document.querySelectorAll("#vos-elus summary")].find(
+        (s) => s.textContent === "Adjointes et adjoints au maire (2)"
+      );
+
+    const grande = await render({ ...base, conseilMunicipal });
+    const volet = titre(grande.document)?.closest("details");
+    expect(volet?.hasAttribute("open")).toBe(false);
+    const rangs = [...(volet?.querySelectorAll("ol li") ?? [])];
+    expect(rangs.map((li) => li.textContent)).toEqual(["Rang 1A Un", "Rang 2A Deux"]);
+    // The register wording is masculine for everyone: it is not repeated beside a name.
+    expect(volet?.textContent).not.toContain("adjoint au Maire");
+
+    const petite = await render({
+      ...base,
+      conseilMunicipal,
+      population: { ...base.population, value: 150 },
+    });
+    expect(titre(petite.document)).toBeUndefined();
+    expect(petite.text).toContain("Voir les 3 membres");
+  });
+
+  it("situe la commune sur l'échelle des territoires, avec la source des compétences", async () => {
+    const { document } = await render(dossier());
+    const echelle = document.querySelector('section[aria-labelledby="echelle-titre"]')!;
+    const barreaux = [...echelle.querySelectorAll("ol > li")];
+
+    expect(barreaux).toHaveLength(3);
+    expect(barreaux[0]?.getAttribute("aria-current")).toBe("true");
+    expect(barreaux[0]?.textContent).toContain("Commune · cette page");
+    expect(barreaux[0]?.querySelector("a")).toBeNull();
+    expect([...echelle.querySelectorAll("ol a")].map((a) => a.getAttribute("href"))).toEqual([
+      "/territoires/departements/ille-et-vilaine",
+      "/territoires/regions/bretagne",
+    ]);
+    expect(echelle.textContent).toContain("Collèges, aide sociale");
+    expect(echelle.textContent).toContain("à titre indicatif et non exhaustif");
+    expect(echelle.textContent).toContain("Vérifié le 15 novembre 2026");
+    expect(
+      echelle.querySelector('a[href^="https://www.collectivites-locales.gouv.fr/"]')
+    ).not.toBeNull();
+  });
+
+  it("dit comment agir, avec le tribunal du territoire, les sources officielles et l'avertissement", async () => {
+    const { document } = await render(dossier());
+    const agir = document.querySelector("#agir")!;
+
+    expect(agir.querySelector("h2")?.textContent).toBe("Agir");
+    expect([...agir.querySelectorAll("h3")].map((h) => h.textContent)).toEqual([
+      "Assister au conseil municipal",
+      "Obtenir un document",
+      "Contacter la mairie",
+      "Demander une consultation",
+      "S'inscrire pour voter",
+      "Contester une décision",
+    ]);
+    // The one fact proper to the territory: Ille-et-Vilaine is in the jurisdiction of Rennes.
+    expect(agir.textContent).toContain(
+      "le tribunal administratif compétent est en principe celui qui siège à Rennes."
+    );
+    expect(agir.textContent).toContain("ne remplace pas un conseil juridique");
+    expect(agir.textContent).toContain("Vérifié le 15 novembre 2026.");
+    // Hosts and wording of the links are checked on the configuration itself.
+    expect(agir.querySelectorAll('a[target="_blank"][rel="noopener noreferrer"]')).toHaveLength(13);
+  });
+
+  it("donne le tribunal d'une collectivité d'outre-mer selon son propre ressort", async () => {
+    const { document } = await render(papeete());
+    const agir = document.querySelector("#agir")!;
+    expect(agir.textContent).toContain("celui qui siège à Papeete.");
+    // The CGCT applies to the communes of Polynésie française (article L. 2573-5).
+    // Neither the consultation nor the registration to vote is asserted for an overseas
+    // collectivité: their application there was not verified.
+    expect([...agir.querySelectorAll("h3")].map((h) => h.textContent)).toEqual([
+      "Assister au conseil municipal",
+      "Obtenir un document",
+      "Contacter la mairie",
+      "Contester une décision",
+    ]);
+    expect(agir.textContent).toContain(
+      "Code général des collectivités territoriales, article L. 2121-18"
+    );
+  });
+
   it("donne la date de dernière confirmation quand elle existe", async () => {
     const base = dossier();
-    const { text } = await render({
+    const date = "2026-10-01T00:00:00.000Z";
+    const { document } = await render({
       ...base,
-      maire: { ...base.maire, lastConfirmedAt: "2026-10-01T00:00:00.000Z" },
+      maire: { ...base.maire, lastConfirmedAt: date },
+      coverage: base.coverage.map((c) => (c.bloc === "maire" ? { ...c, date } : c)),
     });
-    expect(text).toContain("dernière confirmation le 1 octobre 2026");
+    // The dated detail lives in the sources panel, with the link to the source.
+    const maire = [...document.querySelectorAll("#sources details li")].find((li) =>
+      li.textContent?.startsWith("Maire")
+    );
+    expect(maire?.textContent).toContain("dernière confirmation le 1 octobre 2026");
+    expect(maire?.querySelector("a")?.getAttribute("href")).toBe(
+      "https://www.data.gouv.fr/fr/datasets/repertoire-national-des-elus-1/"
+    );
   });
 
   it("ne nomme personne quand le maire n'est pas établi", async () => {
     const { document, text } = await render(withMaire("NON_ETABLI"));
 
-    expect(text).toContain("Titulaire non établi");
+    expect(document.querySelector(BANDEAU)?.textContent).toContain(
+      "Titulaire non établi : les données enregistrées ne permettent pas de désigner le maire avec certitude."
+    );
+    expect(document.querySelector(`${BANDEAU} a[href^='/politiques/']`)).toBeNull();
     expect(text).toContain("Le maire en fonction n'est pas établi dans Poligraph.");
     // The head of list may still be named in the results, never as mayor.
-    expect(document.querySelector("#qui-decide a[href^='/politiques/']")).toBeNull();
+    expect(document.querySelector("#vos-elus a[href^='/politiques/']")).toBeNull();
   });
 
   it("dit l'absence de maire en mots, sans zéro ni tiret", async () => {
-    const { text } = await render(withMaire("ABSENT"));
+    const { document, text } = await render(withMaire("ABSENT"));
 
-    expect(text).toContain("Non renseigné");
+    expect(document.querySelector(BANDEAU)?.textContent).toContain(
+      "Aucun maire en fonction n'est enregistré."
+    );
+    expect(document.querySelector(`${BANDEAU} a[href^='/politiques/']`)).toBeNull();
     expect(text).toContain("Aucun maire en fonction n'est enregistré pour Rennes dans Poligraph.");
     expect(text).not.toMatch(/[—–]/);
   });
@@ -155,11 +292,11 @@ describe("/territoires/communes/[code]", () => {
 
   it("nomme le député de la circonscription enregistrée avec la réserve, jamais comme certain", async () => {
     const { document } = await render(grandeCommune());
-    const header = document.querySelector("header")?.textContent ?? "";
+    const header = document.querySelector(BANDEAU)?.textContent ?? "";
     const section = document.querySelector("#parlement")?.textContent ?? "";
 
     expect(header).toContain("1re circonscription enregistrée");
-    expect(header).toContain("Selon l'adresse, vérifiez avec Mon député");
+    expect(header).toContain("Selon l'adresse, vérifiez avec Mon député.");
     expect(header).not.toContain("Dominique Député");
     expect(section).toContain(
       "Rien n'établit que la commune relève de cette seule circonscription"
@@ -180,7 +317,7 @@ describe("/territoires/communes/[code]", () => {
 
     expect(text).toContain("Ville de Paris");
     expect(text).toContain("Loi n° 2017-257 du 28 février 2017 relative au statut de Paris");
-    const details = document.querySelector("#qui-decide details");
+    const details = document.querySelector("#vos-elus details");
     expect(details?.hasAttribute("open")).toBe(false);
     expect(details?.textContent).toContain("Alex Secteur");
   });
@@ -231,26 +368,39 @@ describe("/territoires/communes/[code]", () => {
     expect(text).toContain("Aucun résultat des municipales 2026 n'est enregistré");
   });
 
-  it("navigue par ancres, sans onglet Décisions ni badge de dossier", async () => {
+  it("navigue par onglets d'un mot, sans onglet Décisions ni badge de dossier", async () => {
     const { document, text } = await render(dossier());
 
     const anchors = [...document.querySelectorAll('nav[aria-label="Sections de la page"] a')];
     expect(anchors.map((a) => a.getAttribute("href"))).toEqual([
-      "#qui-decide",
+      "#vos-elus",
+      "#parlement",
       "#elections",
-      "#sources",
-      "/territoires/communes/35238/elections",
+      "#agir",
     ]);
-    for (const id of ["qui-decide", "elections", "sources"]) {
+    expect(anchors.map((a) => a.textContent)).toEqual(["Élus", "Parlement", "Élections", "Agir"]);
+    for (const id of ["vos-elus", "parlement", "elections", "agir", "sources"]) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
-    expect(anchors[0]?.textContent).toBe("Élus et institutions");
-    expect(document.getElementById("qui-decide-titre")?.textContent).toBe("Élus et institutions");
+    // The sub-page left the tabs: it stays one click away, from its own section.
+    expect(
+      document.querySelector('#elections a[href="/territoires/communes/rennes-35238/elections"]')
+    ).not.toBeNull();
+    expect(document.getElementById("vos-elus-titre")?.textContent).toBe("Vos élus");
+    // The former anchor still lands inside the section.
+    expect(document.querySelector("#vos-elus #qui-decide")).not.toBeNull();
     expect(text).not.toContain("Qui décide");
-    expect(text).not.toMatch(/Décisions|Socle officiel|Dossier curé|intercommunalit|superficie/i);
-    expect(text).toContain(
-      "Informations disponibles : maire, population, circonscription législative, sénateurs du département, résultats des municipales 2026."
-    );
+    expect(text).not.toMatch(/Décisions|Socle officiel|Dossier curé|superficie/i);
+    // No intercommunality block without an import. The word itself belongs to the fixed text of
+    // the territories ladder, which is why the check is scoped to the elected-officials section.
+    expect(document.querySelector("#vos-elus")?.textContent).not.toMatch(/intercommunalit/i);
+    expect(
+      document.querySelectorAll('section[aria-labelledby="echelle-titre"] ol > li')
+    ).toHaveLength(3);
+    const volet = document.querySelector("#sources details");
+    expect(volet?.hasAttribute("open")).toBe(false);
+    expect(volet?.querySelector("summary")?.textContent).toBe("Sources de cette page");
+    expect(volet?.textContent).toContain("Conseil municipal : non établi dans nos données");
   });
 
   it("propose la réutilisation et le signalement existants", async () => {
@@ -269,7 +419,7 @@ describe("/territoires/communes/[code]", () => {
   it("dessine la silhouette du département avec le repère de la commune, en décor", async () => {
     const { document } = await render(dossier());
 
-    const svgs = [...document.querySelectorAll("header svg:not(.lucide)")];
+    const svgs = [...document.querySelectorAll(`${BANDEAU} svg:not(.lucide)`)];
     expect(svgs.length).toBeGreaterThan(0);
     expect(svgs.every((svg) => svg.getAttribute("aria-hidden") === "true")).toBe(true);
     expect(document.querySelector("[data-territory-marker]")).not.toBeNull();
@@ -283,7 +433,7 @@ describe("/territoires/communes/[code]", () => {
     async (_, make, code) => {
       const { document } = await render(make());
 
-      const svgs = [...document.querySelectorAll("header svg:not(.lucide)")];
+      const svgs = [...document.querySelectorAll(`${BANDEAU} svg:not(.lucide)`)];
       // Its own territory, never metropolitan France: no mini inset overseas.
       expect(svgs).toHaveLength(1);
       expect(svgs[0]!.getAttribute("aria-hidden")).toBe("true");
@@ -296,17 +446,23 @@ describe("/territoires/communes/[code]", () => {
   it("relie la commune d'un DROM à sa région", async () => {
     const { document, text } = await render(reunion());
 
-    expect(text).toContain("Commune · La Réunion (974)");
+    expect(text).toContain("Commune · Code INSEE 97411");
     expect(document.querySelector('a[href="/territoires/regions/la-reunion"]')).not.toBeNull();
   });
 
   it("présente une COM hors région, avec son statut et sans région", async () => {
     const { document, text } = await render(papeete());
-    const crumbs = [...document.querySelectorAll('nav[aria-label="Fil d\'Ariane"] li')].map(
-      (li) => li.textContent
+    const crumbs = [...document.querySelectorAll('nav[aria-label="Fil d\'Ariane"] li')].map((li) =>
+      li.textContent?.replace(/[‹›]/g, "")
     );
 
-    expect(crumbs).toEqual(["Territoires", "Outre-mer", "Polynésie française (987)", "Papeete"]);
+    expect(crumbs).toEqual([
+      "Accueil",
+      "Territoires",
+      "Outre-mer",
+      "Polynésie française (987)",
+      "Papeete",
+    ]);
     expect(text).toContain("Collectivité d'outre-mer hors région");
     expect(text).toContain("Circonscription non renseignée");
     expect(document.querySelector('a[href^="/territoires/regions/"]')).toBeNull();
@@ -334,11 +490,11 @@ describe("/territoires/communes/[code]", () => {
       },
     });
 
-    const hero = document.querySelector("header")?.textContent ?? "";
+    const hero = document.querySelector(BANDEAU)?.textContent ?? "";
     expect(hero).toContain("Population municipale 2023, en vigueur au 1er janvier 2026 (INSEE)");
     expect(hero).not.toContain("geo.api.gouv.fr");
     expect(
-      document.querySelector('header a[href="https://www.insee.fr/fr/statistiques/8680726"]')
+      document.querySelector(`${BANDEAU} a[href="https://www.insee.fr/fr/statistiques/8680726"]`)
     ).not.toBeNull();
     expect(document.querySelector("#sources")?.textContent).toContain(
       "vérifiée le 11 octobre 2026"
@@ -368,7 +524,7 @@ describe("/territoires/communes/[code]", () => {
       },
     });
 
-    expect(document.querySelector("header")?.textContent).toContain(
+    expect(document.querySelector(BANDEAU)?.textContent).toContain(
       "Population municipale 2022, en vigueur au 1er janvier 2023 (ISPF)"
     );
   });
@@ -376,8 +532,8 @@ describe("/territoires/communes/[code]", () => {
   it("sans série millésimée, n'invente aucun millésime", async () => {
     const { document, text } = await render(dossier());
 
-    expect(document.querySelector("header")?.textContent).toContain(
-      "Source INSEE via geo.api.gouv.fr"
+    expect(document.querySelector(BANDEAU)?.textContent).toContain(
+      "source INSEE via geo.api.gouv.fr"
     );
     expect(text).not.toMatch(/en vigueur au/);
     expect(text).toContain("importée le");
@@ -405,6 +561,9 @@ describe("/territoires/communes/[code]", () => {
     });
 
     expect(text).toContain("District · ");
+    // No town hall and no municipal council: no « Agir » block, and no tab leading to it.
+    expect(text).not.toContain("Contacter la mairie");
+    expect(text).not.toContain("Agir");
     expect(text).toContain("Pas de conseil municipal");
     expect(text).not.toContain("Composition actuelle non établie");
     expect(text).not.toContain("Présidentielle 2027");
@@ -412,8 +571,16 @@ describe("/territoires/communes/[code]", () => {
 
   it("met la réponse principale (le maire) avant les repères secondaires", async () => {
     const { document } = await render(withMaire("NON_ETABLI"));
-    const facts = [...document.querySelectorAll("header dt")].map((dt) => dt.textContent);
-    expect(facts).toEqual(["Maire", "Population", "Au Parlement"]);
+    const bandeau = document.querySelector(BANDEAU)!;
+    const facts = [...bandeau.querySelectorAll("dt")].map((dt) => dt.textContent);
+    expect(facts).toEqual(["Population", "Conseil municipal", "Parlement"]);
+    const phrase = [...bandeau.querySelectorAll("p")].find((p) =>
+      p.textContent?.startsWith("Titulaire non établi")
+    )!;
+    expect(
+      phrase.compareDocumentPosition(bandeau.querySelector("dl")!) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("publie un JSON-LD AdministrativeArea limité aux faits affichés", async () => {
@@ -425,7 +592,7 @@ describe("/territoires/communes/[code]", () => {
 
     expect(area).toMatchObject({
       name: "Rennes",
-      url: "https://poligraph.fr/territoires/communes/35238",
+      url: "https://poligraph.fr/territoires/communes/rennes-35238",
       identifier: { "@type": "PropertyValue", propertyID: "Code INSEE", value: "35238" },
       containedInPlace: { name: "Ille-et-Vilaine" },
     });
@@ -439,7 +606,7 @@ describe("metadata /territoires/communes/[code]", () => {
 
     expect(m.title).toBe("Rennes (35) : maire, élus et résultats");
     expect(m.description).toContain("Maire : Camille Exemple.");
-    expect(m.alternates?.canonical).toBe("/territoires/communes/35238");
+    expect(m.alternates?.canonical).toBe("/territoires/communes/rennes-35238");
     expect(m.robots).toBeUndefined();
   });
 
@@ -478,16 +645,23 @@ describe("intercommunalité", () => {
 
   /** Text of the intercommunality card, located by its label. */
   function card(document: Document, label: string): Element | null {
-    const p = [...document.querySelectorAll("#qui-decide p")].find(
-      (el) => el.textContent === label
-    );
+    const p = [...document.querySelectorAll("#vos-elus p")].find((el) => el.textContent === label);
     return p?.parentElement ?? null;
   }
 
   it("nomme la MGP et l'EPT, nature en toutes lettres, situation et source, sans lien ni compétence", async () => {
-    const { document } = await render(
-      dossier({ intercommunalite: interco("DISPONIBLE", [MGP, PLAINE]) })
-    );
+    const intercommunalite = interco("DISPONIBLE", [MGP, PLAINE]);
+    // The reader adds the coverage entry with the block: the fixture does it here.
+    const coverage = [
+      ...dossier().coverage,
+      {
+        bloc: "intercommunalite" as const,
+        state: "DISPONIBLE" as const,
+        source: intercommunalite.source,
+        date: intercommunalite.situationDate,
+      },
+    ];
+    const { document } = await render(dossier({ intercommunalite, coverage }));
     const el = card(document, "Intercommunalité");
     const text = el?.textContent?.replace(/\s+/g, " ") ?? "";
 
@@ -495,14 +669,23 @@ describe("intercommunalité", () => {
     expect(text).toContain("Métropole, situation au 1er janvier 2026");
     expect(text).toContain("Plaine Commune");
     expect(text).toContain("Établissement public territorial, situation au 1er janvier 2026");
-    expect(text).toContain("INSEE, EPCI à fiscalité propre au 1er janvier 2026");
-    expect(text).toContain("INSEE, établissements publics territoriaux au 1er janvier 2026");
-    expect(text).toContain("dernière vérification le 12 octobre 2026");
     expect(text).not.toMatch(/compétence/i);
-    // Only the external source links: Poligraph has no intercommunality page to link to.
-    const hrefs = [...(el?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href"));
-    expect(hrefs.length).toBe(2);
-    expect(new Set(hrefs)).toEqual(new Set(["https://www.insee.fr/fr/information/2510634"]));
+    // No link in the card: Poligraph has no intercommunality page, and the sources are named
+    // once on the line of the block, then dated in « Sources de cette page ».
+    expect(el?.querySelector("a")).toBeNull();
+    expect(text).not.toContain("Source");
+    const bloc = [...document.querySelectorAll("#vos-elus > p")].at(-1)?.textContent ?? "";
+    expect(bloc).toContain("INSEE, EPCI à fiscalité propre au 1er janvier 2026");
+    expect(bloc).toContain("INSEE, établissements publics territoriaux au 1er janvier 2026");
+    const volet = [...document.querySelectorAll("#sources details li")].map((li) =>
+      li.textContent?.replace(/\s+/g, " ")
+    );
+    expect(volet).toContain(
+      "Intercommunalité, Métropole du Grand Paris : situation au 1 janvier 2026, dernière vérification le 12 octobre 2026Source : INSEE, EPCI à fiscalité propre au 1er janvier 2026 (nouvel onglet)"
+    );
+    expect(volet.find((l) => l?.startsWith("Intercommunalité, Plaine Commune"))).toContain(
+      "Source : INSEE, établissements publics territoriaux au 1er janvier 2026"
+    );
   });
 
   it("garde le maire avant l'intercommunalité dans l'ordre de lecture", async () => {
@@ -570,7 +753,12 @@ describe("absence de composant client cartographique", () => {
   const ROOT = process.cwd();
   it.each([
     "src/app/territoires/communes/[code]/page.tsx",
-    "src/components/territoires/CommuneHero.tsx",
+    "src/components/territoires/CommuneBandeau.tsx",
+    "src/components/territoires/TerritoireBandeau.tsx",
+    "src/components/territoires/TerritoireOnglets.tsx",
+    "src/components/territoires/LigneSource.tsx",
+    "src/components/territoires/EchelleTerritoires.tsx",
+    "src/components/territoires/Agir.tsx",
     "src/components/territoires/CommuneSections.tsx",
     "src/components/territoires/IntercommunaliteCard.tsx",
     "src/components/territoires/TerritoryShape.tsx",

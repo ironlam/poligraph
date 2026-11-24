@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import type { ExtractorRetryEvent } from "./extractor";
 import type { DocumentUnit, ProgramDocumentType } from "./types";
 import { DISCOURSE_EXTRACTOR_VERSION, PROGRAM_DOCUMENT_PARSER_VERSION } from "./versions";
@@ -247,7 +248,7 @@ async function analyzeBatch(
     ],
     {
       system: DISCOURSE_SYSTEM_PROMPT,
-      model: "mistral-large-latest",
+      model: MISTRAL_LARGE_MODEL,
       maxTokens: 5_000,
       temperature: 0,
       responseFormat: { type: "json_object" },

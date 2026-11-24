@@ -51,13 +51,12 @@ describe("getActiveTabHref", () => {
 });
 
 describe("NAV_MENU_GROUPS", () => {
-  it("does not repeat a section the tab bar already holds", () => {
+  it("repeats only Affaires from the tab bar, under Transparence et probité", () => {
     const tabHrefs = new Set(NAV_TABS.flatMap((tab) => [tab.href, tab.match]));
-    for (const group of NAV_MENU_GROUPS) {
-      for (const item of group.items) {
-        expect(tabHrefs.has(item.href), `${group.label} / ${item.label}`).toBe(false);
-      }
-    }
+    const repeated = NAV_MENU_GROUPS.flatMap(({ label, items }) =>
+      items.filter(({ href }) => tabHrefs.has(href)).map(({ href }) => ({ label, href }))
+    );
+    expect(repeated).toEqual([{ label: "Transparence et probité", href: "/affaires" }]);
   });
 
   it("drops a flagged item, and a group left with nothing to show", () => {

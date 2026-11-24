@@ -30,6 +30,25 @@ export function isPoolExhaustedError(error: unknown): boolean {
   return false;
 }
 
+/** SQLSTATE the pooler sends with EMAXCONN. */
+const POOL_EXHAUSTED_SQLSTATE = "XX000";
+/** The pooler giving up on reaching Postgres for a new client: SQLSTATE 08006 with this message. */
+const BACKEND_TIMEOUT_SQLSTATE = "08006";
+const BACKEND_TIMEOUT_MESSAGE = "Failed to connect to database: {:error, :timeout}";
+
+/**
+ * A refusal by the pooler that a later attempt can outlive: its client ceiling is reached, or it
+ * did not reach Postgres in time. Read on the pg error itself, before the driver adapter wraps it.
+ * Both are matched on code and message together, exactly as production reported them: a refusal
+ * with another reason may be permanent, and asking again would only delay the failure.
+ */
+export function isPoolerRefusal(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
+  if (typeof message !== "string") return false;
+  if (code === POOL_EXHAUSTED_SQLSTATE) return message.includes(POOL_EXHAUSTED_CODE);
+  return code === BACKEND_TIMEOUT_SQLSTATE && message.includes(BACKEND_TIMEOUT_MESSAGE);
+}
+
 /** Opens at most once per interval. `now` is injectable so the window is testable without waiting. */
 export function createReportGate(intervalMs: number, now: () => number = Date.now) {
   let lastOpenedAt = Number.NEGATIVE_INFINITY;

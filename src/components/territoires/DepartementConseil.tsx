@@ -1,8 +1,10 @@
 import Link from "next/link";
 import type { CollectiviteParticuliere } from "@/config/collectivites-particulieres";
 import type { DepartementTerritoire } from "@/lib/data/territoires";
-import { DepartementSection } from "@/components/territoires/DepartementSection";
+import { SectionCard } from "@/components/territoires/CommuneSections";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
+import { Executif } from "@/components/territoires/Executif";
+import { rangsExecutif } from "@/lib/territoires/executif";
 
 /**
  * Collectivités that exercise the departmental competences in place of a departmental council:
@@ -57,7 +59,7 @@ function SourceLink({ source }: { source: { label: string; url: string | null } 
 
 function CollectiviteNotes({ notes }: { notes: readonly CollectiviteParticuliere[] }) {
   return (
-    <div id="collectivite" className="flex scroll-mt-20 flex-col gap-3">
+    <div id="collectivite" className="flex scroll-mt-32 flex-col gap-3">
       {notes.map((c) => (
         <div key={c.id} className="rounded-xl border bg-muted/40 p-4">
           <p className="font-bold">{c.collectivite}</p>
@@ -71,6 +73,18 @@ function CollectiviteNotes({ notes }: { notes: readonly CollectiviteParticuliere
   );
 }
 
+/**
+ * First block of the page, always open: the reader sees who presides and the first
+ * vice-presidents without unfolding anything.
+ */
+function Bloc({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+  return (
+    <SectionCard id={id} title={title}>
+      <div className="flex flex-col gap-4">{children}</div>
+    </SectionCard>
+  );
+}
+
 interface DepartementConseilProps {
   territoire: DepartementTerritoire;
 }
@@ -80,29 +94,29 @@ export function DepartementConseil({ territoire }: DepartementConseilProps) {
 
   if (territoireHorsRegion) {
     return (
-      <DepartementSection id="statut" title="Statut du territoire">
+      <Bloc id="statut" title="Statut du territoire">
         <p>
           {territoireHorsRegion.name} : {territoireHorsRegion.statut.toLowerCase()}. Ce territoire
           ne fait partie d{"'"}aucune région.
         </p>
         <SourceLink source={COG_SOURCE} />
-      </DepartementSection>
+      </Bloc>
     );
   }
 
   if (remplaceLeDepartement(collectivitesParticulieres)) {
     return (
-      <DepartementSection id="collectivite-competente" title="Collectivité compétente">
+      <Bloc id="collectivite-competente" title="Collectivité compétente">
         <CollectiviteNotes notes={collectivitesParticulieres} />
         <p className="text-sm">
           La composition de son assemblée n{"'"}est pas établie dans nos données.
         </p>
-      </DepartementSection>
+      </Bloc>
     );
   }
 
   return (
-    <DepartementSection id="conseil" title="Conseil départemental">
+    <Bloc id="conseil" title="Conseil départemental">
       {collectivitesParticulieres.length > 0 && (
         <CollectiviteNotes notes={collectivitesParticulieres} />
       )}
@@ -139,25 +153,35 @@ export function DepartementConseil({ territoire }: DepartementConseilProps) {
       </div>
 
       {conseil.state === "DISPONIBLE" ? (
-        <ConseilMembres conseil={conseil} groupLabel="canton" />
+        <>
+          <Executif
+            titre="Vice-présidence du conseil départemental"
+            rangs={rangsExecutif(conseil.membres)}
+          />
+          <ConseilMembres conseil={conseil} groupLabel="canton" />
+        </>
       ) : (
         <p className="text-sm">
           La composition du conseil départemental n{"'"}est pas établie dans nos données.
         </p>
       )}
 
-      <div className="flex flex-col gap-1.5 border-t pt-4">
-        <h3 className="font-bold">Compétences fixées par la loi</h3>
-        <p className="text-sm">
-          Le conseil départemental règle par ses délibérations les affaires du département dans les
-          domaines que la loi lui attribue. Il est compétent pour prévenir et prendre en charge les
-          situations de fragilité, pour le développement social, l{"'"}accueil des jeunes enfants et
-          l{"'"}autonomie des personnes, et facilite l{"'"}accès aux droits des publics dont il a la
-          charge. Il promeut aussi les solidarités, la cohésion territoriale et l{"'"}accès aux
-          soins de proximité.
-        </p>
-        <SourceLink source={CGCT_COMPETENCES} />
-      </div>
-    </DepartementSection>
+      <details className="rounded-xl border">
+        <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">
+          Compétences fixées par la loi
+        </summary>
+        <div className="flex flex-col gap-1.5 border-t px-4 py-3">
+          <p className="text-sm">
+            Le conseil départemental règle par ses délibérations les affaires du département dans
+            les domaines que la loi lui attribue. Il est compétent pour prévenir et prendre en
+            charge les situations de fragilité, pour le développement social, l{"'"}accueil des
+            jeunes enfants et l{"'"}autonomie des personnes, et facilite l{"'"}accès aux droits des
+            publics dont il a la charge. Il promeut aussi les solidarités, la cohésion territoriale
+            et l{"'"}accès aux soins de proximité.
+          </p>
+          <SourceLink source={CGCT_COMPETENCES} />
+        </div>
+      </details>
+    </Bloc>
   );
 }

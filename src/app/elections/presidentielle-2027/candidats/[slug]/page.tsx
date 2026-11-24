@@ -39,6 +39,7 @@ import {
   CandidateThemeSpread,
   CandidateThemes,
 } from "./_components/CandidateFicheBlocks";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 /**
  * Candidate fiche for the presidential hub. `[slug]` is the POLITICIAN slug, consistent with
@@ -110,12 +111,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     // No `images` here: the `opengraph-image` route beside this file already provides the card, and
     // naming a second image would let the two drift. `summary_large_image` is what that 1200x630
     // card is drawn for, and X falls back to `og:image` since we ship no `twitter-image` route.
-    openGraph: {
+    openGraph: openGraph({
       title: shareTitle,
       description,
       type: "profile",
       url: fichePath(slug),
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
     twitter: { card: "summary_large_image", title: shareTitle, description },
   };
 }
@@ -208,13 +210,16 @@ export default async function CandidateFichePage({ params }: PageProps) {
           page needs room to clear it. The extra padding goes away at `2xl`, where that bar becomes
           the vertical one on the left. */}
       <div className="container mx-auto space-y-8 px-4 pb-24 pt-4 2xl:pb-8">
-        <Breadcrumb
-          items={[
-            { label: "Élections", href: "/elections" },
-            { label: "Présidentielle 2027", href: `/elections/${candidacy.electionSlug}` },
-            { label: politician.fullName },
-          ]}
-        />
+        {/* From sm up: on a phone the sticky bar right above is the way back to the list. The breadcrumb JSON-LD is emitted at every width. */}
+        <div className="max-sm:hidden">
+          <Breadcrumb
+            items={[
+              { label: "Élections", href: "/elections" },
+              { label: "Présidentielle 2027", href: `/elections/${candidacy.electionSlug}` },
+              { label: politician.fullName },
+            ]}
+          />
+        </div>
 
         <header className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-5 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)_6rem]">
           <div aria-hidden="true">

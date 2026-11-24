@@ -59,10 +59,10 @@ const DATA_SOURCES = [
   {
     name: "NosDéputés / NosSénateurs",
     shortName: "ND/NS",
-    description: "Activité parlementaire, votes nominatifs et données complémentaires",
+    description: "Source historique, utilisée jusqu'en novembre 2026.",
     url: "https://www.nosdeputes.fr",
-    frequency: "Quotidienne",
-    fields: ["Photos", "Activité", "Votes nominatifs", "Scrutins"],
+    frequency: "aucune depuis novembre 2026",
+    fields: ["Photos", "Dates de naissance des sénateurs", "Liens de vérification"],
     color: "#FF6600",
   },
   {

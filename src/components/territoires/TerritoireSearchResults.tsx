@@ -126,7 +126,7 @@ export function TerritoireSearchResults({
           {byPostal.map((c) => (
             <ResultRow
               key={c.inseeCode}
-              href={territoireCommunePath(c.inseeCode)}
+              href={territoireCommunePath(c.inseeCode, c.name)}
               title={c.name}
               detail={departmentLabel(c)}
             />
@@ -139,7 +139,7 @@ export function TerritoireSearchResults({
           {others.map((c) => (
             <ResultRow
               key={c.inseeCode}
-              href={territoireCommunePath(c.inseeCode)}
+              href={territoireCommunePath(c.inseeCode, c.name)}
               title={c.name}
               detail={departmentLabel(c)}
             />

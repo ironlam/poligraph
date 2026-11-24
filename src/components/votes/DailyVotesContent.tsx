@@ -1,77 +1,43 @@
 import { VoteCard } from "./VoteCard";
-import { ScrutinTypeTabs } from "./ScrutinTypeTabs";
+import { ScrutinLinkList } from "./ScrutinLinkList";
 import { CHAMBER_LABELS } from "@/config/labels";
 import { Vote, CheckCircle, XCircle, Building2, Sparkles } from "lucide-react";
 import type { Chamber } from "@/generated/prisma";
 import type { DailyScrutin } from "@/lib/data/scrutins";
+import { displayTitleOf, toPublicTitleView } from "@/lib/votes/to-public-title-view";
 
-interface DailyVotesContentProps {
-  scrutins: DailyScrutin[];
-  typeTab: string;
-  canonicalPath: string;
-}
+/** Amendments shown as full cards before the rest becomes a plain list of links. */
+const AMENDMENT_CARD_COUNT = 10;
 
 /**
- * Pure presentational view of the daily votes for a given type tab. No hooks, so
- * it renders identically on the server (Suspense fallback = default "votes" tab,
- * keeps content in the SSR HTML for SEO) and inside the client DailyVotesList
- * (which feeds the tab read from useSearchParams).
+ * Every scrutin of the day, rendered on the server.
+ *
+ * The page used to split texts and amendments into tabs read from `?type=` in a client component,
+ * with the texts as the server fallback. The server never reads that parameter (it would make the
+ * route dynamic), so no amendment of any day was ever in the HTML a crawler receives: a day made
+ * only of amendments linked nothing. Both groups are now in the document. Amendments beyond the
+ * first few are plain links, since a sitting day can hold close to 200 of them.
  */
-export function DailyVotesContent({ scrutins, typeTab, canonicalPath }: DailyVotesContentProps) {
-  let amendementCount = 0;
-  let nonAmendementCount = 0;
-  for (const s of scrutins) {
-    if (s.type === "AMENDEMENT") amendementCount++;
-    else nonAmendementCount++;
-  }
-  const totalAll = scrutins.length;
+export function DailyVotesContent({ scrutins }: { scrutins: DailyScrutin[] }) {
+  const texts = scrutins.filter((s) => s.type !== "AMENDEMENT");
+  const amendments = scrutins.filter((s) => s.type === "AMENDEMENT");
+  const adopted = scrutins.filter((s) => s.result === "ADOPTED").length;
+  const rejected = scrutins.length - adopted;
 
-  let filtered = scrutins;
-  if (typeTab === "votes") {
-    filtered = scrutins.filter((s) => s.type !== "AMENDEMENT");
-  } else if (typeTab === "amendements") {
-    filtered = scrutins.filter((s) => s.type === "AMENDEMENT");
-  }
-
-  const grouped: Record<Chamber, DailyScrutin[]> = { AN: [], SENAT: [] };
-  let adopted = 0;
-  let rejected = 0;
-  for (const s of filtered) {
-    grouped[s.chamber].push(s);
-    if (s.result === "ADOPTED") adopted++;
-    else rejected++;
-  }
-
-  const buildTypeUrl = (tabKey: string) =>
-    tabKey === "votes" ? canonicalPath : `${canonicalPath}?type=${tabKey}`;
-
-  const tabs = [
-    {
-      key: "votes",
-      label: "Textes de loi",
-      count: nonAmendementCount,
-      href: buildTypeUrl("votes"),
-    },
-    {
-      key: "amendements",
-      label: "Amendements",
-      count: amendementCount,
-      href: buildTypeUrl("amendements"),
-    },
-    { key: "tous", label: "Tous", count: totalAll, href: buildTypeUrl("tous") },
-  ];
-
-  const hasMultipleTypes = amendementCount > 0 && nonAmendementCount > 0;
+  const amendmentCards = amendments.slice(0, AMENDMENT_CARD_COUNT);
+  const amendmentLinks = amendments.slice(AMENDMENT_CARD_COUNT).map((s) => ({
+    slug: s.slug,
+    title: displayTitleOf(toPublicTitleView(s)),
+    result: s.result,
+  }));
 
   return (
     <>
-      {hasMultipleTypes && <ScrutinTypeTabs tabs={tabs} activeKey={typeTab} />}
-
       <div className="flex flex-wrap gap-4 mb-8">
         <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-lg">
           <Vote className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm font-medium">
-            {filtered.length} scrutin{filtered.length > 1 ? "s" : ""}
+            {scrutins.length} scrutin{scrutins.length > 1 ? "s" : ""}
           </span>
         </div>
         {adopted > 0 && (
@@ -93,10 +59,27 @@ export function DailyVotesContent({ scrutins, typeTab, canonicalPath }: DailyVot
       </div>
 
       {(["AN", "SENAT"] as Chamber[]).map((chamber) => {
-        const votes = grouped[chamber];
+        const votes = texts.filter((s) => s.chamber === chamber);
         if (votes.length === 0) return null;
         return <ChamberSection key={chamber} chamber={chamber} scrutins={votes} />;
       })}
+
+      {amendments.length > 0 && (
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-4">
+            Amendements{" "}
+            <span className="text-sm font-normal text-muted-foreground">
+              {amendments.length} scrutin{amendments.length > 1 ? "s" : ""}
+            </span>
+          </h2>
+          <ScrutinCards scrutins={amendmentCards} />
+          {amendmentLinks.length > 0 && (
+            <div className="mt-6">
+              <ScrutinLinkList items={amendmentLinks} />
+            </div>
+          )}
+        </section>
+      )}
     </>
   );
 }
@@ -114,31 +97,37 @@ function ChamberSection({ chamber, scrutins }: { chamber: Chamber; scrutins: Dai
           {scrutins.length} scrutin{scrutins.length > 1 ? "s" : ""}
         </span>
       </div>
-      <div className="grid gap-4">
-        {scrutins.map((s) => (
-          <div key={s.id}>
-            <VoteCard
-              id={s.id}
-              externalId={s.externalId}
-              slug={s.slug}
-              title={s.title}
-              votingDate={s.votingDate}
-              legislature={s.legislature}
-              chamber={s.chamber}
-              votesFor={s.votesFor}
-              votesAgainst={s.votesAgainst}
-              votesAbstain={s.votesAbstain}
-              result={s.result}
-              sourceUrl={s.sourceUrl}
-              theme={s.theme}
-              type={s.type}
-              policy={s.policyTitle}
-            />
-            {s.summary && <SummaryExcerpt summary={s.summary} />}
-          </div>
-        ))}
-      </div>
+      <ScrutinCards scrutins={scrutins} />
     </section>
+  );
+}
+
+function ScrutinCards({ scrutins }: { scrutins: DailyScrutin[] }) {
+  return (
+    <div className="grid gap-4">
+      {scrutins.map((s) => (
+        <div key={s.id}>
+          <VoteCard
+            id={s.id}
+            externalId={s.externalId}
+            slug={s.slug}
+            title={s.title}
+            votingDate={s.votingDate}
+            legislature={s.legislature}
+            chamber={s.chamber}
+            votesFor={s.votesFor}
+            votesAgainst={s.votesAgainst}
+            votesAbstain={s.votesAbstain}
+            result={s.result}
+            sourceUrl={s.sourceUrl}
+            theme={s.theme}
+            type={s.type}
+            policy={s.policyTitle}
+          />
+          {s.summary && <SummaryExcerpt summary={s.summary} />}
+        </div>
+      ))}
+    </div>
   );
 }
 

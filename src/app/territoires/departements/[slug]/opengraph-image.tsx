@@ -1,8 +1,12 @@
 import { ImageResponse } from "next/og";
-import { db } from "@/lib/db";
 import { getDepartmentBySlug } from "@/config/departments";
-import { OgLayout, OgCategoryLabel, OG_SIZE, OgEmoji } from "@/lib/og-utils";
+import { remplaceLeDepartement } from "@/components/territoires/DepartementConseil";
+import { getDepartementTerritoire } from "@/lib/data/territoires";
+import { OgLayout, OG_SIZE } from "@/lib/og-utils";
 import { getDepartmentShapeDataUri } from "@/lib/og-department-shape";
+import { departementPhraseReponse } from "@/lib/territoires/departement-bandeau";
+import { formatCompte } from "@/lib/territoires/format";
+import { phraseTexte, territoireOg, TERRITOIRE_OG_SHAPE } from "@/lib/territoires/og";
 
 export const alt = "Département sur Poligraph";
 export const size = OG_SIZE;
@@ -11,8 +15,12 @@ export const contentType = "image/png";
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const dept = getDepartmentBySlug(slug);
+  // Same reader, same arguments as the page, so both share one cache entry and say the same.
+  const territoire = dept
+    ? await getDepartementTerritoire(dept.code, { letter: null, page: 1 })
+    : null;
 
-  if (!dept) {
+  if (!dept || !territoire) {
     return new ImageResponse(
       <OgLayout>
         <div
@@ -32,85 +40,40 @@ export default async function Image({ params }: { params: Promise<{ slug: string
     );
   }
 
-  const [deputyCount, senatorCount] = await Promise.all([
-    db.politician.count({
-      where: {
-        mandates: {
-          some: { type: "DEPUTE", isCurrent: true, departmentCode: dept.code },
-        },
-      },
-    }),
-    db.politician.count({
-      where: {
-        mandates: {
-          some: { type: "SENATEUR", isCurrent: true, departmentCode: dept.code },
-        },
-      },
-    }),
-  ]);
-
-  const shapeUri = getDepartmentShapeDataUri(dept.code, { width: 400, height: 400 }, "#3b82f6");
+  const { region, territoireHorsRegion, parlement } = territoire;
+  // An empty count is left out of the image rather than drawn as a zero.
+  const faits = [
+    territoire.communeCount > 0
+      ? formatCompte(territoire.communeCount, "commune", "communes")
+      : null,
+    parlement.deputeCount > 0 ? formatCompte(parlement.deputeCount, "député", "députés") : null,
+    parlement.senateurCount > 0
+      ? formatCompte(parlement.senateurCount, "sénateur", "sénateurs")
+      : null,
+  ].filter((f): f is string => f !== null);
 
   return new ImageResponse(
     <OgLayout>
-      {shapeUri && (
-        <img
-          src={shapeUri}
-          width={400}
-          height={400}
-          style={{
-            position: "absolute",
-            right: 40,
-            top: 100,
-            opacity: 0.08,
-          }}
-        />
-      )}
-
-      <OgCategoryLabel emoji="📍" label="Département" />
-
-      <div
-        style={{
-          fontSize: 72,
-          fontWeight: 700,
-          color: "#3b82f6",
-          marginBottom: 8,
-        }}
-      >
-        {dept.code}
-      </div>
-
-      <div
-        style={{
-          fontSize: 44,
-          fontWeight: 700,
-          color: "white",
-          marginBottom: 12,
-        }}
-      >
-        {dept.name}
-      </div>
-
-      <div style={{ fontSize: 24, color: "#94a3b8", marginBottom: 28 }}>{dept.region}</div>
-
-      <div style={{ display: "flex", gap: 40, fontSize: 22, color: "#94a3b8" }}>
-        {deputyCount > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <OgEmoji emoji="🏛️" size={26} />
-            <span>
-              {deputyCount} député{deputyCount > 1 ? "s" : ""}
-            </span>
-          </div>
-        )}
-        {senatorCount > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <OgEmoji emoji="🏛️" size={26} />
-            <span>
-              {senatorCount} sénateur{senatorCount > 1 ? "s" : ""}
-            </span>
-          </div>
-        )}
-      </div>
+      {territoireOg({
+        surtitre: territoireHorsRegion
+          ? territoireHorsRegion.statut
+          : `Département${region ? ` · ${region.name}` : ""}`,
+        nom: dept.name,
+        code: dept.code,
+        phrase: phraseTexte(
+          departementPhraseReponse(
+            territoire,
+            remplaceLeDepartement(territoire.collectivitesParticulieres)
+          )
+        ),
+        faits,
+        shape: getDepartmentShapeDataUri(
+          dept.code,
+          { width: TERRITOIRE_OG_SHAPE, height: TERRITOIRE_OG_SHAPE },
+          "#ffffff"
+        ),
+        shapeOpacity: 0.3,
+      })}
     </OgLayout>,
     { ...OG_SIZE }
   );

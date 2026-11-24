@@ -15,6 +15,14 @@ const mocks = vi.hoisted(() => ({
   imageResponses: [] as ReactNode[],
 }));
 
+vi.mock("@/lib/data/territoire-fil", () => ({
+  getFilTerritoire: vi.fn(async () => []),
+  getRapportsCrcTerritoire: vi.fn(async () => []),
+}));
+vi.mock("@/lib/data/territoire-comptes", () => ({
+  getEchellesComptesPubliees: vi.fn(async () => []),
+  getComptesTerritoire: vi.fn(async () => ({ dernierExercice: null, agregats: [], source: null })),
+}));
 vi.mock("@/lib/data/territoires", () => ({
   getRegionTerritoire: (slug: string) => mocks.getRegionTerritoire(slug),
 }));
@@ -113,7 +121,32 @@ describe("page région", () => {
     const svg = banner.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg!.getAttribute("aria-hidden")).toBe("true");
-    expect(banner.textContent).toContain("Présidence non établie dans nos données");
+    expect(banner.textContent).toContain("La présidence n'est pas établie dans nos données.");
+    expect(banner.textContent).toContain("Région · code 53 · chef-lieu : Rennes");
+    const faits = [...banner.querySelectorAll("dl > div")].map((d) => [
+      d.querySelector("dt")?.textContent,
+      d.querySelector("dd span")?.textContent,
+    ]);
+    expect(faits).toEqual([
+      ["Départements", "4"],
+      ["Communes", "1\u00a0202"],
+      ["Parlementaires", "15"],
+    ]);
+    const onglets = [...container.querySelectorAll('nav[aria-label="Sections de la page"] a')];
+    expect(onglets.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+      ["Conseil", "#conseil"],
+      ["Départements", "#departements"],
+      ["Élections", "#elections"],
+      ["Parlement", "#parlement"],
+      ["Agir", "#agir"],
+    ]);
+    const agir = container.querySelector("#agir")!;
+    expect(agir.textContent).toContain("Les séances du conseil régional sont publiques.");
+    // The seat of a regional council is not recorded: no court is named for a region.
+    expect(agir.textContent).not.toContain("celui qui siège à");
+    for (const a of onglets) {
+      expect(container.querySelector(a.getAttribute("href")!), a.textContent ?? "").not.toBeNull();
+    }
 
     const list = screen.getByRole("region", { name: "Départements" });
     const links = within(list).getAllByRole("link");
@@ -209,16 +242,35 @@ describe("page région", () => {
           source: { label: "Répertoire national des élus", url: null },
           registre: null,
         },
+        coverage: [
+          {
+            bloc: "presidence",
+            state: "DISPONIBLE",
+            source: { label: "Répertoire national des élus", url: null },
+            date: "2026-09-01T00:00:00.000Z",
+          },
+        ],
       })
     );
-    render(await RegionPage(params("martinique")));
+    const { container } = render(await RegionPage(params("martinique")));
     expect(screen.getByRole("link", { name: "Camille Exemple" })).toHaveAttribute(
       "href",
       "/politiques/camille-exemple"
     );
-    expect(
-      screen.getByText(/Source : Répertoire national des élus · confirmée le 1 septembre 2026/)
-    ).toBeInTheDocument();
+    const banner = container.querySelector("section[aria-labelledby='region-titre']")!;
+    expect(banner.textContent).toContain("Camille Exemple préside la collectivité.");
+    expect(banner.textContent).not.toContain("conseil régional");
+    // The dated detail lives in the coverage block, with the source.
+    const couverture = screen.getByRole("region", { name: "Informations disponibles" });
+    expect(couverture).toHaveTextContent("Présidence : disponible, confirmée le 1 septembre 2026");
+    expect(couverture).toHaveTextContent("Source : Répertoire national des élus");
+    expect(container.querySelector('nav[aria-label="Sections de la page"] a')).toHaveAttribute(
+      "href",
+      "#collectivite"
+    );
+    expect(container.querySelector("#collectivite")).not.toBeNull();
+    // A single collectivité replaces the region: the block on the conseil régional is not shown.
+    expect(container.querySelector("#agir")).toBeNull();
   });
 });
 

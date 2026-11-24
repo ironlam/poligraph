@@ -1,6 +1,6 @@
 /**
  * Client-safe share utilities for social platforms.
- * No server dependencies (unlike src/lib/social/post.ts).
+ * No server dependencies (unlike src/lib/api/social-networks.ts).
  */
 
 const BLUESKY_MAX_CHARS = 300;

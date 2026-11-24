@@ -124,11 +124,6 @@ const STATIC_SOURCES: SourceUrl[] = [
     kind: "api",
   },
   {
-    url: "https://archive.nossenateurs.fr/senateurs/json",
-    service: "sync:senat (historique des sénateurs)",
-    kind: "api",
-  },
-  {
     url: "https://www.senat.fr/scrutin-public/scr2024.html",
     service: "sync:scrutins-senat (liste de session)",
     kind: "api",

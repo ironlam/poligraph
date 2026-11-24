@@ -4,6 +4,7 @@ const h = vi.hoisted(() => ({
   revalidateTags: vi.fn(),
   revalidateAll: vi.fn(),
   requestProfileReconcile: vi.fn(),
+  requestActiveProfileReconcile: vi.fn(),
 }));
 
 vi.mock("@/lib/cache", () => ({
@@ -13,6 +14,7 @@ vi.mock("@/lib/cache", () => ({
 vi.mock("@/lib/politicians/profile-snapshot/events", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/politicians/profile-snapshot/events")>()),
   requestProfileReconcile: h.requestProfileReconcile,
+  requestActiveProfileReconcile: h.requestActiveProfileReconcile,
 }));
 
 import { POST } from "../route";
@@ -32,14 +34,28 @@ describe("POST /api/cron/revalidate : rattrapage des fiches", () => {
     vi.unstubAllEnvs();
     vi.stubEnv("CRON_SECRET", "secret");
     h.requestProfileReconcile.mockResolvedValue({ sent: 1 });
+    h.requestActiveProfileReconcile.mockResolvedValue({ sent: 1 });
   });
 
-  it("demande un rattrapage quand un tag de fiche est revalidé", async () => {
-    const res = await POST(req({ tags: ["stats", "votes"] }));
+  it.each([["votes"], ["factchecks"]])(
+    "limite le rattrapage aux fiches actives quand %s est revalidé",
+    async (tag) => {
+      const res = await POST(req({ tags: ["stats", tag] }));
 
-    expect(await res.json()).toEqual({ revalidated: ["stats", "votes"] });
-    expect(h.revalidateTags).toHaveBeenCalledWith(["stats", "votes"]);
-    expect(h.requestProfileReconcile).toHaveBeenCalledWith("cron:stats,votes");
+      expect(await res.json()).toEqual({ revalidated: ["stats", tag] });
+      expect(h.revalidateTags).toHaveBeenCalledWith(["stats", tag]);
+      expect(h.requestActiveProfileReconcile).toHaveBeenCalledExactlyOnceWith(`cron:stats,${tag}`);
+      expect(h.requestProfileReconcile).not.toHaveBeenCalled();
+    }
+  );
+
+  it("demande le rattrapage complet, et lui seul, quand politicians est revalidé", async () => {
+    await POST(req({ tags: ["factchecks", "politicians", "votes"] }));
+
+    expect(h.requestProfileReconcile).toHaveBeenCalledExactlyOnceWith(
+      "cron:factchecks,politicians,votes"
+    );
+    expect(h.requestActiveProfileReconcile).not.toHaveBeenCalled();
   });
 
   it("ne demande rien pour des tags qui ne touchent pas les fiches", async () => {
@@ -47,6 +63,7 @@ describe("POST /api/cron/revalidate : rattrapage des fiches", () => {
 
     expect(await res.json()).toEqual({ revalidated: ["stats"] });
     expect(h.requestProfileReconcile).not.toHaveBeenCalled();
+    expect(h.requestActiveProfileReconcile).not.toHaveBeenCalled();
   });
 
   it("demande un rattrapage sur la revalidation complète, réponse inchangée", async () => {

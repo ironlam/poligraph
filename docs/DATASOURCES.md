@@ -74,8 +74,8 @@ Ce document décrit les sources de données utilisées par Poligraph, leur forma
 - Politiciens : nom, prénom, civilité, date/lieu de naissance
 - Mandats : type `DEPUTE`, circonscription, code département, date de début
 - Groupes parlementaires : mappés vers les partis réels via `src/config/parliamentaryGroups.ts` (voir section "Groupes parlementaires vs Partis" ci-dessous)
-- IDs externes : `ASSEMBLEE_NATIONALE` (PA...) + `NOSDEPUTES` (slug)
-- Photos : depuis NosDéputés (`https://www.nosdeputes.fr/depute/photo/{slug}/120`)
+- IDs externes : `ASSEMBLEE_NATIONALE` (PA...)
+- Photos : voir la section Photos (NosDéputés n'est plus interrogé depuis novembre 2026, #1440)
 
 ### Script
 
@@ -94,18 +94,17 @@ Le script interroge l'API data.gouv.fr pour obtenir l'URL du dernier CSV, puis l
 ## 3. Sénat
 
 - **URL de base** : `https://www.senat.fr/api-senat/senateurs.json`
-- **URL enrichissement** : `https://archive.nossenateurs.fr/senateurs/json`
-- **Type d'accès** : API REST JSON (2 endpoints publics)
+- **Type d'accès** : API REST JSON
 - **Authentification** : Aucune
 - **Rate limit** : 200 ms (`SENAT_RATE_LIMIT_MS`), politesse
-- **Licence** : Licence Ouverte (Sénat) / CC-BY-SA (NosSénateurs)
+- **Licence** : Licence Ouverte (Sénat)
 
 ### Données importées
 
-- Politiciens : matricule, nom, prénom, civilité, date de naissance (via NosSénateurs)
+- Politiciens : matricule, nom, prénom, civilité (dates de naissance : `sync:birthdates`, Wikidata)
 - Mandats : type `SENATEUR`, circonscription, code département
 - Groupes parlementaires : mappés vers les partis réels via `src/config/parliamentaryGroups.ts` (SENATE_GROUPS)
-- IDs externes : `SENAT` (matricule) + `NOSDEPUTES` (slug NosSénateurs)
+- IDs externes : `SENAT` (matricule)
 - Photos : `https://www.senat.fr/senimg/{matricule}.jpg`
 - Fermeture automatique des mandats des sénateurs absents de l'API
 
@@ -627,8 +626,6 @@ La synchronisation des photos interroge plusieurs sources par ordre de priorité
 | 10       | Gouvernement        | Via HATVP                                                                 |
 | 8        | HATVP               | `https://www.hatvp.fr/livraison/photos_gouvernement/{nom}-{prenom}.jpg`   |
 | 6        | Wikidata            | Wikimedia Commons via propriété P18 (thumbnail MD5)                       |
-| 5        | NosDéputés          | `https://www.nosdeputes.fr/depute/photo/{slug}/120`                       |
-| 5        | NosSénateurs        | `https://archive.nossenateurs.fr/senateur/photo/{slug}/120`               |
 
 ### Fonctionnement
 
@@ -774,7 +771,6 @@ Le script `npm run sync:full` exécute toutes les étapes dans l'ordre de dépen
 12. sync:birthdates        # Dates de naissance
 13. sync:deceased          # Décès
 14. sync:photos            # Photos
-15. sync:history           # Historique mandats
 ```
 
 ### Phase 4 : Votes et législation
@@ -832,7 +828,12 @@ Le script `npm run sync:daily` exécute un sous-ensemble incrémentiel (3x/jour 
 ```bash
 npm run sync:daily              # Votes du jour + législation active + presse + IA
 npm run sync:daily -- --dry-run
+npm run sync:daily -- --group=votes # Un seul groupe d'étapes
 ```
+
+Dans `sync-daily.yml`, chaque groupe (`votes`, `legislation`, `press-import`, `press-analysis`,
+`factchecks`, `scores`, `purge`) tourne dans son propre job : un groupe en échec ne fait pas
+échouer les autres, et la purge du cache passe en dernier quoi qu'il arrive.
 
 ---
 

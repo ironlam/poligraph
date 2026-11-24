@@ -34,6 +34,10 @@ export type PublicPresidentialCandidacyFieldEntry = {
   /** Currently defended public measures, withdrawals excluded. */
   measureCount: number;
   themesCoveredCount: number;
+  /** Publication date of the latest published revision among those measures, if any. */
+  lastMeasurePublishedAt?: Date | null;
+  /** When the status last changed, if it did since the candidacy was recorded. */
+  statusChangedAt?: Date | null;
   programmeAbsence: "aucun_programme" | "non_depouille" | null;
 };
 
@@ -99,6 +103,7 @@ export async function getPublicPresidentialCandidacyField(
         status: true,
         sourceUrl: true,
         sourceLabel: true,
+        statusChangedAt: true,
         partyLabel: true,
         presidentialData: {
           select: { accentColor: true, publicationStatus: true, withdrewReason: true },
@@ -170,6 +175,8 @@ export async function getPublicPresidentialCandidacyField(
         partyLogoUrl: candidacy.party?.logoUrl ?? null,
         measureCount,
         themesCoveredCount: rollup?.themesCoveredCount ?? 0,
+        lastMeasurePublishedAt: rollup?.lastPublishedAt ?? null,
+        statusChangedAt: candidacy.statusChangedAt,
         programmeAbsence: resolveProgrammeAbsence(
           measureCount,
           editionCandidacyIds.has(candidacy.id)

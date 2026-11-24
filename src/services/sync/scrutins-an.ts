@@ -10,7 +10,9 @@ import { db } from "@/lib/db";
 import { syncMetadata, hashFile, hashVotes, ProgressTracker } from "@/lib/sync";
 import { computeGroupPositionsForScrutin } from "@/services/sync/compute-group-positions";
 import { writeVotesForScrutin } from "@/services/sync/scrutins-vote-writer";
-import { generateDateSlug, generateUniqueSlug } from "@/lib/utils";
+import { generateUniqueSlug } from "@/lib/utils";
+import { buildScrutinSlugBase } from "@/lib/votes/scrutin-slug";
+import { extractScrutinNumber } from "@/lib/votes/scrutin-number";
 import { VotePosition, VotingResult, DataSource } from "@/generated/prisma";
 import { classifyScrutinTitle } from "@/lib/scrutin-type";
 import * as fs from "fs";
@@ -304,8 +306,17 @@ function parseVotingResult(code: string): VotingResult {
 /**
  * Generate a unique slug for an AN scrutin
  */
-async function generateUniqueScrutinSlug(date: Date, title: string): Promise<string> {
-  const baseSlug = generateDateSlug(date, title);
+async function generateUniqueScrutinSlug(
+  externalId: string,
+  date: Date,
+  title: string
+): Promise<string> {
+  const baseSlug = buildScrutinSlugBase({
+    chamber: "AN",
+    date,
+    number: extractScrutinNumber(externalId),
+    title,
+  });
   return generateUniqueSlug(baseSlug, (s) =>
     db.scrutin.findUnique({ where: { slug: s } }).then(Boolean)
   );
@@ -686,7 +697,7 @@ export async function syncScrutinsAN(
             if (existing) {
               const updateData: typeof scrutinData & { slug?: string } = { ...scrutinData };
               if (!existing.slug) {
-                updateData.slug = await generateUniqueScrutinSlug(votingDate, s.titre);
+                updateData.slug = await generateUniqueScrutinSlug(externalId, votingDate, s.titre);
               }
               scrutin = await db.scrutin.update({
                 where: { id: existing.id },
@@ -694,7 +705,7 @@ export async function syncScrutinsAN(
               });
               stats.scrutinsUpdated++;
             } else {
-              const slug = await generateUniqueScrutinSlug(votingDate, s.titre);
+              const slug = await generateUniqueScrutinSlug(externalId, votingDate, s.titre);
               scrutin = await db.scrutin.create({
                 data: { ...scrutinData, slug },
               });

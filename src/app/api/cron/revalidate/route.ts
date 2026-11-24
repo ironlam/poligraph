@@ -2,13 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { revalidateAll, revalidateTags } from "@/lib/cache";
 import { SELECTABLE_TAGS, type SelectableCacheTag } from "@/lib/cache-tags";
-import { revalidatePathsSchema } from "@/lib/security/schemas/admin";
-import { requestProfileReconcile } from "@/lib/politicians/profile-snapshot/events";
+import {
+  profileReconcileRelaySchema,
+  profileRefreshRelaySchema,
+  revalidatePathsSchema,
+} from "@/lib/security/schemas/admin";
+import {
+  inngestSend,
+  PROFILE_RECONCILE_ACTIVE_EVENT,
+  PROFILE_RECONCILE_EVENT,
+  PROFILE_REFRESH_EVENT,
+  requestActiveProfileReconcile,
+  requestProfileReconcile,
+  type InngestEventPayload,
+} from "@/lib/politicians/profile-snapshot/events";
 
 const CRON_ALLOWED_TAGS = SELECTABLE_TAGS;
 
 // Tags whose sync may change a profile document: a reconcile pass follows their revalidation.
-const PROFILE_TAGS: readonly string[] = ["politicians", "votes", "factchecks"];
+// `politicians` can touch any profile, so it gets the full pass. A vote or fact-check sync only
+// changes the profiles of parliamentarians and of politicians a fact-check mentions.
+const FULL_RECONCILE_TAG = "politicians";
+const ACTIVE_RECONCILE_TAGS: readonly string[] = ["votes", "factchecks"];
 type CronAllowedTag = SelectableCacheTag;
 
 // Tags a caller may expire at once with `expireNow: true` (no stale entry served while the
@@ -28,6 +43,10 @@ const EXPIRE_NOW_TAGS: readonly string[] = ["gouvernements", "historical-group-p
  * Body: { tags: ["votes", "politicians"] } or { all: true }, and/or
  * { paths: ["/politiques/<slug>"] } (at most 10, profile and government paths only).
  * `expireNow: true` additionally expires the tags of EXPIRE_NOW_TAGS immediately.
+ *
+ * Or a profile-snapshot request relayed by a workflow, which has no Inngest event key:
+ * { profileRefresh: { politicianIds, reason } } or { profileReconcile: { reason, active } }.
+ * Such a body purges nothing.
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -40,6 +59,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+
+    if (body.profileRefresh !== undefined || body.profileReconcile !== undefined) {
+      return relayProfileRequest(body);
+    }
 
     if (body.all) {
       // Deprecated: { all: true } purges every cache tag, including politicians
@@ -89,8 +112,10 @@ export async function POST(request: NextRequest) {
         for (const tag of tags)
           if (EXPIRE_NOW_TAGS.includes(tag)) revalidateTag(tag, { expire: 0 });
       }
-      if (tags.some((tag: string) => PROFILE_TAGS.includes(tag))) {
+      if (tags.includes(FULL_RECONCILE_TAG)) {
         await requestProfileReconcile(`cron:${tags.join(",")}`);
+      } else if (tags.some((tag: string) => ACTIVE_RECONCILE_TAGS.includes(tag))) {
+        await requestActiveProfileReconcile(`cron:${tags.join(",")}`);
       }
       return NextResponse.json(
         revalidatedPaths ? { revalidated: tags, revalidatedPaths } : { revalidated: tags }
@@ -109,4 +134,50 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+}
+
+// Sent with `inngestSend`, not `defaultSend`: the latter relays to this very route when the
+// event key is missing.
+async function relayProfileRequest(body: {
+  profileRefresh?: unknown;
+  profileReconcile?: unknown;
+}): Promise<NextResponse> {
+  let events: InngestEventPayload[];
+  if (body.profileRefresh !== undefined) {
+    const parsed = profileRefreshRelaySchema.safeParse(body.profileRefresh);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "profileRefresh: { politicianIds: 1 to 100 ids, reason }" },
+        { status: 400 }
+      );
+    }
+    const { politicianIds, reason } = parsed.data;
+    events = [...new Set(politicianIds)].map((politicianId) => ({
+      name: PROFILE_REFRESH_EVENT,
+      data: { politicianId, reason },
+    }));
+  } else {
+    const parsed = profileReconcileRelaySchema.safeParse(body.profileReconcile);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "profileReconcile: { reason, active }" }, { status: 400 });
+    }
+    const { reason, active } = parsed.data;
+    events = [
+      { name: active ? PROFILE_RECONCILE_ACTIVE_EVENT : PROFILE_RECONCILE_EVENT, data: { reason } },
+    ];
+  }
+
+  try {
+    await inngestSend(events);
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "[profile-snapshot] relay failed",
+        count: events.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
+    return NextResponse.json({ error: "Relay failed" }, { status: 502 });
+  }
+  return NextResponse.json({ relayed: events.length });
 }

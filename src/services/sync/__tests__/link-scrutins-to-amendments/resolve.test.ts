@@ -755,3 +755,126 @@ describeIfDb("amendmentDeliberation (pure)", () => {
     expect(amendmentDeliberation("AMANR5L17PO838901B3018N000001")).toBeNull();
   });
 });
+
+/**
+ * Same number in two texts of one dossier (first and second reading, PPL 53069
+ * shape): the author cited in the title picks the text when exactly one
+ * candidate's first author matches. Never used when the title cites a
+ * délibération.
+ */
+describeIfDb("resolveLinks — author tie-break across readings", () => {
+  const DLR_EXT = "TEST_AUTHOR_DLR";
+  const AMEND_PFX = "TEST_AUTHOR_A_";
+  const SCRUTIN_PFX = "TEST_AUTHOR_S_";
+  const PEU5_T1 = `${AMEND_PFX}peu5_t1`;
+  const FALCON5_T2 = `${AMEND_PFX}falcon5_t2`;
+  const FALCON7_T1 = `${AMEND_PFX}falcon7_t1`;
+  const FALCON7_T2 = `${AMEND_PFX}falcon7_t2`;
+
+  let dossierId: string;
+  let idByExt: Map<string, string>;
+
+  async function makeScrutin(suffix: string, title: string) {
+    return db.scrutin.create({
+      data: {
+        externalId: `${SCRUTIN_PFX}${suffix}`,
+        title,
+        votingDate: new Date("2026-11-19T10:00:00Z"),
+        legislature: 17,
+        chamber: "AN",
+        votesFor: 1,
+        votesAgainst: 0,
+        votesAbstain: 0,
+        result: "REJECTED",
+        dossierLegislatifId: dossierId,
+      },
+    });
+  }
+
+  beforeAll(async () => {
+    ({ db } = await import("@/lib/db"));
+    ({ resolveLinks } = await import("@/services/sync/link-scrutins-to-amendments/resolve"));
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: SCRUTIN_PFX } } });
+    await db.amendment.deleteMany({ where: { externalId: { startsWith: AMEND_PFX } } });
+    await db.legislativeDossier.deleteMany({ where: { externalId: DLR_EXT } });
+
+    const dossier = await db.legislativeDossier.create({
+      data: { externalId: DLR_EXT, slug: "test-author-dossier", title: "Test", status: "EN_COURS" },
+    });
+    dossierId = dossier.id;
+
+    const base = { dossierId, status: "REJETE" as const, legislature: 17, chamber: "AN" as const };
+    await db.amendment.createMany({
+      data: [
+        {
+          ...base,
+          externalId: PEU5_T1,
+          number: "5",
+          texteRef: "T1",
+          authorName: "M. Peu, M. Brugerolles",
+        },
+        {
+          ...base,
+          externalId: FALCON5_T2,
+          number: "5",
+          texteRef: "T2",
+          authorName: "M. Falcon, M. Amblard et M. Vos",
+        },
+        { ...base, externalId: FALCON7_T1, number: "7", texteRef: "T1", authorName: "M. Falcon" },
+        {
+          ...base,
+          externalId: FALCON7_T2,
+          number: "7",
+          texteRef: "T2",
+          authorName: "M. Falcon, M. Jolly",
+        },
+      ],
+    });
+    const rows = await db.amendment.findMany({
+      where: { externalId: { startsWith: AMEND_PFX } },
+      select: { id: true, externalId: true },
+    });
+    idByExt = new Map(rows.map((r) => [r.externalId, r.id]));
+  });
+
+  afterAll(async () => {
+    await db.scrutinAmendment.deleteMany({
+      where: { scrutin: { externalId: { startsWith: SCRUTIN_PFX } } },
+    });
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: SCRUTIN_PFX } } });
+    await db.amendment.deleteMany({ where: { externalId: { startsWith: AMEND_PFX } } });
+    await db.legislativeDossier.deleteMany({ where: { externalId: DLR_EXT } });
+  });
+
+  it("POSITIVE: picks the text whose amendment the cited author signed", async () => {
+    const title = "l'amendement n° 5 de M. Falcon à l'article premier (deuxième lecture).";
+    const scrutin = await makeScrutin("falcon5", title);
+    const res = await resolveLinks(scrutin, parseScrutinTitle(title));
+
+    const principal = res.links.filter((l) => l.role === "PRINCIPAL");
+    expect(principal).toHaveLength(1);
+    expect(principal[0]!.amendmentId).toBe(idByExt.get(FALCON5_T2));
+    expect(principal[0]!.parserWarnings.some((w) => w.code === "AUTHOR_DISAMBIGUATED")).toBe(true);
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(false);
+  });
+
+  it("NEGATIVE: the same author on both texts stays ambiguous", async () => {
+    const title = "l'amendement n° 7 de M. Falcon à l'article premier (deuxième lecture).";
+    const scrutin = await makeScrutin("falcon7", title);
+    const res = await resolveLinks(scrutin, parseScrutinTitle(title));
+
+    expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+  });
+
+  it("NEGATIVE: a title citing a délibération does not use the author", async () => {
+    const title = "l'amendement n° 5 de M. Falcon à l'article premier (seconde délibération)";
+    const scrutin = await makeScrutin("falcon5d2", title);
+    const parsed = parseScrutinTitle(title);
+    expect(parsed.deliberation).toBe(2);
+    const res = await resolveLinks(scrutin, parsed);
+
+    expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+  });
+});

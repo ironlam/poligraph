@@ -113,7 +113,14 @@ export async function setCandidacyStatusAction(input: {
 
     await tx.candidacy.update({
       where: { id: candidacyId },
-      data: { status, sourceUrl, sourceLabel },
+      data: {
+        status,
+        sourceUrl,
+        sourceLabel,
+        // Only a real change of status: correcting a source must not resurface the candidacy
+        // as news on the hub.
+        ...(candidacy.status !== status ? { statusChangedAt: new Date() } : {}),
+      },
     });
     if (mustClearSynthesis) {
       await tx.candidacyPresidential.updateMany({

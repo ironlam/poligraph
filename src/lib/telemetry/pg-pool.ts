@@ -8,7 +8,8 @@ import {
   startLoopLagProbe,
   type AcquisitionSample,
 } from "./pool-acquisition";
-import { createReportGate } from "./pool-exhaustion";
+import { POOLER_REFUSAL_RETRY_DELAYS_MS } from "@/config/database";
+import { createReportGate, isPoolerRefusal } from "./pool-exhaustion";
 
 /** How often one process may send a slow acquisition to Sentry. */
 export const SLOW_ACQUISITION_REPORT_INTERVAL_MS = 10 * 60_000;
@@ -59,8 +60,67 @@ class ObservedClient extends Client {
 }
 
 export class ObservedPool extends Pool {
-  constructor(config: PoolConfig) {
+  constructor(
+    config: PoolConfig,
+    private readonly refusalRetryDelaysMs: readonly number[] = POOLER_REFUSAL_RETRY_DELAYS_MS
+  ) {
     super({ ...config, Client: ObservedClient });
+  }
+
+  // A refusal by the pooler is transient (see POOLER_REFUSAL_RETRY_DELAYS_MS): ask again a few
+  // times before letting the error reach the caller. Nothing has been sent on a refused
+  // connection, so trying again cannot run a statement twice.
+  override connect: Pool["connect"] = ((...args: unknown[]) => {
+    const callback = args[0];
+    const startedAt = Date.now();
+
+    if (typeof callback === "function") {
+      const invoke = callback as Invocation;
+      const attempt = (retries: number): unknown =>
+        (this.acquire as Invocation)((...callbackArgs: unknown[]) => {
+          const wait = this.refusalRetryWait(callbackArgs[0], retries, startedAt);
+          if (wait === null) return invoke(...callbackArgs);
+          setTimeout(() => {
+            // Closed while waiting: hand back the refusal rather than an error about the closing.
+            if (this.ending) invoke(...callbackArgs);
+            else attempt(retries + 1);
+          }, wait);
+        });
+      return attempt(0);
+    }
+
+    const attempt = (retries: number): Promise<unknown> =>
+      ((this.acquire as Invocation)() as Promise<unknown>).catch(async (error: unknown) => {
+        const wait = this.refusalRetryWait(error, retries, startedAt);
+        if (wait === null) throw error;
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        if (this.ending) throw error;
+        return attempt(retries + 1);
+      });
+    return attempt(0);
+  }) as Pool["connect"];
+
+  /**
+   * The wait before the next attempt, or null when the error should reach the caller as it is.
+   *
+   * `connectionTimeoutMillis` restarts with every attempt, so the retries get a budget of their
+   * own: no new attempt starts once the time spent since the first one, wait included, reaches
+   * that timeout. The call as a whole therefore lasts at most twice the timeout, not once per
+   * attempt.
+   */
+  private refusalRetryWait(error: unknown, retries: number, startedAt: number): number | null {
+    const delay = this.refusalRetryDelaysMs[retries];
+    if (delay === undefined || this.ending || !isPoolerRefusal(error)) return null;
+
+    const wait = Math.round(delay * (0.5 + Math.random() / 2));
+    const budget = this.options.connectionTimeoutMillis;
+    if (budget && Date.now() - startedAt + wait >= budget) return null;
+
+    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs, Sentry breadcrumb)
+    console.warn(
+      `[pg-pool] refus du pooler, nouvelle tentative ${retries + 1}/${this.refusalRetryDelaysMs.length} dans ${wait}ms`
+    );
+    return wait;
   }
 
   // Pool.query acquires through this public callback API. A queued acquisition otherwise runs
@@ -68,7 +128,7 @@ export class ObservedPool extends Pool {
   //
   // The timing wrapper goes inside the binding, not around it, so the whole call still runs in the
   // caller's context rather than the releasing operation's.
-  override connect: Pool["connect"] = ((...args: unknown[]) => {
+  private acquire: Pool["connect"] = ((...args: unknown[]) => {
     const startedAt = Date.now();
     // Read before the acquisition, because that is what decides which pg-pool branch runs: a full
     // pool queues the caller, a pool with room opens a new connection.

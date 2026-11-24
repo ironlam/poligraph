@@ -12,6 +12,9 @@ permissions:
 
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  # Without an Inngest event key, profile refresh requests go through the application.
+  CRON_SECRET: ${{ secrets.CRON_SECRET }}
+  NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL || 'https://poligraph.fr' }}
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
 jobs:

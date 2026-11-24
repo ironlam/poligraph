@@ -160,6 +160,17 @@ for (const theme of THEMES) {
           }
           await page.getByRole("button", { name: "Ouvrir le menu" }).click();
           await expect(page.locator(MOBILE_MENU)).toBeVisible();
+          const transparency = page
+            .locator(MOBILE_MENU)
+            .getByRole("region", { name: "Transparence et probité" });
+          const affairs = transparency.getByRole("link", { name: "Affaires judiciaires" });
+          const declarations = transparency.getByRole("link", {
+            name: "Patrimoine et déclarations",
+          });
+          await expect(affairs).toBeVisible();
+          await expect(affairs).toHaveAttribute("href", "/affaires");
+          await expect(declarations).toBeVisible();
+          await expect(declarations).toHaveAttribute("href", "/declarations-et-patrimoine");
         } else {
           await expect(page.locator(TAB_BAR)).toBeHidden();
         }

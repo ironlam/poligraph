@@ -60,6 +60,7 @@ vi.mock("@/lib/db", () => ({
 import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import {
   getCommuneDossier,
+  getDepartementGrandesCommunes,
   getDepartementTerritoire,
   getRegionTerritoire,
   matchDepartements,
@@ -68,6 +69,7 @@ import {
   resolvePremierTour,
   resolveTitulaire,
   searchTerritoires,
+  suggestCommunesInDepartement,
 } from "../territoires";
 
 type Status = "PUBLISHED" | "DRAFT";
@@ -648,6 +650,65 @@ describe("getDepartementTerritoire", () => {
   });
 });
 
+describe("getDepartementGrandesCommunes", () => {
+  it("refuse un code invalide sans interroger la base", async () => {
+    expect(await getDepartementGrandesCommunes("1; DROP")).toEqual([]);
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("rend les communes dans l'ordre de la requête, par population, avec l'état du maire", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([
+      { id: "13055", name: "Marseille", population: 870000 },
+      { id: "13001", name: "Aix-en-Provence", population: 147000 },
+    ]);
+    mocks.mandateFindMany.mockResolvedValue([
+      { localData: { communeId: "13001" }, politician: person("maire-aix") },
+    ]);
+
+    const rows = await getDepartementGrandesCommunes("13");
+
+    expect(rows.map((r) => [r.inseeCode, r.name, r.maire.person?.slug ?? null])).toEqual([
+      ["13055", "Marseille", null],
+      ["13001", "Aix-en-Provence", "maire-aix"],
+    ]);
+    // The order and the limit belong to the query: largest first, eight rows.
+    const sql = mocks.queryRaw.mock.calls[0]![0] as { strings: string[]; values: unknown[] };
+    expect(sql.strings.join("?")).toMatch(/ORDER BY c\."population" DESC NULLS LAST/);
+    expect(sql.values.at(-1)).toBe(8);
+  });
+});
+
+describe("getDepartementTerritoire, présidence d'après le registre", () => {
+  // Morbihan and Vendée, 2026-11-15: a "Président de commission" sorted before the president
+  // and the page named the wrong person as president of the departmental council.
+  it("ne prend pas un président de commission pour le président du conseil", async () => {
+    mocks.mandateCount.mockResolvedValue(0);
+    mocks.mandateGroupBy.mockResolvedValue([]);
+    mocks.mandateFindMany.mockResolvedValue([]);
+    mocks.queryRaw
+      .mockResolvedValueOnce([{ letter: "A", count: 1 }])
+      .mockResolvedValueOnce([{ id: "56001", name: "Allaire", population: 4000 }]);
+    const row = (lastName: string, functionLabel: string) => ({
+      lastName,
+      firstName: "A",
+      subdivisionLabel: "Vannes-1",
+      functionLabel,
+      registerDate: new Date("2026-08-11T12:00:00Z"),
+    });
+    mocks.conseilFindMany.mockResolvedValue([
+      row("Abel", "Président de commission du conseil départemental"),
+      row("Zola", "Président du conseil départemental"),
+    ]);
+
+    const result = await getDepartementTerritoire("56");
+
+    expect(result?.presidence.registre).toEqual({
+      fullName: "A Zola",
+      title: "Président du conseil départemental",
+    });
+  });
+});
+
 describe("getRegionTerritoire, conseil régional", () => {
   it("range la présidence puis les vice-présidences par rang, puis l'ordre alphabétique", async () => {
     mocks.communeGroupBy.mockResolvedValue([]);
@@ -829,5 +890,70 @@ describe("searchTerritoires", () => {
   it("ignore une requête trop courte", async () => {
     expect(await searchTerritoires(" a ")).toEqual({ communes: [], departements: [], regions: [] });
     expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe("suggestCommunesInDepartement", () => {
+  const quimper = {
+    id: "29232",
+    name: "Quimper",
+    postalCodes: ["29000"],
+    population: 63000,
+    departmentCode: "29",
+  };
+  const sqlOf = (call: unknown[]) => {
+    const [strings, ...values] = call as [
+      TemplateStringsArray | { sql: string; values: unknown[] },
+      ...unknown[],
+    ];
+    return Array.isArray(strings)
+      ? { sql: strings.join("?"), values }
+      : (strings as { sql: string; values: unknown[] });
+  };
+
+  it("cherche dans le seul département, accents et tirets repliés, et borne le résultat", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([quimper]);
+    const result = await suggestCommunesInDepartement("29", "  Saint-pol ");
+
+    expect(result).toEqual([
+      { inseeCode: "29232", name: "Quimper", postalCodes: ["29000"], population: 63000 },
+    ]);
+    const { sql, values } = sqlOf(mocks.queryRaw.mock.calls[0]!);
+    expect(sql).toContain('c."departmentCode" =');
+    expect(sql).toContain("unaccent(replace(c.\"name\", '-', ' '))");
+    expect(values).toEqual(["29", "%Saint pol%", "Saint pol%", 8]);
+  });
+
+  it("neutralise les jokers de LIKE saisis par l'utilisateur", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([]);
+    await suggestCommunesInDepartement("29", "100%_x");
+    expect(sqlOf(mocks.queryRaw.mock.calls[0]!).values.slice(1, 3)).toEqual([
+      "%100\\%\\_x%",
+      "100\\%\\_x%",
+    ]);
+  });
+
+  it("lit cinq chiffres comme un code postal du département", async () => {
+    mocks.communeFindMany.mockResolvedValueOnce([quimper]);
+    await suggestCommunesInDepartement("29", "29000");
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+    expect(mocks.communeFindMany.mock.calls[0]![0]).toMatchObject({
+      where: { departmentCode: "29", postalCodes: { has: "29000" } },
+      take: 8,
+    });
+  });
+
+  it("ne lance aucune requête pour un département inconnu ou un texte trop court", async () => {
+    expect(await suggestCommunesInDepartement("999", "quimper")).toEqual([]);
+    expect(await suggestCommunesInDepartement("__proto__", "quimper")).toEqual([]);
+    expect(await suggestCommunesInDepartement("29", " q ")).toEqual([]);
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+    expect(mocks.communeFindMany).not.toHaveBeenCalled();
+  });
+
+  it("coupe un texte démesuré avant la requête", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([]);
+    await suggestCommunesInDepartement("29", "a".repeat(500));
+    expect(String(sqlOf(mocks.queryRaw.mock.calls[0]!).values[2])).toHaveLength(81);
   });
 });

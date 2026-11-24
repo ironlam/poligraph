@@ -16,12 +16,6 @@ export const SCRUTIN_TYPE_LABELS: Record<ScrutinType, string> = {
   PRESIDENTIELLE: "Présidentielle",
 };
 
-/** Query-string value of each type on the dedicated page. */
-export const SCRUTIN_TYPE_PARAMS: Record<ScrutinType, string> = {
-  MUNICIPALES: "municipales",
-  PRESIDENTIELLE: "presidentielle",
-};
-
 export interface ScrutinRow {
   key: string;
   label: string;

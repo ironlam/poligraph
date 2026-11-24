@@ -1,4 +1,12 @@
-import { territoireCommuneDecisionsPath, territoireCommunePath } from "./paths";
+import { getDepartmentName, getDepartmentSlug } from "@/config/departments";
+import { getRegionBySlug } from "@/config/regions";
+import { generateSlug } from "@/lib/utils";
+import {
+  territoireCommuneDecisionsPath,
+  territoireCommunePath,
+  territoireDepartementPath,
+  territoireRegionPath,
+} from "./paths";
 
 /** INSEE code at the end of a local mandate label: "Carcassonne (11069)", "Ajaccio (2A004)". */
 const INSEE_SUFFIX = /\(([0-9]{5}|2[AB][0-9]{3})\)$/;
@@ -10,19 +18,63 @@ export interface MandateCommuneLinkInput {
   localData?: { commune?: unknown } | null;
 }
 
+export interface MandateCommuneLink {
+  href: string;
+  /** True for a mandate that ended: the link then says « historique ». */
+  historique: boolean;
+}
+
 /**
- * Link from a local mandate to its Territoires commune page (#1052, Liens.html P1).
+ * Link from a local mandate to its Territoires commune page (#1052, Liens.html P1; past
+ * mandates since lot B).
  *
- * Current mandates only: a past mandate gets no link rather than one without the « historique »
- * wording. The commune must exist in the base, which the profile document already proves through
- * `localData.commune` (a foreign key to Commune), so no extra read is needed. The code is taken
- * from the label, measured on production on 2026-10-11 to equal `MandateLocal.communeId` on every
- * row that carries one; a label without a code yields no link rather than a guessed one.
+ * A past mandate is linked too, and flagged: the page it leads to describes the commune today,
+ * not at the time of the mandate, so the label must say « historique ». The commune must exist
+ * in the base, which the profile document already proves through `localData.commune` (a foreign
+ * key to Commune), so no extra read is needed. The code is taken from the label, measured on
+ * production on 2026-10-11 to equal `MandateLocal.communeId` on every row that carries one; a
+ * label without a code yields no link rather than a guessed one.
  */
-export function mandateTerritoireHref(mandate: MandateCommuneLinkInput): string | null {
-  if (!mandate.isCurrent || !mandate.localData?.commune) return null;
+export function mandateCommuneLink(mandate: MandateCommuneLinkInput): MandateCommuneLink | null {
+  if (!mandate.localData?.commune) return null;
   const code = mandate.constituency?.trim().match(INSEE_SUFFIX)?.[1];
-  return code ? territoireCommunePath(code) : null;
+  return code ? { href: territoireCommunePath(code), historique: !mandate.isCurrent } : null;
+}
+
+export interface MandateDepartementLinkInput {
+  type: string;
+  isCurrent: boolean;
+  departmentCode: string | null;
+}
+
+const DEPARTEMENT_LINKED_TYPES = new Set(["DEPUTE", "SENATEUR", "PRESIDENT_DEPARTEMENT"]);
+
+/**
+ * Link from the current mandate of a deputy, a senator or a departmental council president to
+ * the Territoires page of their department. Null for a code without a department page (seats of the French
+ * abroad, collectivities outside the referential): never a guessed destination.
+ */
+export function mandateDepartementHref(mandate: MandateDepartementLinkInput): string | null {
+  if (!mandate.isCurrent || !DEPARTEMENT_LINKED_TYPES.has(mandate.type)) return null;
+  const name = getDepartmentName(mandate.departmentCode);
+  return name ? territoireDepartementPath(getDepartmentSlug(name)) : null;
+}
+
+/**
+ * Link from a current regional presidency to its region page. `constituency` carries the region
+ * name, the key the region page reads the presidency by; a name outside the referential yields
+ * no link.
+ */
+export function mandateRegionHref(mandate: {
+  type: string;
+  isCurrent: boolean;
+  constituency: string | null;
+}): string | null {
+  if (!mandate.isCurrent || mandate.type !== "PRESIDENT_REGION" || !mandate.constituency) {
+    return null;
+  }
+  const region = getRegionBySlug(generateSlug(mandate.constituency));
+  return region ? territoireRegionPath(region.slug) : null;
 }
 
 const MUNICIPAL_TYPES = new Set(["MAIRE", "ADJOINT_MAIRE", "CONSEILLER_MUNICIPAL"]);

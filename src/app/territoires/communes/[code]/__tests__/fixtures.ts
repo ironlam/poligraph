@@ -108,6 +108,7 @@ export function dossier(overrides: Partial<CommuneDossier> = {}): CommuneDossier
             elueAuPremierTour: true,
             electionAuPremierTour: "ELUE",
             elueAuSecondTour: false,
+            sieges: null,
           },
           {
             listName: "Liste B",
@@ -119,6 +120,7 @@ export function dossier(overrides: Partial<CommuneDossier> = {}): CommuneDossier
             elueAuPremierTour: false,
             electionAuPremierTour: "NON_ELUE",
             elueAuSecondTour: false,
+            sieges: null,
           },
         ],
         participation: [

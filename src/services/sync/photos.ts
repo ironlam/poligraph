@@ -166,21 +166,7 @@ async function getPotentialPhotoUrls(politician: {
     });
   }
 
-  // 4. NosDéputés/NosSénateurs
-  if (hasDeputeMandate) {
-    urls.push({
-      url: `https://www.nosdeputes.fr/depute/photo/${politician.slug}/120`,
-      source: "nosdeputes",
-    });
-  }
-  if (hasSenateurMandate) {
-    urls.push({
-      url: `https://archive.nossenateurs.fr/senateur/photo/${politician.slug}/120`,
-      source: "nossenateurs",
-    });
-  }
-
-  // 5. Wikidata
+  // 4. Wikidata
   if (wikidataId) {
     const wikiPhoto = await getWikidataPhoto(wikidataId);
     if (wikiPhoto) {

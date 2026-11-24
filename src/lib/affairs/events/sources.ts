@@ -87,6 +87,7 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "ina.fr",
   // Presse régionale
   "ouest-france.fr",
+  "oxygeneradio.com",
   "sudouest.fr",
   "ladepeche.fr",
   "ledauphine.com",
@@ -133,12 +134,14 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "lepoulpe.info",
   // Outre-mer (la1ere est un sous-domaine de franceinfo et francetvinfo)
   "franceantilles.fr",
+  "franceguyane.fr",
   "clicanoo.re",
   "lequotidien.re",
   "linfo.re",
   "rci.fm",
   "lnc.nc",
   "outremers360.com",
+  "lejournaldemayotte.yt",
   // Presse étrangère de référence
   "lesoir.be",
   "lalibre.be",

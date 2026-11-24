@@ -11,12 +11,30 @@ import { communeListCounter } from "@/components/territoires/CommuneIndex";
 import { DEPARTMENT_OUTLINES } from "@/config/territoires-shapes";
 
 const territoireMock = vi.fn();
+const grandesMock = vi.fn();
 const deputesMock = vi.fn();
 const senateursMock = vi.fn();
 
+vi.mock("@/lib/data/territoire-fil", () => ({
+  getFilTerritoire: vi.fn(async () => []),
+  getRapportsCrcTerritoire: vi.fn(async () => []),
+}));
+vi.mock("@/lib/data/territoire-comptes", () => ({
+  getEchellesComptesPubliees: vi.fn(async () => []),
+  getComptesTerritoire: vi.fn(async () => ({ dernierExercice: null, agregats: [], source: null })),
+}));
+vi.mock("@/lib/data/parrainages", () => ({
+  getParrainagesCommuneBlocs: async () => [],
+  getParrainagesDepartementResumes: async () => [],
+}));
+vi.mock("@/lib/data/territoire-votes", () => ({
+  getVotesDeputesDepartement: vi.fn(async () => ({ scrutins: [], deputeSlugs: [] })),
+  getVotesSenateursDepartement: vi.fn(async () => ({ scrutins: [], deputeSlugs: [] })),
+}));
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/lib/data/territoires", () => ({
   getDepartementTerritoire: (...args: unknown[]) => territoireMock(...args),
+  getDepartementGrandesCommunes: (...args: unknown[]) => grandesMock(...args),
 }));
 vi.mock("@/lib/data/departments", () => ({
   getDeputesByDepartment: (...args: unknown[]) => deputesMock(...args),
@@ -134,6 +152,11 @@ const text = (doc: Document) => doc.body.textContent ?? "";
 
 beforeEach(() => {
   territoireMock.mockReset();
+  // Eight communes, largest first, as the reader returns them.
+  grandesMock.mockReset();
+  grandesMock.mockResolvedValue(
+    Array.from({ length: 8 }, (_, i) => row(`Grande ${i}`, i, i !== 1))
+  );
   deputesMock.mockResolvedValue([person("d2", "Eure (2)"), person("d1", "Eure (1)")]);
   senateursMock.mockResolvedValue([person("s1", "Eure")]);
 });
@@ -142,15 +165,27 @@ describe("page département : département ordinaire", () => {
   it("affiche le bandeau, le fil d'Ariane vers la région et les faits clés", async () => {
     const doc = await render("eure", territoire("27"));
 
-    expect(doc.querySelector("h1")?.textContent).toBe("Eure (27)");
+    const bandeau = doc.querySelector('section[aria-labelledby="departement-titre"]')!;
+    expect(doc.querySelector("h1")?.textContent).toBe("Eure");
+    expect(bandeau.textContent).toContain("Département · code 27 · Normandie");
     const crumbs = [...doc.querySelectorAll('nav[aria-label="Fil d\'Ariane"] a')];
     expect(crumbs.map((a) => a.getAttribute("href"))).toEqual([
+      "/",
       "/territoires",
       "/territoires/regions/normandie",
     ]);
-    expect(text(doc)).toContain("158");
-    expect(text(doc)).toContain("2 députés · 1 sénateur");
-    expect(text(doc)).toContain("Non établie");
+    expect(bandeau.textContent).toContain(
+      "La présidence du conseil départemental n'est pas établie dans nos données."
+    );
+    const faits = [...bandeau.querySelectorAll("dl > div")].map((d) => [
+      d.querySelector("dt")?.textContent,
+      d.querySelector("dd span")?.textContent,
+    ]);
+    expect(faits).toEqual([
+      ["Communes", "158"],
+      ["Députés", "2"],
+      ["Sénateurs", "1"],
+    ]);
     // Silhouette présente pour un département métropolitain, décorative.
     expect(doc.querySelector('section[aria-labelledby="departement-titre"] svg')).not.toBeNull();
     expect(
@@ -158,6 +193,29 @@ describe("page département : département ordinaire", () => {
         .querySelector('section[aria-labelledby="departement-titre"] svg')
         ?.closest('[aria-hidden="true"]')
     ).not.toBeNull();
+  });
+
+  it("navigue par onglets, le conseil avant l'index des communes", async () => {
+    const doc = await render("eure", territoire("27"));
+    const onglets = [...doc.querySelectorAll('nav[aria-label="Sections de la page"] a')];
+    expect(onglets.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+      ["Conseil", "#conseil"],
+      ["Communes", "#communes"],
+      ["Parlement", "#parlement"],
+      ["Agir", "#agir"],
+    ]);
+    const agir = doc.querySelector("#agir")!;
+    expect(agir.textContent).toContain("Les séances du conseil départemental sont publiques.");
+    // Eure is in the jurisdiction of Rouen (code de justice administrative, art. R. 221-3).
+    expect(agir.textContent).toContain(
+      "Pour une décision du département, le tribunal administratif compétent est en principe celui qui siège à Rouen."
+    );
+    expect(agir.textContent).not.toMatch(/mairie|conseil municipal/);
+    const conseil = doc.querySelector("#conseil")!;
+    const communes = doc.querySelector("#communes")!;
+    expect(
+      conseil.compareDocumentPosition(communes) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("garde le bloc Parlement existant, députés triés par circonscription", async () => {
@@ -202,8 +260,8 @@ describe("page département : département ordinaire", () => {
   it("lie chaque commune vers sa page Territoires, avec population et maire public", async () => {
     const doc = await render("eure", territoire("27"));
     const links = [...doc.querySelectorAll("#communes ul.overflow-hidden a")];
-    expect(links).toHaveLength(PAGE_SIZE);
-    expect(links[0]?.getAttribute("href")).toBe("/territoires/communes/27000");
+    expect(links).toHaveLength(8);
+    expect(links[0]?.getAttribute("href")).toBe("/territoires/communes/grande-0-27000");
     expect(links[0]?.textContent).toMatch(/1\s000 hab\./u);
     expect(links[0]?.textContent).toContain("Maire : Maire 0");
     expect(links[1]?.textContent).toContain("Maire non établi");
@@ -252,6 +310,49 @@ describe("page département : département ordinaire", () => {
   });
 });
 
+describe("page département : ordre de lecture", () => {
+  it("ouvre sur le conseil, puis les plus grandes communes et un lien vers la liste de A à Z", async () => {
+    const doc = await render("eure", territoire("27"));
+    // The council is a plain section: nothing to unfold to read who presides.
+    const conseil = doc.querySelector("#conseil")!;
+    expect(conseil.tagName).toBe("SECTION");
+    expect(conseil.querySelector("h2")?.textContent).toBe("Conseil départemental");
+    const communes = doc.querySelector("#communes")!;
+    expect(communes.textContent).toContain("Les 158 communes");
+    expect(communes.textContent).toContain("Les 8 plus peuplées");
+    expect(communes.querySelectorAll("ul.overflow-hidden a")).toHaveLength(8);
+    // No index, no pagination, no counter of the alphabetical list on this view.
+    expect(communes.querySelector("nav")).toBeNull();
+    expect(communes.textContent).not.toMatch(/Communes 1 à 50/);
+    const lien = [...communes.querySelectorAll("a")].find(
+      (a) => a.textContent === "Toutes les communes, de A à Z"
+    );
+    expect(lien?.getAttribute("href")).toBe("/territoires/departements/eure?lettre=A#communes");
+    expect(grandesMock).toHaveBeenCalledWith("27");
+  });
+
+  it("ne lit pas les plus grandes communes sur une vue de la liste, qui reste alphabétique", async () => {
+    const query = { letter: "M", page: 1 };
+    const doc = await render("eure", territoire("27", query), query);
+    expect(grandesMock).not.toHaveBeenCalled();
+    expect(doc.querySelectorAll("#communes ul.overflow-hidden a")).toHaveLength(PAGE_SIZE);
+    expect(
+      doc.querySelector('#communes nav a[href="/territoires/departements/eure#communes"]')
+        ?.textContent
+    ).toBe("Communes les plus peuplées");
+  });
+
+  it("liste toutes les communes d'un département qui en compte moins que la sélection", async () => {
+    grandesMock.mockResolvedValue([row("Paris", 0)]);
+    const doc = await render(
+      "paris",
+      territoire("75", { letterCounts: { P: 1 }, rows: [row("Paris", 0)] })
+    );
+    expect(doc.querySelector("#communes")?.textContent).not.toContain("plus peuplées");
+    expect(doc.querySelector("#communes")?.textContent).toContain("Ordre alphabétique");
+  });
+});
+
 describe("page département : index A à Z et pagination", () => {
   it("désactive les lettres sans commune et marque la lettre active", async () => {
     const doc = await render("eure", territoire("27", { letter: "M", page: 2 }), {
@@ -262,7 +363,7 @@ describe("page département : index A à Z et pagination", () => {
     expect(index.querySelector('a[aria-current="page"]')?.textContent).toBe("M");
     // Pas de lien pour une lettre vide.
     expect([...index.querySelectorAll("a")].map((a) => a.textContent)).toEqual([
-      "Toutes",
+      "Communes les plus peuplées",
       "A",
       "B",
       "E",
@@ -333,8 +434,14 @@ describe("page département : collectivités à statut particulier", () => {
     expect(text(doc)).toContain("Collectivité compétente : Ville de Paris");
     expect(doc.querySelector("#collectivite-competente")?.textContent).toContain("Loi n° 2017-257");
     expect(doc.querySelector("#conseil")).toBeNull();
-    expect(text(doc)).not.toContain("Présidence du département");
+    expect(text(doc)).not.toMatch(/présidence du conseil départemental|préside le conseil/i);
     expect(text(doc)).not.toContain("Compétences fixées par la loi");
+    expect(doc.querySelector('nav[aria-label="Sections de la page"] a')?.getAttribute("href")).toBe(
+      "#collectivite-competente"
+    );
+    // No conseil départemental: the block that speaks of it is not shown, nor its tab.
+    expect(doc.querySelector("#agir")).toBeNull();
+    expect(doc.querySelector('nav[aria-label="Sections de la page"] a[href="#agir"]')).toBeNull();
   });
 
   it("Rhône : note sur la Métropole de Lyon, conseil départemental conservé", async () => {
@@ -342,7 +449,7 @@ describe("page département : collectivités à statut particulier", () => {
     const conseil = doc.querySelector("#conseil")!;
     expect(conseil.textContent).toContain("Métropole de Lyon");
     expect(conseil.textContent).toContain("distincte du département");
-    expect(text(doc)).toContain("Présidence du département");
+    expect(text(doc)).toContain("La présidence du conseil départemental n'est pas établie");
   });
 
   it("Corse-du-Sud : la Collectivité de Corse, région Corse dans le fil d'Ariane", async () => {
@@ -389,6 +496,9 @@ describe("page département : collectivités à statut particulier", () => {
     const doc = await render("saint-pierre-et-miquelon", territoire("975"));
     expect(text(doc)).toContain("Collectivité d'outre-mer");
     expect(doc.querySelector("#statut")?.textContent).toContain("aucune région");
+    expect(doc.querySelector('nav[aria-label="Sections de la page"] a')?.getAttribute("href")).toBe(
+      "#statut"
+    );
     expect(doc.querySelector('a[href^="/territoires/regions/"]')).toBeNull();
     expect(doc.querySelector("#conseil")).toBeNull();
   });

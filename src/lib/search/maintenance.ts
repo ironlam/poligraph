@@ -1,5 +1,6 @@
 import type { SearchEntityType } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import { lockMeasure, lockMeasureCandidacy } from "@/lib/measures/lock";
 import { syncSearchDocument } from "@/lib/measures/search-sync";
 import { syncCandidacySearchDocument } from "@/lib/presidentielle/search-sync";
@@ -47,10 +48,12 @@ const INDEXABLE: Record<ReindexableSearchEntityType, Indexable> = {
       return new Set(rows.map((row) => row.id));
     },
     nextIds: async (after, take, electionSlug) => {
+      const electionId = electionSlug ? await getElectionIdBySlug(electionSlug) : null;
+      if (electionSlug && electionId === null) return [];
       const rows = await db.candidacy.findMany({
         where: {
           ...(after ? { id: { gt: after } } : {}),
-          ...(electionSlug ? { election: { slug: electionSlug } } : {}),
+          ...(electionId ? { electionId } : {}),
         },
         orderBy: { id: "asc" },
         take,

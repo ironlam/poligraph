@@ -121,7 +121,7 @@ describe("présidentielle dans la commune", () => {
     expect(text).not.toContain("Présidentielle 2022");
     expect(text).toContain("Tous les scrutins (3)");
     expect(
-      document.querySelector('a[href="/territoires/communes/35238/elections"]')
+      document.querySelector('a[href="/territoires/communes/rennes-35238/elections"]')
     ).not.toBeNull();
   });
 

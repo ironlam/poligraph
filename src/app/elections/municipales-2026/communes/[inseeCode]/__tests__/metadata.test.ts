@@ -34,9 +34,12 @@ describe("/elections/municipales-2026/communes/[inseeCode] metadata", () => {
 
     const m = await metadataFor("42218");
 
-    expect(m.title).toBe("Municipales 2026 à Saint-Étienne — Candidats et listes | Poligraph");
+    expect(m.title).toBe("Municipales 2026 à Saint-Étienne : candidats et listes");
     expect(m.description).toContain("Saint-Étienne");
     expect(m.alternates?.canonical).toBe("/elections/municipales-2026/communes/42218");
+    expect(m.openGraph?.images).toEqual([
+      expect.objectContaining({ url: "/territoires/opengraph-image" }),
+    ]);
     expect(m.robots).not.toEqual({ index: false, follow: true });
   });
 });

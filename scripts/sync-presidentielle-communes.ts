@@ -18,6 +18,7 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { db } from "@/lib/db";
 import { PRESIDENTIELLE_COMMUNES_SOURCES } from "@/config/presidentielle-communes";
+import { recordEvenements, resultatElectionEvenement } from "@/services/sync/territoire-evenements";
 import {
   buildImportPlan,
   decodeResultsFile,
@@ -90,7 +91,7 @@ async function main() {
 
   const election = await db.election.findUnique({
     where: { slug: electionSlug },
-    select: { id: true, type: true, title: true },
+    select: { id: true, type: true, title: true, round1Date: true, round2Date: true },
   });
   if (!election || election.type !== "PRESIDENTIELLE") {
     throw new Error(`Élection présidentielle introuvable : ${electionSlug}`);
@@ -198,6 +199,26 @@ async function main() {
   console.log(
     `\nÉcrit : ${fr(written.communeRounds)} participations, ${fr(written.results)} lignes de voix en ${((Date.now() - t0) / 1000).toFixed(1)} s`
   );
+
+  const roundDate = round === 1 ? election.round1Date : election.round2Date;
+  if (roundDate) {
+    const fil = await recordEvenements(
+      plan.communeRounds.map((r) =>
+        resultatElectionEvenement({
+          inseeCode: r.communeId,
+          electionSlug,
+          electionLabel: election.title,
+          tour: round as 1 | 2,
+          roundDate,
+          sourceLabel: "Ministère de l'Intérieur",
+          sourceUrl: file,
+        })
+      )
+    );
+    console.log(
+      `Fil du territoire : ${fr(fil.written)} événements écrits, ${fr(fil.rejected)} écartés (fichier local ou contenu invalide)`
+    );
+  }
 }
 
 main()

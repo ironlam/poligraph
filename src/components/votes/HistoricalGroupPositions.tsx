@@ -3,6 +3,7 @@ import { MissingData } from "@/components/ui/MissingData";
 import { SourceLine, type SourceRef } from "@/components/ui/SourceLine";
 import { DataStatus } from "@/components/parlement/legislature/DataStatus";
 import { PositionCountBar } from "@/components/votes/PositionCountBar";
+import { PositionCountLegend } from "@/components/votes/PositionCountLegend";
 import { formatDate } from "@/lib/utils";
 import {
   WITHHELD_GROUP_REASON_TEXT,
@@ -117,10 +118,13 @@ function CountsList({ rows }: { rows: HistoricalGroupRow[] }) {
             abstainCount={row.abstainCount}
             className="mt-2"
           />
-          <p className="mt-2 text-sm tabular-nums text-muted-foreground">
-            Pour {row.forCount} · Contre {row.againstCount} · Abstentions {row.abstainCount} ·{" "}
-            <span className="whitespace-nowrap">Non-votants {row.nonVoterCount}</span>
-          </p>
+          <PositionCountLegend
+            forCount={row.forCount}
+            againstCount={row.againstCount}
+            abstainCount={row.abstainCount}
+            nonVoterCount={row.nonVoterCount}
+            className="mt-2"
+          />
         </li>
       ))}
     </ul>
@@ -256,7 +260,7 @@ export function HistoricalGroupPositions({ view, scrutinDate }: HistoricalGroupP
 
   return (
     <Card className="mb-8">
-      <CardContent className="pt-6">
+      <CardContent>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-semibold">Votes par groupe le {date}</h3>
           <DataStatus

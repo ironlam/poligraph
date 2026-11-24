@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({
   db: {
     politician: { findMany: h.findPoliticians },
+    mandate: { findMany: async () => [] },
     identityDecision: { findMany: h.findDecisions, createMany: h.createDecisions, create: vi.fn() },
     $queryRaw: h.queryRaw,
   },

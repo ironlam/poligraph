@@ -13,8 +13,12 @@ import {
 import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE } from "@/lib/data/presidential-candidacy-policy";
 import type { PartyDisplayRef } from "@/lib/affairs/party-display";
+import {
+  DEFAULT_PRESIDENTIAL_AFFAIRS_SORT,
+  type PresidentialAffairsSort,
+} from "@/lib/presidentielle/affaires-listing";
 
-const AFFAIRS_PAGE_SIZE = 20;
+export const AFFAIRS_PAGE_SIZE = 20;
 
 export type PresidentialAffair = {
   id: string;
@@ -46,10 +50,50 @@ export type PresidentialAffair = {
   }>;
 };
 
+export type PresidentialAffairsCandidateFacet = {
+  slug: string;
+  fullName: string;
+  count: number;
+};
+
+export type PresidentialAffairsQuery = {
+  page?: number;
+  /** Politician slug. Ignored unless it names a facet, so the cache key stays bounded. */
+  candidat?: string;
+  tri?: PresidentialAffairsSort;
+};
+
 export type PresidentialAffairsPageData = {
   affairs: PresidentialAffair[];
   total: number;
+  candidates: PresidentialAffairsCandidateFacet[];
+  /** The candidate filter actually applied, null when absent or unknown. */
+  candidat: string | null;
+  tri: PresidentialAffairsSort;
 };
+
+// Every order ends on the affair id so pagination never repeats or skips a row on ties.
+const ORDER_BY: Record<PresidentialAffairsSort, Prisma.Sql> = {
+  recentes: Prisma.sql`COALESCE(a."startDate", a."factsDate", a."createdAt") DESC, a."id" DESC`,
+  anciennes: Prisma.sql`COALESCE(a."startDate", a."factsDate", a."createdAt") ASC, a."id" ASC`,
+  candidat: Prisma.sql`p."lastName" ASC, p."firstName" ASC, p."id" ASC,
+    COALESCE(a."startDate", a."factsDate", a."createdAt") DESC, a."id" DESC`,
+};
+
+// The published-affair predicate stays inline in each statement: the attribution guard checks that
+// every raw read of "Affair" carries it at the call site.
+function trackedCandidateSqlWhere(electionId: string): Prisma.Sql {
+  return Prisma.sql`p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+      AND EXISTS (
+        SELECT 1
+        FROM "Candidacy" c
+        WHERE c."politicianId" = p."id"
+          AND c."electionId" = ${electionId}
+          AND c."status" IS NOT NULL
+          AND c."sourceUrl" IS NOT NULL
+          AND c."sourceLabel" IS NOT NULL
+      )`;
+}
 
 /**
  * Public judicial affairs attached to sourced presidential candidacies.
@@ -57,32 +101,69 @@ export type PresidentialAffairsPageData = {
  */
 export async function getPresidentialAffairs(
   electionSlug: string,
-  page = 1
+  query: PresidentialAffairsQuery = {}
 ): Promise<PresidentialAffairsPageData> {
+  const tri = query.tri ?? DEFAULT_PRESIDENTIAL_AFFAIRS_SORT;
   const election = await db.election.findUnique({
     where: { slug: electionSlug },
     select: { id: true },
   });
 
-  if (!election) return { affairs: [], total: 0 };
-  const safePage = Number.isSafeInteger(page) && page > 0 ? page : 1;
-  return getPresidentialAffairsCached(election.id, safePage);
+  if (!election) return { affairs: [], total: 0, candidates: [], candidat: null, tri };
+  const page = query.page && Number.isSafeInteger(query.page) && query.page > 0 ? query.page : 1;
+  const facets = await getPresidentialAffairCandidatesCached(election.id);
+  const selected = facets.find((facet) => facet.slug === query.candidat) ?? null;
+  // Grouping one person's affairs by person is a no-op: fall back to the default order.
+  const effectiveTri = selected && tri === "candidat" ? DEFAULT_PRESIDENTIAL_AFFAIRS_SORT : tri;
+  const list = await getPresidentialAffairsCached(
+    election.id,
+    page,
+    selected?.id ?? null,
+    effectiveTri
+  );
+
+  return {
+    ...list,
+    candidates: facets.map(({ slug, fullName, count }) => ({ slug, fullName, count })),
+    candidat: selected?.slug ?? null,
+    tri: effectiveTri,
+  };
+}
+
+async function getPresidentialAffairCandidatesCached(
+  electionId: string
+): Promise<Array<PresidentialAffairsCandidateFacet & { id: string }>> {
+  "use cache";
+  cacheTag("affairs", `election-candidacies:${electionId}`);
+  cacheLife("synced");
+
+  const rows = await db.$queryRaw<
+    Array<{ id: string; slug: string; fullName: string; count: number }>
+  >(Prisma.sql`
+    SELECT p."id", p."slug", p."fullName", COUNT(a."id")::int AS "count"
+    FROM "Affair" a
+    INNER JOIN "Politician" p ON p."id" = a."politicianId"
+    WHERE ${getPublishedAffairSqlWhere("a")}
+      AND ${trackedCandidateSqlWhere(electionId)}
+    GROUP BY p."id", p."slug", p."fullName", p."lastName", p."firstName"
+    ORDER BY p."lastName" ASC, p."firstName" ASC, p."id" ASC
+  `);
+  return rows.map((row) => ({ ...row, count: Number(row.count) }));
 }
 
 async function getPresidentialAffairsCached(
   electionId: string,
-  page: number
-): Promise<PresidentialAffairsPageData> {
+  page: number,
+  politicianId: string | null,
+  tri: PresidentialAffairsSort
+): Promise<Pick<PresidentialAffairsPageData, "affairs" | "total">> {
   "use cache";
-  cacheTag(
-    "affairs",
-    `election-candidacies:${electionId}`,
-    `election-affairs:${electionId}:page:${page}`
-  );
+  cacheTag("affairs", `election-candidacies:${electionId}`);
   cacheLife("synced");
 
   const where = {
     ...getPublishedAffairWhere(),
+    ...(politicianId ? { politicianId } : {}),
     politician: {
       ...PUBLIC_POLITICIAN_WHERE,
       candidacies: {
@@ -101,17 +182,9 @@ async function getPresidentialAffairsCached(
     FROM "Affair" a
     INNER JOIN "Politician" p ON p."id" = a."politicianId"
     WHERE ${getPublishedAffairSqlWhere("a")}
-      AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
-      AND EXISTS (
-        SELECT 1
-        FROM "Candidacy" c
-        WHERE c."politicianId" = p."id"
-          AND c."electionId" = ${electionId}
-          AND c."status" IS NOT NULL
-          AND c."sourceUrl" IS NOT NULL
-          AND c."sourceLabel" IS NOT NULL
-      )
-    ORDER BY COALESCE(a."startDate", a."factsDate", a."createdAt") DESC, a."id" DESC
+      AND ${trackedCandidateSqlWhere(electionId)}
+      ${politicianId ? Prisma.sql`AND p."id" = ${politicianId}` : Prisma.empty}
+    ORDER BY ${ORDER_BY[tri]}
     LIMIT ${AFFAIRS_PAGE_SIZE}
     OFFSET ${(page - 1) * AFFAIRS_PAGE_SIZE}
   `);

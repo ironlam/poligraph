@@ -29,6 +29,10 @@ import { CandidacyCard } from "@/components/elections/CandidacyCard";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import type { ElectionStatus } from "@/types";
 import { SITE_URL } from "@/config/site";
+import { PARRAINAGES_ELECTIONS } from "@/config/parrainages";
+import { ParrainagesElection } from "@/components/parrainages/ParrainagesTerritoire";
+import { getParrainagesTableauDeBord } from "@/lib/data/parrainages";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 
 export const revalidate = 3600; // ISR: revalidate every hour
 
@@ -129,18 +133,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const typeLabel = ELECTION_TYPE_LABELS[election.type];
-  const title = `${election.title} | Poligraph`;
   const description =
     election.description ||
     `${typeLabel} - ${ELECTION_SCOPE_LABELS[election.scope]}. Dates, candidatures et résultats.`;
 
   return {
-    title,
+    title: election.title,
     description,
-    openGraph: {
+    openGraph: openGraph({
       title: election.title,
       description,
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
     alternates: { canonical: `/elections/${slug}` },
   };
 }
@@ -159,6 +163,10 @@ export default async function ElectionDetailPage({ params }: PageProps) {
   const showCountdown = !isPhaseAtLeast(election.status, "ROUND_1") && election.round1Date;
   const typeLabel = ELECTION_TYPE_LABELS[election.type];
   const showGuideSection = await isFeatureEnabled("ELECTION_GUIDE_SECTION");
+  // Only for an election whose list of presentations is imported; one cached read otherwise none.
+  const parrainages = Object.hasOwn(PARRAINAGES_ELECTIONS, slug)
+    ? await getParrainagesTableauDeBord(slug)
+    : null;
 
   return (
     <>
@@ -310,6 +318,8 @@ export default async function ElectionDetailPage({ params }: PageProps) {
               dateConfirmed={election.dateConfirmed}
               status={election.status}
             />
+
+            {parrainages && <ParrainagesElection electionSlug={slug} tableau={parrainages} />}
 
             {/* Candidacies — skip for MUNICIPALES (500K+ rows, use dedicated portal) */}
             {isPhaseAtLeast(election.status, "CANDIDACIES") && election.type !== "MUNICIPALES" && (

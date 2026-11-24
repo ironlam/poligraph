@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
 import { confirmedNow } from "@/lib/mandates/confirmation";
 import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource, Chamber } from "@/generated/prisma";
-import { SenateurAPI, NosSenateursAPI, SenatSyncResult } from "./types";
+import { SenateurAPI, SenatSyncResult } from "./types";
 import { politicianService } from "@/services/politician";
 import { SENATE_GROUPS, type ParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
 import { findDepartmentCode } from "@/config/departments";
@@ -25,7 +26,6 @@ import { syncSenateGroupPresidencies } from "./group-presidencies";
 const client = new HTTPClient({ rateLimitMs: SENAT_RATE_LIMIT_MS });
 
 export const SENAT_API_URL = "https://www.senat.fr/api-senat/senateurs.json";
-const NOSSENATEURS_API_URL = "https://archive.nossenateurs.fr/senateurs/json";
 
 /**
  * Fetch senators from senat.fr API
@@ -36,38 +36,6 @@ async function fetchSenatAPI(): Promise<SenateurAPI[]> {
   const { data } = await client.get<SenateurAPI[]>(SENAT_API_URL);
   console.log(`Parsed ${data.length} senators from senat.fr`);
   return data;
-}
-
-/**
- * Fetch additional data from NosSenateurs (birth dates, etc.)
- */
-async function fetchNosSenateursAPI(): Promise<Map<string, NosSenateursAPI>> {
-  console.log(`Fetching additional data from: ${NOSSENATEURS_API_URL}`);
-
-  try {
-    const { data } = await client.get<{ senateurs?: NosSenateursAPI[] } | NosSenateursAPI[]>(
-      NOSSENATEURS_API_URL
-    );
-    const senators: NosSenateursAPI[] = Array.isArray(data) ? data : data.senateurs || [];
-    console.log(`Parsed ${senators.length} senators from NosSenateurs`);
-
-    // Create lookup map by matricule/id_institution
-    const map = new Map<string, NosSenateursAPI>();
-    for (const s of senators) {
-      if (s.id_institution) {
-        map.set(s.id_institution, s);
-      }
-      // Also index by slug for fallback matching
-      if (s.slug) {
-        map.set(s.slug.toLowerCase(), s);
-      }
-    }
-
-    return map;
-  } catch (error) {
-    console.warn("Could not fetch NosSenateurs data:", error);
-    return new Map();
-  }
 }
 
 /**
@@ -166,8 +134,7 @@ async function syncSenateParliamentaryGroups(senators: SenateurAPI[]): Promise<{
 async function syncSenator(
   sen: SenateurAPI,
   groupMap: Map<string, string>,
-  partyMap: Map<string, string | null>,
-  nosSenateursData: Map<string, NosSenateursAPI>
+  partyMap: Map<string, string | null>
 ): Promise<"created" | "updated" | "skipped" | "error"> {
   try {
     const slug = generateSlug(`${sen.prenom}-${sen.nom}`);
@@ -175,38 +142,15 @@ async function syncSenator(
     const partyId = sen.groupe?.code ? (partyMap.get(sen.groupe.code) ?? null) : null;
     const groupId = sen.groupe?.code ? groupMap.get(sen.groupe.code) || null : null;
 
-    // Try to get additional data from NosSenateurs
-    const extraData = nosSenateursData.get(sen.matricule) || nosSenateursData.get(slug);
-
-    // Parse birth date if available
-    let birthDate: Date | null = null;
-    let birthPlace: string | null = null;
-
-    if (extraData?.date_naissance) {
-      birthDate = new Date(extraData.date_naissance);
-      if (isNaN(birthDate.getTime())) birthDate = null;
-    }
-    if (extraData?.lieu_naissance) {
-      birthPlace = extraData.lieu_naissance;
-    }
-
     // Renewal series, straight from the Senate API. Authoritative: neither the
     // start date nor the department can stand in for it.
     const senateSeries = parseSenateSeries(sen.serie);
 
-    // Parse mandate start date
-    let mandateStart: Date | null = null;
-    const hasApiDate = Boolean(extraData?.mandat_debut);
-    if (extraData?.mandat_debut) {
-      mandateStart = new Date(extraData.mandat_debut);
-      if (isNaN(mandateStart.getTime())) mandateStart = null;
-    }
-    // Fallback for a senator we have no individual date for: the day their series
-    // last took office. Approximate by construction, and wrong for anyone who took
-    // over mid-cycle, which is why `audit:senateurs-series` reports on it.
-    if (!mandateStart && senateSeries) {
-      mandateStart = getSeriesTermStart(senateSeries);
-    }
+    // The Senate API carries no individual start date: a new mandate starts on the
+    // day its series last took office. Approximate by construction, and wrong for
+    // anyone who took over mid-cycle, which is why `audit:senateurs-series` reports
+    // on it. An existing mandate keeps its stored date (see below).
+    const mandateStart: Date | null = senateSeries ? getSeriesTermStart(senateSeries) : null;
 
     // Photo URL from senat.fr (urlAvatar is a relative path like /senimg/xxx.jpg)
     const rawAvatar = sen.urlAvatar || `/senateur/${sen.matricule}/photo.jpg`;
@@ -231,8 +175,6 @@ async function syncSenator(
       firstName: sen.prenom,
       lastName: sen.nom,
       fullName,
-      birthDate: birthDate || undefined,
-      birthPlace: birthPlace || undefined,
       photoUrl,
       photoSource: "senat",
     };
@@ -273,9 +215,6 @@ async function syncSenator(
         where: { id: existing.id },
         data: {
           ...politicianData,
-          // Only update birth data if we have it and it's missing
-          birthDate: existing.birthDate || politicianData.birthDate,
-          birthPlace: existing.birthPlace || politicianData.birthPlace,
           // Only update photo if current photo is not from a higher priority source
           ...(shouldUpdatePhoto(existing.photoSource, "senat")
             ? { photoUrl: politicianData.photoUrl, photoSource: politicianData.photoSource }
@@ -290,17 +229,14 @@ async function syncSenator(
       }
 
       // Upsert external ID
-      await upsertExternalIds(existing.id, sen.matricule, slug);
+      await upsertExternalIds(existing.id, sen.matricule);
 
       if (mandateDecision?.kind === "update") {
         const existingMandate = mandateDecision.mandate;
         // Keep the stored start date without an API date (the series fallback would
         // overwrite a remplaçant's accurate one), and never move a 2026 term back.
         const updateData = { ...mandateData };
-        if (
-          existingMandate.startDate &&
-          keepExistingStartDate(existingMandate.startDate, hasApiDate ? mandateStart : null)
-        ) {
+        if (existingMandate.startDate && keepExistingStartDate(existingMandate.startDate, null)) {
           updateData.startDate = existingMandate.startDate;
         }
         await db.mandate.update({
@@ -347,7 +283,7 @@ async function syncSenator(
       // Set party affiliation via service (creates PartyMembership)
       await politicianService.setCurrentParty(newPolitician.id, partyId);
 
-      await upsertExternalIds(newPolitician.id, sen.matricule, slug);
+      await upsertExternalIds(newPolitician.id, sen.matricule);
       return "created";
     }
   } catch (error) {
@@ -359,11 +295,7 @@ async function syncSenator(
 /**
  * Upsert external IDs for a senator
  */
-async function upsertExternalIds(
-  politicianId: string,
-  matricule: string,
-  slug: string
-): Promise<void> {
+async function upsertExternalIds(politicianId: string, matricule: string): Promise<void> {
   // Sénat ID
   await upsertPoliticianExternalId(
     politicianId,
@@ -371,23 +303,13 @@ async function upsertExternalIds(
     matricule,
     `https://www.senat.fr/senateur/${matricule}/`
   );
-
-  // NosSénateurs ID (if different from matricule)
-  // Using slug as the ID since that's how NosSénateurs URLs work
-  // Reusing NOSDEPUTES for NosSénateurs (same platform)
-  await upsertPoliticianExternalId(
-    politicianId,
-    DataSource.NOSDEPUTES,
-    `senateur-${slug}`,
-    `https://archive.nossenateurs.fr/${slug}`
-  );
 }
 
 /**
  * Attach each matricule unknown to the base to its person elected in 2026, by creating the
  * SENAT external id, and return those that could not be attached.
  */
-async function mapUnknownSenators(
+export async function mapUnknownSenators(
   senators: SenateurAPI[]
 ): Promise<Array<{ matricule: string; name: string }>> {
   const known = new Set(
@@ -406,27 +328,34 @@ async function mapUnknownSenators(
   );
   if (unknown.size === 0) return [];
 
-  const candidacies = await db.candidacy.findMany({
-    where: { election: { slug: "senatoriales-2026" }, isElected: true },
-    take: 200,
-    select: {
-      politicianId: true,
-      candidateName: true,
-      constituencyCode: true,
-      politician: {
-        select: {
-          mandates: {
-            where: {
-              type: MandateType.SENATEUR,
-              isCurrent: true,
-              startDate: { gte: SENATE_TERM_2026_START },
+  // Without the election there is nobody to attach to: every unknown matricule must come back
+  // unresolved, never an empty list, which the caller reads as "all attached" before it creates
+  // politicians and closes outgoing mandates.
+  const electionId = await getElectionIdBySlug("senatoriales-2026");
+  const candidacies =
+    electionId === null
+      ? []
+      : await db.candidacy.findMany({
+          where: { electionId, isElected: true },
+          take: 200,
+          select: {
+            politicianId: true,
+            candidateName: true,
+            constituencyCode: true,
+            politician: {
+              select: {
+                mandates: {
+                  where: {
+                    type: MandateType.SENATEUR,
+                    isCurrent: true,
+                    startDate: { gte: SENATE_TERM_2026_START },
+                  },
+                  select: { id: true },
+                },
+              },
             },
-            select: { id: true },
           },
-        },
-      },
-    },
-  });
+        });
   const elected2026: Elected2026[] = candidacies.map((c) => ({
     politicianId: c.politicianId,
     name: c.candidateName,
@@ -477,11 +406,8 @@ export async function syncSenateurs(): Promise<SenatSyncResult> {
   try {
     console.log("Starting senators sync...");
 
-    // 1. Fetch data from both APIs
-    const [senators, nosSenateursData] = await Promise.all([
-      fetchSenatAPI(),
-      fetchNosSenateursAPI(),
-    ]);
+    // 1. Fetch senators from the Senate API
+    const senators = await fetchSenatAPI();
 
     // 1b. Map every matricule we do not know to a person elected on 27 September 2026,
     // never by name alone across the base: syncSenator() no longer has a name fallback, and a
@@ -501,7 +427,7 @@ export async function syncSenateurs(): Promise<SenatSyncResult> {
     console.log("Syncing senators...");
     for (const sen of senators) {
       if (skipped.has(sen.matricule)) continue;
-      const status = await syncSenator(sen, codeToGroupId, codeToPartyId, nosSenateursData);
+      const status = await syncSenator(sen, codeToGroupId, codeToPartyId);
       if (status === "created") result.senatorsCreated++;
       else if (status === "updated") result.senatorsUpdated++;
       else if (status === "skipped")

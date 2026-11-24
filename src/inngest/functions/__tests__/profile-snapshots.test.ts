@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   runReconcileBatch: vi.fn(),
   listPublicPoliticianIds: vi.fn(),
   listOrphanProfileSnapshotIds: vi.fn(),
+  listActiveProfilePoliticianIds: vi.fn(),
   captureMessage: vi.fn(),
 }));
 
@@ -24,6 +25,7 @@ vi.mock("@/lib/politicians/profile-snapshot/reconcile", () => ({
   runReconcileBatch: h.runReconcileBatch,
   listPublicPoliticianIds: h.listPublicPoliticianIds,
   listOrphanProfileSnapshotIds: h.listOrphanProfileSnapshotIds,
+  listActiveProfilePoliticianIds: h.listActiveProfilePoliticianIds,
 }));
 vi.mock("@/lib/politicians/profile-snapshot/refresh", () => ({
   refreshPoliticianProfile: vi.fn(),
@@ -140,5 +142,30 @@ describe("rattrapage des fiches politicien", () => {
       "Rattrapage des fiches politicien incomplet",
       expect.objectContaining({ extra: expect.objectContaining({ orphansDeferred: 4 }) })
     );
+  });
+
+  it("le rattrapage des fiches actives garde les orphelins et ne parcourt pas toutes les fiches", async () => {
+    const lists: unknown[] = [];
+    h.runReconcileBatch.mockImplementation(
+      async (input: { orphans?: boolean }, deps: { listIds: unknown }) => {
+        lists.push([deps.listIds, input.orphans]);
+        return input.orphans ? batch({}) : batch({ processed: 7, updated: 1, invalidated: 1 });
+      }
+    );
+    const step = { run: vi.fn(async (_id: string, fn: () => unknown) => fn()) };
+
+    const summary = await (h.handlers["reconcile-active-politician-profiles"] as Handler)({
+      event: { data: { reason: "sync-scrutins" } },
+      step,
+    });
+
+    expect(lists).toEqual([
+      [h.listOrphanProfileSnapshotIds, true],
+      [h.listActiveProfilePoliticianIds, false],
+    ]);
+    expect(lists.flat()).not.toContain(h.listPublicPoliticianIds);
+    expect(step.run.mock.calls.map((c) => c[0])).toEqual(["start", "orphans-1", "active-1"]);
+    expect(h.runReconcileBatch.mock.calls[0]![2]).toBe("reconcile:sync-scrutins");
+    expect(summary).toMatchObject({ batches: 2, processed: 7, updated: 1 });
   });
 });

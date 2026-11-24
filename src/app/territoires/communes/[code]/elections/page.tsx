@@ -4,26 +4,41 @@ import { notFound } from "next/navigation";
 import {
   CommuneElectionsBandeau,
   CommuneElectionsSections,
-  scrutinTypeFromParam,
 } from "@/components/territoires/CommuneElectionsPage";
 import { getCommuneElections } from "@/lib/data/territoire-elections";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
-import { territoireCommuneElectionsPath } from "@/lib/territoires/paths";
+import {
+  communeCodeFromSegment,
+  isCommuneSegment,
+  territoireCommuneElectionsPath,
+} from "@/lib/territoires/paths";
+import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
+import { openGraph } from "@/lib/seo/open-graph";
 
 // ISR: 24 h backstop; results import refreshes `territoire:<code>` and `elections`.
-// No generateStaticParams: the `type` filter reads searchParams (see AGENTS.md, ISR gotchas).
 export const revalidate = 86400;
+
+// ISR-only: nothing is prerendered at build, each commune is rendered on first request and then
+// served from the cache. The page reads no `searchParams` for that reason: the `?type=` filter
+// it used to read made every single visit a fresh render (the types are now anchors).
+export async function generateStaticParams() {
+  return [];
+}
 
 interface PageProps {
   params: Promise<{ code: string }>;
-  searchParams: Promise<{ type?: string }>;
 }
 
-const loadElections = cache((code: string) => getCommuneElections(code));
+/** The segment is `brest-29019` or the bare code. The code finds the commune, a wrong name is a 404. */
+const loadElections = cache(async (segment: string) => {
+  const code = communeCodeFromSegment(segment);
+  const data = code ? await getCommuneElections(code) : null;
+  return data && isCommuneSegment(segment, code!, data.commune.name) ? data : null;
+});
 
-export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
-  const [{ code }, { type }] = await Promise.all([params, searchParams]);
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { code } = await params;
   const data = await loadElections(code);
   // No result: the page does not exist, it is never an empty indexable shell.
   if (!data) return missingEntityMetadata("Élections introuvables");
@@ -34,16 +49,17 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   return {
     title,
     description,
-    // A sub-page inherits the verdict of its commune page (AGENTS.md §5). A filtered view is a
-    // subset of the same content: it never competes with the unfiltered page.
-    robots: verdict.robots ?? (type ? { index: false, follow: true } : undefined),
-    openGraph: { title, description },
-    alternates: { canonical: territoireCommuneElectionsPath(data.commune.inseeCode) },
+    // A sub-page inherits the verdict of its commune page (AGENTS.md §5).
+    robots: verdict.robots,
+    openGraph: openGraph({ title, description, images: [TERRITOIRES_OG_IMAGE] }),
+    alternates: {
+      canonical: territoireCommuneElectionsPath(data.commune.inseeCode, data.commune.name),
+    },
   };
 }
 
-export default async function CommuneElectionsPage({ params, searchParams }: PageProps) {
-  const [{ code }, { type }] = await Promise.all([params, searchParams]);
+export default async function CommuneElectionsPage({ params }: PageProps) {
+  const { code } = await params;
   const data = await loadElections(code);
   if (!data) notFound();
 
@@ -51,7 +67,7 @@ export default async function CommuneElectionsPage({ params, searchParams }: Pag
     <>
       <CommuneElectionsBandeau inseeCode={data.commune.inseeCode} name={data.commune.name} />
       <div className="container mx-auto max-w-6xl px-4 py-6 md:py-8">
-        <CommuneElectionsSections data={data} active={scrutinTypeFromParam(type)} />
+        <CommuneElectionsSections data={data} />
       </div>
     </>
   );

@@ -7,6 +7,9 @@ vi.mock("@/lib/db", () => ({
     politician: {
       findMany: vi.fn(),
     },
+    mandate: {
+      findMany: vi.fn(),
+    },
     externalId: {
       findFirst: vi.fn(),
     },
@@ -26,6 +29,7 @@ import type { Mock } from "vitest";
 // Prisma's complex generics don't play well with vi.mocked() — cast to vi.Mock
 // The mock functions are vi.fn() at runtime (defined in vi.mock above)
 const mockPoliticianFindMany = db.politician.findMany as Mock;
+const mockMandateFindMany = db.mandate.findMany as Mock;
 const mockExternalIdFindFirst = db.externalId.findFirst as Mock;
 const mockDecisionFindMany = db.identityDecision.findMany as Mock;
 const mockDecisionCreate = db.identityDecision.create as Mock;
@@ -37,6 +41,7 @@ describe("IdentityResolver", () => {
     vi.clearAllMocks();
     // Default: no prior decisions
     mockDecisionFindMany.mockResolvedValue([]);
+    mockMandateFindMany.mockResolvedValue([]);
     // Default: no ExternalId match
     mockExternalIdFindFirst.mockResolvedValue(null);
     // Default: no name candidates
@@ -727,6 +732,31 @@ describe("IdentityResolver", () => {
   });
 
   describe("resolveBatch", () => {
+    it("reads departments from a flat mandate query, not a nested select (P2029)", async () => {
+      mockPoliticianFindMany.mockResolvedValue([
+        { id: "pol-1", firstName: "Thierry", lastName: "Cousin", birthDate: null },
+      ]);
+      mockMandateFindMany.mockResolvedValue([{ politicianId: "pol-1", departmentCode: "45" }]);
+
+      const { results } = await resolveBatch({
+        sourceType: DataSource.RNE,
+        persist: false,
+        inputs: [
+          {
+            firstName: "Thierry",
+            lastName: "Cousin",
+            department: "45",
+            source: DataSource.RNE,
+            sourceId: "45321",
+          },
+        ],
+      });
+
+      const select = (mockPoliticianFindMany.mock.calls[0]![0] as { select: object }).select;
+      expect(select).not.toHaveProperty("mandates");
+      expect(results[0]!.confidence).toBe(0.85); // 0.7 department + 0.15 first name bonus
+    });
+
     it("returns empty results for inputs with no matching politicians", async () => {
       mockPoliticianFindMany.mockResolvedValue([]);
       mockDecisionFindMany.mockResolvedValue([]);
@@ -874,6 +904,37 @@ describe("IdentityResolver", () => {
         ],
       });
       // Individual create NOT called (createMany succeeded)
+      expect(mockDecisionCreate).not.toHaveBeenCalled();
+    });
+
+    it("writes no decision when persist is false, and still returns the verdict", async () => {
+      mockPoliticianFindMany.mockResolvedValue([
+        {
+          id: "pol-1",
+          firstName: "Marie",
+          lastName: "Durand",
+          birthDate: new Date("1970-01-01"),
+          mandates: [],
+        },
+      ]);
+      mockDecisionFindMany.mockResolvedValue([]);
+
+      const { results } = await resolveBatch({
+        sourceType: DataSource.RNE,
+        persist: false,
+        inputs: [
+          {
+            firstName: "Marie",
+            lastName: "Durand",
+            birthDate: new Date("1970-01-01"),
+            source: DataSource.RNE,
+            sourceId: "12345",
+          },
+        ],
+      });
+
+      expect(results[0]).toMatchObject({ politicianId: "pol-1", decision: Judgement.SAME });
+      expect(mockDecisionCreateMany).not.toHaveBeenCalled();
       expect(mockDecisionCreate).not.toHaveBeenCalled();
     });
 

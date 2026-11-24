@@ -9,7 +9,13 @@ import { getCommuneDossier } from "@/lib/data/territoires";
 import { getCommuneDecisions } from "@/lib/data/territoire-decisions";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
-import { territoireCommuneDecisionsPath } from "@/lib/territoires/paths";
+import {
+  communeCodeFromSegment,
+  isCommuneSegment,
+  territoireCommuneDecisionsPath,
+} from "@/lib/territoires/paths";
+import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
+import { openGraph } from "@/lib/seo/open-graph";
 
 // ISR: 24 h backstop; publishing or unpublishing a decision refreshes `territoire:<code>`.
 export const revalidate = 86400;
@@ -22,8 +28,16 @@ interface PageProps {
   params: Promise<{ code: string }>;
 }
 
-const loadDecisions = cache((code: string) => getCommuneDecisions(code));
-const loadDossier = cache((code: string) => getCommuneDossier(code));
+/** The segment is `brest-29019` or the bare code. The code finds the commune, a wrong name is a 404. */
+const loadDecisions = cache(async (segment: string) => {
+  const code = communeCodeFromSegment(segment);
+  const decisions = code ? await getCommuneDecisions(code) : null;
+  return decisions && isCommuneSegment(segment, code!, decisions.commune.name) ? decisions : null;
+});
+const loadDossier = cache((segment: string) => {
+  const code = communeCodeFromSegment(segment);
+  return code ? getCommuneDossier(code) : null;
+});
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { code } = await params;
@@ -41,8 +55,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       population: dossier.population.value,
       maireEtabli: dossier.maire.state === "ETABLI",
     }),
-    openGraph: { title, description },
-    alternates: { canonical: territoireCommuneDecisionsPath(decisions.commune.inseeCode) },
+    openGraph: openGraph({ title, description, images: [TERRITOIRES_OG_IMAGE] }),
+    alternates: {
+      canonical: territoireCommuneDecisionsPath(
+        decisions.commune.inseeCode,
+        decisions.commune.name
+      ),
+    },
   };
 }
 

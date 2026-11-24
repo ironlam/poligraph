@@ -121,7 +121,7 @@ describe("generateCandidateSynthesis", () => {
     await generateCandidateSynthesis("cand-1", { persist: false });
 
     expect(callMistralMock.mock.calls[0]![1]).toMatchObject({
-      model: "mistral-large-latest",
+      model: "mistral-large-2512",
       temperature: 0,
       responseFormat: {
         type: "json_schema",

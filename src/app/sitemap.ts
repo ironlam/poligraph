@@ -3,7 +3,7 @@ import { MetadataRoute } from "next";
 import { cacheTag, cacheLife } from "next/cache";
 import { connection } from "next/server";
 import { Prisma } from "@/generated/prisma";
-import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
+import { SITEMAP_SHARD_IDS, SITEMAP_SHARD_TAGS, type SitemapShardId } from "@/lib/seo/sitemap-tags";
 import { db } from "@/lib/db";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
@@ -14,6 +14,8 @@ import { PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
 import { ROUTES, STATS_SECTIONS, STATS_TABS } from "@/config/routes";
 import { CURRENT_LEGISLATURE } from "@/config/scrutin-importance";
 import { getPublishedChangelog } from "@/lib/data/changelog";
+import { getVoteArchiveMonths } from "@/lib/data/vote-archives";
+import { voteArchiveMonthPath } from "@/lib/votes/vote-archive";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
 import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
@@ -36,26 +38,58 @@ import {
   MAIRE_MIN_COMMUNE_POPULATION,
   MIN_BIOGRAPHY_LENGTH,
 } from "@/lib/seo/politician-robots";
-import { TERRITOIRE_COMMUNE_MIN_POPULATION } from "@/lib/seo/territoire-robots";
+import {
+  isIndexableTerritoireBudget,
+  TERRITOIRE_COMMUNE_MIN_POPULATION,
+} from "@/lib/seo/territoire-robots";
+import { getEchellesComptesPubliees } from "@/lib/data/territoire-comptes";
+import { parrainagesSitemapEntries } from "@/lib/seo/parrainages-robots";
+import { PARRAINAGES_ELECTIONS } from "@/config/parrainages";
+import { getParrainagesTableauDeBord } from "@/lib/data/parrainages";
 import {
   PUBLIC_PARTY_WHERE,
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+  getPublicFactCheckSqlWhere,
 } from "@/lib/api/public-contract";
+import {
+  FACTCHECK_POLITICIAN_MIN_CLAIMS,
+  FACTCHECK_RECORD_MIN_TOTAL,
+} from "@/lib/seo/factcheck-robots";
+import { PARTICIPATION_POSITIONS } from "@/lib/data/factcheck-context";
+import { SCRUTIN_THEMES } from "@/config/scrutin-themes";
 import { REGIONS } from "@/config/regions";
 import { REPERE_METHODES, repereMethodePath } from "@/config/territoire-methodes";
 import {
   TERRITOIRES_DONNEES_PATH,
+  TERRITOIRES_METHODE_RAPPORTS_CRC_PATH,
   TERRITOIRES_PATH,
   territoireCommunePath,
   territoireCommuneElectionsPath,
   territoireRegionPath,
   territoireDepartementPath,
+  territoireDepartementBudgetPath,
+  territoireRegionBudgetPath,
   TERRITOIRES_DEPARTEMENTS_PATH,
 } from "@/lib/territoires/paths";
 
 export async function generateSitemaps() {
-  return [{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }];
+  return SITEMAP_SHARD_IDS.map((id) => ({ id }));
 }
+
+// Each entry calls its builder when the request arrives, never at module load. The builders are
+// `"use cache"` functions: the compiler turns them into variables, which are not hoisted like
+// function declarations. A table holding `buildX` itself read them before their initialisation,
+// got `undefined` for every shard, and every sitemap shipped empty (2026-11-22, all seven shards).
+// Vitest does not apply that transform, so only the guard on this source catches it.
+const SHARD_BUILDERS: Record<SitemapShardId, () => Promise<MetadataRoute.Sitemap>> = {
+  0: () => buildStaticAndPoliticiansSitemap(),
+  1: () => buildAffairsPartiesElectionsDepartmentsSitemap(),
+  2: () => buildDossiersSitemap(),
+  3: () => buildScrutinsSitemap(),
+  4: () => buildCommunesSitemap(),
+  5: () => buildTerritoiresSitemap(),
+  6: () => buildFactChecksSitemap(),
+};
 
 export default async function sitemap(props: {
   id: Promise<string>;
@@ -69,22 +103,10 @@ export default async function sitemap(props: {
   await connection();
 
   const id = Number(await props.id);
-  switch (id) {
-    case 0:
-      return buildStaticAndPoliticiansSitemap();
-    case 1:
-      return buildAffairsPartiesElectionsDepartmentsSitemap();
-    case 2:
-      return buildDossiersSitemap();
-    case 3:
-      return buildScrutinsSitemap();
-    case 4:
-      return buildCommunesSitemap();
-    case 5:
-      return buildTerritoiresSitemap();
-    default:
-      return [];
-  }
+  const build = (SITEMAP_SHARD_IDS as readonly number[]).includes(id)
+    ? SHARD_BUILDERS[id as SitemapShardId]
+    : null;
+  return build ? build() : [];
 }
 
 // Sitemap 0: Static pages + rich PUBLISHED politicians (priority 0.8-1.0).
@@ -708,6 +730,15 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       priority: 0.7,
     }));
 
+  // Presidential presentations: same predicate as the candidate pages (parrainages-robots.ts).
+  const parrainagesPages: MetadataRoute.Sitemap = (
+    await Promise.all(
+      Object.keys(PARRAINAGES_ELECTIONS).map(async (slug) =>
+        parrainagesSitemapEntries(SITE_URL, slug, await getParrainagesTableauDeBord(slug))
+      )
+    )
+  ).flat();
+
   const presidentialDirectoryPages: MetadataRoute.Sitemap =
     presidentielleHubPublishable && presidentielle2027 !== undefined
       ? [
@@ -851,6 +882,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     ...partyProgrammePages,
     ...partyAffairPages,
     ...electionPages,
+    ...parrainagesPages,
     ...presidentialDirectoryPages,
     ...presidentialSubjectPages,
     ...presidentialReaderGuidePages,
@@ -938,12 +970,26 @@ async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
     LIMIT 500
   `);
 
-  return scrutins.map((s) => ({
+  // The monthly archives: the path by which a crawler reaches the scrutins this shard does not
+  // list. Only the current month still changes.
+  const months = await getVoteArchiveMonths();
+  const archivePages: MetadataRoute.Sitemap = [
+    { url: `${SITE_URL}${ROUTES.voteArchives}`, changeFrequency: "weekly", priority: 0.5 },
+    ...months.map((m, i) => ({
+      url: `${SITE_URL}${voteArchiveMonthPath(m)}`,
+      changeFrequency: i === 0 ? ("daily" as const) : ("yearly" as const),
+      priority: 0.4,
+    })),
+  ];
+
+  const scrutinPages: MetadataRoute.Sitemap = scrutins.map((s) => ({
     url: `${SITE_URL}/parlement/votes/${s.slug}`,
     lastModified: s.updatedAt,
     changeFrequency: "monthly" as const,
     priority: 0.4,
   }));
+
+  return [...archivePages, ...scrutinPages];
 }
 
 // Sitemap 4: Top 200 communes by population, restricted to those with candidacies (priority 0.6)
@@ -981,9 +1027,9 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
   cacheLife("synced");
 
   const communes = await db.$queryRaw<
-    Array<{ id: string; lastmod: Date; electionsLastmod: Date | null }>
+    Array<{ id: string; name: string; lastmod: Date; electionsLastmod: Date | null }>
   >(Prisma.sql`
-    SELECT c."id", maire."lastmod",
+    SELECT c."id", c."name", maire."lastmod",
       (
         SELECT MAX(r."updatedAt") FROM "CommuneElectionRound" r WHERE r."communeId" = c."id"
       ) AS "electionsLastmod"
@@ -1010,6 +1056,24 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
     (latest, c) => (latest === null || c.lastmod > latest ? c.lastmod : latest),
     null
   );
+  // Budget sub-pages: only those isIndexableTerritoireBudget() keeps (departments and regions with
+  // accounts of their own), and only once their scale's batch is published, so the sitemap never
+  // lists a page that answers 404.
+  const echellesComptes = await getEchellesComptesPubliees();
+  const budgetPages = [
+    ...(echellesComptes.includes("REG")
+      ? REGIONS.filter((r) => isIndexableTerritoireBudget("REG", r.code)).map((r) =>
+          territoireRegionBudgetPath(r.slug)
+        )
+      : []),
+    ...(echellesComptes.includes("DEP")
+      ? REGIONS.flatMap((r) => r.departmentCodes)
+          .filter((code) => isIndexableTerritoireBudget("DEP", code) && DEPARTMENTS[code])
+          .map((code) =>
+            territoireDepartementBudgetPath(getDepartmentSlug(DEPARTMENTS[code]!.name))
+          )
+      : []),
+  ];
 
   return [
     {
@@ -1031,14 +1095,26 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly" as const,
       priority: 0.4,
     })),
+    {
+      url: `${SITE_URL}${TERRITOIRES_METHODE_RAPPORTS_CRC_PATH}`,
+      lastModified: sectionLastmod ?? new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.4,
+    },
     ...REGIONS.map((region) => ({
       url: `${SITE_URL}${territoireRegionPath(region.slug)}`,
       lastModified: sectionLastmod ?? new Date(),
       changeFrequency: "weekly" as const,
       priority: 0.7,
     })),
+    ...budgetPages.map((path) => ({
+      url: `${SITE_URL}${path}`,
+      lastModified: sectionLastmod ?? new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.4,
+    })),
     ...communes.map((c) => ({
-      url: `${SITE_URL}${territoireCommunePath(c.id)}`,
+      url: `${SITE_URL}${territoireCommunePath(c.id, c.name)}`,
       lastModified: c.lastmod,
       changeFrequency: "monthly" as const,
       priority: 0.5,
@@ -1048,10 +1124,111 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
     ...communes
       .filter((c) => c.electionsLastmod != null)
       .map((c) => ({
-        url: `${SITE_URL}${territoireCommuneElectionsPath(c.id)}`,
+        url: `${SITE_URL}${territoireCommuneElectionsPath(c.id, c.name)}`,
         lastModified: c.electionsLastmod as Date,
         changeFrequency: "monthly" as const,
         priority: 0.4,
       })),
+  ];
+}
+
+// Sitemap 6: fact-checks that carry Poligraph's own context (priority 0.5). The rule is
+// isIndexableFactCheck() from src/lib/seo/factcheck-robots.ts, fed by getFactCheckContext():
+// exactly one claimant on a published profile, a block specific to the claim (a vote of the author
+// on the UTC day of the claim, or on scrutins of the claim's validated theme) AND a block that
+// situates the author (a record of FACTCHECK_RECORD_MIN_TOTAL public fact-checks or more, or a
+// sourced 2027 candidacy). Keep both in sync. The other fact-checks are noindex,follow on the page
+// and stay out of this list. The shard also lists the indexable landing pages
+// /factchecks/politique/[slug] (priority 0.6).
+async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
+  "use cache";
+  cacheTag(...SITEMAP_SHARD_TAGS[6]);
+  cacheLife("synced");
+
+  const factChecks = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`
+    WITH claimant AS (
+      SELECT m."factCheckId", min(m."politicianId") AS "politicianId"
+      FROM "FactCheckMention" m
+      JOIN "Politician" p ON p."id" = m."politicianId"
+        AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+      WHERE m."isClaimant"
+      GROUP BY m."factCheckId"
+      HAVING count(*) = 1
+    )
+    SELECT fc."slug", fc."updatedAt"
+    FROM "FactCheck" fc
+    JOIN claimant c ON c."factCheckId" = fc."id"
+    WHERE ${getPublicFactCheckSqlWhere("fc")}
+      AND fc."slug" IS NOT NULL
+      -- A block specific to this claim.
+      AND (
+        (fc."claimDate" IS NOT NULL AND EXISTS (
+          SELECT 1 FROM "Vote" v
+          JOIN "Scrutin" s ON s."id" = v."scrutinId"
+          WHERE v."politicianId" = c."politicianId"
+            AND v."position"::text IN (${Prisma.join([...PARTICIPATION_POSITIONS])})
+            AND s."votingDate" >= date_trunc('day', fc."claimDate")
+            AND s."votingDate" < date_trunc('day', fc."claimDate") + interval '1 day'
+        ))
+        OR (fc."themeReviewedAt" IS NOT NULL
+          AND fc."theme"::text IN (${Prisma.join([...SCRUTIN_THEMES])})
+          AND EXISTS (
+            SELECT 1 FROM "Vote" v
+            JOIN "Scrutin" s ON s."id" = v."scrutinId"
+            WHERE v."politicianId" = c."politicianId"
+              AND v."position"::text IN (${Prisma.join([...PARTICIPATION_POSITIONS])})
+              AND s."theme" = fc."theme"
+          ))
+      )
+      -- A block that situates the author.
+      AND (
+        (
+          SELECT count(*) FROM "FactCheckMention" m2
+          JOIN "FactCheck" fc2 ON fc2."id" = m2."factCheckId"
+          WHERE m2."politicianId" = c."politicianId" AND m2."isClaimant"
+            AND ${getPublicFactCheckSqlWhere("fc2")}
+        ) >= ${FACTCHECK_RECORD_MIN_TOTAL}
+        OR EXISTS (
+          SELECT 1 FROM "Candidacy" ca
+          JOIN "Election" e ON e."id" = ca."electionId"
+          WHERE ca."politicianId" = c."politicianId"
+            AND e."slug" = ${PRESIDENTIELLE_2027_SLUG}
+            AND ca."status" IS NOT NULL
+            AND ca."sourceUrl" IS NOT NULL
+            AND ca."sourceLabel" IS NOT NULL
+        )
+      )
+    ORDER BY fc."publishedAt" DESC
+  `);
+
+  // The landing pages /factchecks/politique/[slug], mirroring isIndexableFactCheckPolitician():
+  // a published politician who is the claimant of at least FACTCHECK_POLITICIAN_MIN_CLAIMS public
+  // fact-checks with a slug, counted as the page counts them.
+  const politicians = await db.$queryRaw<Array<{ slug: string; lastModified: Date }>>(Prisma.sql`
+    SELECT p."slug", max(fc."updatedAt") AS "lastModified"
+    FROM "Politician" p
+    JOIN "FactCheckMention" m ON m."politicianId" = p."id" AND m."isClaimant"
+    JOIN "FactCheck" fc ON fc."id" = m."factCheckId"
+    WHERE p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+      AND ${getPublicFactCheckSqlWhere("fc")}
+      AND fc."slug" IS NOT NULL
+    GROUP BY p."id", p."slug"
+    HAVING count(DISTINCT fc."id") >= ${FACTCHECK_POLITICIAN_MIN_CLAIMS}
+    ORDER BY p."slug"
+  `);
+
+  return [
+    ...politicians.map((p) => ({
+      url: `${SITE_URL}/factchecks/politique/${p.slug}`,
+      lastModified: p.lastModified,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+    ...factChecks.map((fc) => ({
+      url: `${SITE_URL}/factchecks/${fc.slug}`,
+      lastModified: fc.updatedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
+    })),
   ];
 }

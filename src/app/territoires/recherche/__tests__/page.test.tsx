@@ -56,7 +56,7 @@ describe("recherche de territoire", () => {
     const group = screen.getByRole("region", { name: "Code postal 01300" });
     const links = within(group).getAllByRole("link");
     expect(links).toHaveLength(22);
-    expect(links[0]).toHaveAttribute("href", "/territoires/communes/01100");
+    expect(links[0]).toHaveAttribute("href", "/territoires/communes/commune-a-01100");
     expect(links[0]).toHaveTextContent("Commune A · Ain (01)");
   });
 

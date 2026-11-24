@@ -201,4 +201,25 @@ describe("document de fiche politicien", () => {
     (doc.identity as unknown as Record<string, unknown>).fn = () => 1;
     expect(() => serializeProfileDocument(doc)).toThrow(/valeur non sérialisable à identity\.fn/);
   });
+
+  it("ne change ni le document ni l'empreinte d'une fiche sans présentation", () => {
+    const sans = sampleDocument();
+    expect(serializeProfileDocument(sans)).not.toHaveProperty("parrainages");
+    expect(hashOf({ ...sans, parrainages: undefined })).toBe(hashOf(sans));
+  });
+
+  it("restitue les présentations et les compte dans l'empreinte", () => {
+    const parrainage = {
+      electionSlug: "presidentielle-2022",
+      candidateName: "HIDALGO Anne",
+      mandateLabel: "Maire",
+      constituencyLabel: "Quimper",
+      publishedOn: "2022-02-15",
+    };
+    const avec = { ...sampleDocument(), parrainages: [parrainage] };
+    expect(
+      deserializeProfileDocument(serializeProfileDocument(avec) as Prisma.JsonValue).parrainages
+    ).toEqual([parrainage]);
+    expect(hashOf(avec)).not.toBe(hashOf(sampleDocument()));
+  });
 });

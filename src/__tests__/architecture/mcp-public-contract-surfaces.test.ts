@@ -89,6 +89,9 @@ const PARTY_SURFACES = [
   "src/app/api/politiques/route.ts",
   "src/app/api/reconcile/route.ts",
   "src/app/api/search/advanced/route.ts",
+  // Commune suggestions of a department page: flagged through the territoires readers, like the
+  // Territoires API below. It returns a commune code, name, postal codes and population only.
+  "src/app/api/search/communes/route.ts",
   "src/app/api/search/filters/route.ts",
   "src/app/api/search/global/route.ts",
   "src/app/api/search/parties/route.ts",
@@ -138,6 +141,10 @@ const PARTY_SURFACES = [
   "src/app/elections/presidentielle-2027/themes/page.tsx",
   "src/app/factchecks/[slug]/page.tsx",
   "src/app/factchecks/page.tsx",
+  // A politician's fact-check landing page: the current party of a published politician, read
+  // through the fact-check context reader (queryAuthor). The preview image draws no party.
+  "src/app/factchecks/politique/[slug]/opengraph-image.tsx",
+  "src/app/factchecks/politique/[slug]/page.tsx",
   "src/app/page.tsx",
   "src/app/parlement/dossiers/[slug]/page.tsx",
   "src/app/parlement/dossiers/page.tsx",
@@ -174,13 +181,15 @@ const PARTY_SURFACES = [
   "src/app/statistiques/legislatif/page.tsx",
   "src/app/statistiques/page.tsx",
   "src/app/statistiques/participation/page.tsx",
-  // Territoires commune page and its image: same reason as the Territoires API above, they read
-  // `getCommuneDossier` only and render no party data.
-  "src/app/territoires/communes/[code]/opengraph-image.tsx",
+  // Territoires commune page: same reason as the Territoires API above, it reads
+  // `getCommuneDossier` only and renders no party data.
   "src/app/territoires/communes/[code]/page.tsx",
   // Decisions sub-page: `getCommuneDossier` for the robots verdict only, and the decisions reader,
   // which selects decision, institution, source and mayor name fields. No party data.
   "src/app/territoires/communes/[code]/decisions/page.tsx",
+  // Budget sub-page: `getCommuneDossier` for the commune name and its address only, and the
+  // accounts reader (OFGL figures of the collectivity). No party data.
+  "src/app/territoires/communes/[code]/budget/page.tsx",
   // Elections sub-page: `getCommuneDossier` through `getCommuneElections`, which keeps list names,
   // head-of-list names, candidate names and shares. No party read, no label, no colour.
   "src/app/territoires/communes/[code]/elections/page.tsx",
@@ -190,6 +199,10 @@ const PARTY_SURFACES = [
   "src/app/territoires/recherche/page.tsx",
   "src/app/territoires/regions/[slug]/opengraph-image.tsx",
   "src/app/territoires/regions/[slug]/page.tsx",
+  // Department image: flagged through `getDepartementTerritoire`, the reader of the page. It
+  // draws counts, the presidency sentence and the outline, and no party data (the party badges
+  // of the page come from the deputies and senators readers, which the image does not call).
+  "src/app/territoires/departements/[slug]/opengraph-image.tsx",
 ] as const;
 
 const FACTCHECK_SURFACES = [
@@ -210,6 +223,8 @@ const FACTCHECK_SURFACES = [
   "src/app/factchecks/[slug]/opengraph-image.tsx",
   "src/app/factchecks/[slug]/page.tsx",
   "src/app/factchecks/page.tsx",
+  "src/app/factchecks/politique/[slug]/opengraph-image.tsx",
+  "src/app/factchecks/politique/[slug]/page.tsx",
   "src/app/page.tsx",
   "src/app/politiques/[slug]/page.tsx",
   "src/app/politiques/[slug]/relations/page.tsx",

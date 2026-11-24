@@ -503,6 +503,8 @@ interface ClaimReviewJsonLdProps {
   reviewDate: string;
   source: string;
   sourceUrl: string;
+  /** The politician the claim is attributed to, pointing at their Poligraph profile. */
+  about?: { name: string; url: string } | null;
 }
 
 export function ClaimReviewJsonLd({
@@ -514,6 +516,7 @@ export function ClaimReviewJsonLd({
   reviewDate,
   source,
   sourceUrl,
+  about,
 }: ClaimReviewJsonLdProps) {
   const ratingValue = VERDICT_RATING_VALUE[verdictRating];
 
@@ -522,6 +525,7 @@ export function ClaimReviewJsonLd({
     "@type": "ClaimReview",
     url,
     claimReviewed: claimText,
+    ...(about && { about: { "@type": "Person", name: about.name, url: about.url } }),
     ...(claimant && {
       itemReviewed: {
         "@type": "Claim",
@@ -626,10 +630,14 @@ interface CollectionPageJsonLdProps {
   description: string;
   url: string;
   numberOfItems?: number;
+  /** ISO date of the last change of the content, never the render date. */
+  dateModified?: string;
   about?: {
     name: string;
     url: string;
   };
+  /** Schema type of `about`: an organization (default) or a person. */
+  aboutType?: "Organization" | "Person";
 }
 
 export function DatasetJsonLd({
@@ -684,7 +692,9 @@ export function CollectionPageJsonLd({
   description,
   url,
   numberOfItems,
+  dateModified,
   about,
+  aboutType = "Organization",
 }: CollectionPageJsonLdProps) {
   const jsonLd = {
     "@context": "https://schema.org",
@@ -692,6 +702,7 @@ export function CollectionPageJsonLd({
     name,
     description,
     url,
+    ...(dateModified && { dateModified }),
     ...(numberOfItems !== undefined && {
       mainEntity: {
         "@type": "ItemList",
@@ -700,7 +711,7 @@ export function CollectionPageJsonLd({
     }),
     ...(about && {
       about: {
-        "@type": "Organization",
+        "@type": aboutType,
         name: about.name,
         url: about.url,
       },

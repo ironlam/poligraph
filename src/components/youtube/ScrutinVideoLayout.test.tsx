@@ -11,25 +11,17 @@ function renderLayout(videoId: string | null) {
 }
 
 describe("ScrutinVideoLayout", () => {
-  it("sans vidéo : en-tête, contenu et bandeau, pas de lecteur", () => {
+  it("sans vidéo : en-tête et contenu, ni lecteur ni appel à s'abonner", () => {
     renderLayout(null);
     expect(screen.getByText("En-tête du scrutin")).toBeInTheDocument();
     expect(screen.getByText("Résultat officiel")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /s'abonner à la chaîne/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /s'abonner/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /lire la vidéo/i })).toBeNull();
   });
 
-  it("sans vidéo : le bandeau de la chaîne suit le résultat au lieu de le précéder", () => {
-    renderLayout(null);
-    const content = screen.getByText("Résultat officiel");
-    const banner = screen.getByRole("link", { name: /s'abonner à la chaîne/i });
-    expect(content.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("avec vidéo : le lecteur remplace le bandeau", () => {
+  it("avec vidéo : le lecteur s'affiche", () => {
     renderLayout("abcdefghijk");
     expect(screen.getByRole("button", { name: /lire la vidéo/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /s'abonner à la chaîne/i })).toBeNull();
   });
 
   it("ordre du document : en-tête, puis vidéo, puis contenu (lecture mobile)", () => {

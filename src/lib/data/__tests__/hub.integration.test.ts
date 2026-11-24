@@ -6,8 +6,8 @@ let db: typeof import("@/lib/db").db;
 let getHubCandidacyField: typeof import("../hub").getHubCandidacyField;
 let getHubMeasureContext: typeof import("../hub").getHubMeasureContext;
 let loadHubMeasureContext: typeof import("../hub").loadHubMeasureContext;
-let loadHubLatestMeasures: typeof import("../hub").loadHubLatestMeasures;
-let getHubLatestMeasures: typeof import("../hub").getHubLatestMeasures;
+let loadHubLatestUpdates: typeof import("../hub").loadHubLatestUpdates;
+let getHubLatestUpdates: typeof import("../hub").getHubLatestUpdates;
 
 const SLUG = "hub-test";
 
@@ -30,8 +30,8 @@ describeIfDisposableDb("hub", () => {
       getHubCandidacyField,
       getHubMeasureContext,
       loadHubMeasureContext,
-      loadHubLatestMeasures,
-      getHubLatestMeasures,
+      loadHubLatestUpdates,
+      getHubLatestUpdates,
     } = await import("../hub"));
     const { seedHubFixture } = await import("./hub-fixture");
     electionId = await seedHubFixture(db, { electionSlug: SLUG });
@@ -223,7 +223,12 @@ describeIfDisposableDb("hub", () => {
       expect(context.electionDescription).toBe("Élection de test (hub) pour le second tour.");
     });
   });
-  describe("loadHubLatestMeasures", () => {
+  describe("loadHubLatestUpdates", () => {
+    /** The fixture carries no change of status: every row is a measure unless a test adds one. */
+    async function loadHubLatestMeasures(id: string) {
+      return (await loadHubLatestUpdates(id)).flatMap((u) => (u.kind === "measure" ? [u] : []));
+    }
+
     it("ne remonte que les mesures atteignables, jamais celle d'une extension en brouillon", async () => {
       const latest = await loadHubLatestMeasures(electionId);
 
@@ -294,8 +299,76 @@ describeIfDisposableDb("hub", () => {
         await db.measure.deleteMany({ where: { id: { in: created } } });
       }
     });
+    it("remonte un changement de statut daté, avec le libellé du site et sa source", async () => {
+      const bravo = await db.candidacy.findFirstOrThrow({
+        where: { electionId, candidateName: "Bravo Fixture" },
+        select: { id: true, status: true, sourceLabel: true },
+      });
+      try {
+        // Plus récent que toute mesure de la fixture : la ligne de Bravo devient son statut.
+        await db.candidacy.update({
+          where: { id: bravo.id },
+          data: { status: "DECLARE", statusChangedAt: new Date("2030-01-01T00:00:00Z") },
+        });
+
+        const latest = await loadHubLatestUpdates(electionId);
+
+        expect(latest[0]).toMatchObject({
+          kind: "status",
+          candidateName: "Bravo Fixture",
+          statusLabel: "Candidature annoncée",
+          sourceLabel: bravo.sourceLabel,
+        });
+        expect(latest.filter((u) => u.candidateName === "Bravo Fixture")).toHaveLength(1);
+      } finally {
+        await db.candidacy.update({
+          where: { id: bravo.id },
+          data: { status: bravo.status, statusChangedAt: null },
+        });
+      }
+    });
+
+    it("garde la mesure quand elle est publiée plus d'un jour après le changement de statut", async () => {
+      const bravo = await db.candidacy.findFirstOrThrow({
+        where: { electionId, candidateName: "Bravo Fixture" },
+        select: { id: true, status: true },
+      });
+      try {
+        await db.candidacy.update({
+          where: { id: bravo.id },
+          data: { status: "DECLARE", statusChangedAt: new Date("2000-01-01T00:00:00Z") },
+        });
+        const rows = (await loadHubLatestUpdates(electionId)).filter(
+          (u) => u.candidateName === "Bravo Fixture"
+        );
+        expect(rows.map((u) => u.kind)).toEqual(["measure"]);
+      } finally {
+        await db.candidacy.update({
+          where: { id: bravo.id },
+          data: { status: bravo.status, statusChangedAt: null },
+        });
+      }
+    });
+
+    it("ne remonte pas un passage à « pressentie », ni une candidature sans date de changement", async () => {
+      const charlie = await db.candidacy.findFirstOrThrow({
+        where: { electionId, candidateName: "Charlie Fixture" },
+        select: { id: true },
+      });
+      try {
+        await db.candidacy.update({
+          where: { id: charlie.id },
+          data: { statusChangedAt: new Date("2030-01-01T00:00:00Z") },
+        });
+        const latest = await loadHubLatestUpdates(electionId);
+        expect(latest.some((u) => u.kind === "status")).toBe(false);
+      } finally {
+        await db.candidacy.update({ where: { id: charlie.id }, data: { statusChangedAt: null } });
+      }
+    });
+
     it("rend une liste vide pour une élection inconnue (avant la frontière cache)", async () => {
-      expect(await getHubLatestMeasures("inconnue")).toEqual([]);
+      expect(await getHubLatestUpdates("inconnue")).toEqual([]);
     });
   });
 });

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { MetadataRoute } from "next";
 import { OG_IMAGE_DISALLOW_PATHS, SOCIAL_PREVIEW_USER_AGENTS } from "@/lib/seo/og-image-robots";
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { SITEMAP_SHARD_IDS } from "@/lib/seo/sitemap-tags";
+import { SITE_URL } from "@/config/site";
 
 const ORIGINAL_VERCEL_ENV = process.env.VERCEL_ENV;
 
@@ -75,10 +77,11 @@ describe("robots.txt (production)", () => {
   });
 
   it("announces every sitemap shard", () => {
-    // One entry per id returned by generateSitemaps() in src/app/sitemap.ts (5: Territoires).
+    // One entry per shard id, the list generateSitemaps() in src/app/sitemap.ts derives from too.
     const sitemaps = asArray(robots.sitemap as string[]);
-    expect(sitemaps).toHaveLength(6);
-    expect(sitemaps.at(-1)).toMatch(/\/sitemap\/5\.xml$/);
+    expect(sitemaps).toHaveLength(SITEMAP_SHARD_IDS.length);
+    // 6: the indexable fact-checks.
+    expect(sitemaps.at(-1)).toBe(`${SITE_URL}/sitemap/6.xml`);
   });
 
   describe("generic crawlers", () => {
@@ -91,6 +94,17 @@ describe("robots.txt (production)", () => {
     it.each(["/admin/", "/api/admin/"])("blocks the private surface %s", (path) => {
       expect(disallow()).toContain(path);
     });
+
+    // One address per page of the site (`?from=`), each rendered on demand.
+    it.each(["/signaler", "/signaler?from=%2Fpolitiques%2Fexemple"])(
+      "blocks the feedback form %s, for social bots too",
+      (url) => {
+        const social = asArray(groupFor(robots, SOCIAL_PREVIEW_USER_AGENTS[0])!.disallow);
+        for (const rules of [disallow(), social]) {
+          expect(rules.some((pattern) => matchesRobotsPattern(pattern, url))).toBe(true);
+        }
+      }
+    );
 
     it.each(OG_IMAGE_DISALLOW_PATHS)("blocks the opengraph-image route %s", (path) => {
       expect(disallow()).toContain(path);
@@ -123,6 +137,33 @@ describe("robots.txt (production)", () => {
         expect(disallow()).not.toContain(`/*?*${key}=`);
       }
     );
+  });
+
+  describe("crawlers slowed down by Crawl-delay", () => {
+    it.each(["ShapBot", "ClaudeBot"])("gives %s a delay between two requests", (agent) => {
+      expect(groupFor(robots, agent)!.crawlDelay).toBeGreaterThanOrEqual(5);
+    });
+
+    // A named group replaces the generic one for that crawler: forgetting a rule here would
+    // reopen to these two what is closed to everyone else.
+    it.each(["ShapBot", "ClaudeBot"])(
+      "restates every rule of the generic group for %s",
+      (agent) => {
+        const generic = asArray(groupFor(robots, "*")!.disallow);
+        expect(asArray(groupFor(robots, agent)!.disallow)).toEqual(generic);
+        expect(generic.length).toBeGreaterThan(5);
+      }
+    );
+
+    // ClaudeBot crawled at exactly the pace a ten-second delay allows, all day long.
+    it("slows ClaudeBot down to one page a minute at most", () => {
+      expect(groupFor(robots, "ClaudeBot")!.crawlDelay).toBeGreaterThanOrEqual(60);
+    });
+
+    it("leaves every other crawler without a delay", () => {
+      expect(groupFor(robots, "*")!.crawlDelay).toBeUndefined();
+      expect(groupFor(robots, SOCIAL_PREVIEW_USER_AGENTS[0])!.crawlDelay).toBeUndefined();
+    });
   });
 
   describe("social preview crawlers", () => {

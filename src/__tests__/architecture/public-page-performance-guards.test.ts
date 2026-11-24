@@ -149,7 +149,7 @@ describe("public page performance contracts", () => {
         "loadHubMeasureContext",
         ["electionId", "electionSlug"],
       ],
-      ["hub", "getHubLatestMeasuresCached", "loadHubLatestMeasures", ["electionId"]],
+      ["hub", "getHubLatestUpdatesCached", "loadHubLatestUpdates", ["electionId"]],
       ["hub-press", "getHubPressCached", "loadHubPress", ["electionId"]],
       ["themes-index", "getThemesIndexCached", "loadThemesIndex", ["electionId", "electionSlug"]],
       ["priorites", "getPrioritesDataCached", "loadPrioritesData", ["electionId", "electionSlug"]],

@@ -19,7 +19,7 @@ const INVALIDATES_PROFILE_DATA = new RegExp(
   ].join("|")
 );
 const REQUESTS_REFRESH =
-  /requestProfileRefresh\(|refreshProfilesForModeration\(|requestProfileReconcile\(|PROFILE_RECONCILE_EVENT/;
+  /requestProfileRefresh\(|refreshProfilesForModeration\(|request(Active)?ProfileReconcile\(|PROFILE_RECONCILE_(ACTIVE_)?EVENT/;
 
 // Files that invalidate one of those tags but write nothing the profile document holds. The
 // document holds: identity, current party, party history, mandates, declarations, external ids,
@@ -321,7 +321,7 @@ describe("points d'écriture des fiches politicien", () => {
   it("le rattrapage suit le sync quotidien et la revalidation par cron", () => {
     const daily = withoutComments(read("src/inngest/functions/sync-daily.ts"));
     expect(daily).toMatch(
-      /step\.sendEvent\(\s*["']profile-reconcile["'],\s*\{\s*name:\s*PROFILE_RECONCILE_EVENT,\s*data:\s*\{\s*reason:\s*["']sync-daily["']\s*\}/
+      /step\.sendEvent\(\s*["']profile-reconcile["'],\s*\{\s*name:\s*PROFILE_RECONCILE_ACTIVE_EVENT,\s*data:\s*\{\s*reason:\s*["']sync-daily["']\s*\}/
     );
     expect(daily.indexOf('step.sendEvent("profile-reconcile"')).toBeGreaterThan(
       daily.indexOf("for (const s of DAILY_STEPS)")
@@ -329,6 +329,7 @@ describe("points d'écriture des fiches politicien", () => {
 
     const cron = withoutComments(read("src/app/api/cron/revalidate/route.ts"));
     expect(cron).toMatch(/requestProfileReconcile\(/);
+    expect(cron).toMatch(/requestActiveProfileReconcile\(/);
     expect(cron).toContain('from "@/lib/politicians/profile-snapshot/events"');
     expect(cron).not.toContain("profile-snapshot/request");
   });
@@ -338,7 +339,15 @@ describe("points d'écriture des fiches politicien", () => {
     // that route's import graph (mcp-public-contract-surfaces.test.ts).
     const events = withoutComments(read("src/lib/politicians/profile-snapshot/events.ts"));
     const imports = [...events.matchAll(/(?:from|import\()\s*["']([^"']+)["']/g)].map((m) => m[1]);
-    expect(imports).toEqual(["@/inngest/client"]);
+    expect(imports).toEqual(["@/lib/api/profile-relay", "./relay", "@/inngest/client"]);
     expect(events).not.toMatch(/@\/lib\/db|@\/lib\/data|from "\.\/request"/);
+    // The two relay modules it loads import nothing themselves, and only the one under
+    // src/lib/api opens a socket (AGENTS.md §5).
+    const relay = withoutComments(read("src/lib/politicians/profile-snapshot/relay.ts"));
+    const transport = withoutComments(read("src/lib/api/profile-relay.ts"));
+    for (const source of [relay, transport]) {
+      expect(source).not.toMatch(/(?:from|import\()\s*["']/);
+    }
+    expect(relay).not.toMatch(/fetch/i);
   });
 });

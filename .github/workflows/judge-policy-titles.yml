@@ -1,0 +1,178 @@
+name: Judge Policy Titles
+
+# Weekly LLM review of the NEEDS_REVIEW scrutin policy titles. Writes only through
+# scripts/judge-policy-titles.ts --apply (approval guard + profile refresh request),
+# never in raw SQL.
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC, after the Sunday scrutin syncs
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max titles to judge (default: 100)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: judge-policy-titles
+  cancel-in-progress: false
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # Profile refresh requests go through the app relay (no Inngest key here).
+  CRON_SECRET: ${{ secrets.CRON_SECRET }}
+  NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL || 'https://poligraph.fr' }}
+  REPORT: scripts/.local/judge-report.json
+  ACTOR: github-actions:judge-policy-titles
+
+jobs:
+  judge-policy-titles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Judge titles (no write)
+        env:
+          LIMIT: ${{ github.event.inputs.limit || '100' }}
+        run: |
+          if ! [[ "$LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::limit must be a positive integer"
+            exit 1
+          fi
+          npx tsx scripts/judge-policy-titles.ts --all --limit "$LIMIT"
+          node -e '
+            const r = require("./" + process.env.REPORT);
+            console.log(`Verdicts: ${r.total}/${r.candidates}`);
+            if (r.candidates > 0 && r.total === 0) {
+              console.log("::error::No verdict for any candidate (Anthropic API unavailable or out of credit?)");
+              process.exit(1);
+            }'
+
+      - name: Dry run through the approval guard
+        run: |
+          npx tsx scripts/judge-policy-titles.ts --apply --from "$REPORT" --dry-run --actor "$ACTOR"
+          node -e '
+            const d = require("./scripts/.local/judge-report.dry-run.json");
+            const errors = d.filter((x) => x.outcome.startsWith("error:"));
+            if (errors.length > 0) {
+              console.log(`::error::${errors.length} error(s) in the dry run, nothing applied`);
+              process.exit(1);
+            }'
+
+      - name: Apply verdicts
+        run: |
+          set -o pipefail
+          npx tsx scripts/judge-policy-titles.ts --apply --from "$REPORT" --actor "$ACTOR" 2>&1 | tee apply.log
+          if grep -q "\[profile-snapshot\] request failed" apply.log; then
+            echo "::error::Titles applied, but the profile refresh request failed"
+            exit 1
+          fi
+          node -e '
+            const d = require("./scripts/.local/judge-report.applied.json");
+            const errors = d.filter((x) => x.outcome.startsWith("error:"));
+            if (errors.length > 0) {
+              console.log(`::error::${errors.length} error(s) while applying`);
+              process.exit(1);
+            }'
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Judge Policy Titles"
+            echo ""
+            echo "- **Triggered by**: ${{ github.actor }}"
+            echo "- **Status**: ${{ job.status }}"
+            if [ -f scripts/.local/judge-report.applied.json ]; then
+              echo ""
+              echo "| Outcome | Count |"
+              echo "| --- | --- |"
+              node -e '
+                const d = require("./scripts/.local/judge-report.applied.json");
+                const counts = {};
+                for (const x of d) counts[x.outcome] = (counts[x.outcome] ?? 0) + 1;
+                for (const [k, v] of Object.entries(counts)) console.log(`| ${k} | ${v} |`);'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: judge-policy-titles-report
+          path: scripts/.local/judge-report*.json
+          retention-days: 14
+          # scripts/.local is a hidden directory, skipped by default.
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  notify:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [judge-policy-titles]
+    if: failure() && !cancelled()
+
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = "judge-policy-titles-failure";
+            const title = `Judge Policy Titles failed - ${new Date().toISOString().split("T")[0]}`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              "## Judge Policy Titles failed",
+              "",
+              `**Workflow run**: ${runUrl}`,
+              `**Triggered by**: ${context.actor}`,
+              `**Commit**: \`${context.sha.slice(0, 7)}\``,
+              "",
+              "### Checklist",
+              "- [ ] Open the workflow run and identify the failing step",
+              "- [ ] Check whether titles were applied before the failure (judge-report.applied.json artifact)",
+              "- [ ] Re-run the workflow once the underlying cause is fixed",
+              "- [ ] Close this issue when resolved",
+            ].join("\n");
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: label,
+            });
+
+            if (existing.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label, "automated"],
+              });
+            }

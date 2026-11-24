@@ -4,9 +4,14 @@ import { cache } from "react";
 import { getRegionTerritoire } from "@/lib/data/territoires";
 import { getElections } from "@/lib/data/elections";
 import { REGIONS } from "@/config/regions";
-import { territoireRegionPath } from "@/lib/territoires/paths";
+import { territoireRegionBudgetPath, territoireRegionPath } from "@/lib/territoires/paths";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
-import { RegionHero } from "@/components/territoires/RegionHero";
+import { Agir } from "@/components/territoires/Agir";
+import { FilTerritoire } from "@/components/territoires/FilTerritoire";
+import { getFilTerritoire, getRapportsCrcTerritoire } from "@/lib/data/territoire-fil";
+import { RapportsCrc } from "@/components/territoires/RapportsCrc";
+import { RegionBandeau } from "@/components/territoires/RegionBandeau";
+import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
 import {
   RegionCollectivites,
   RegionConseil,
@@ -18,6 +23,9 @@ import {
   type RegionElection,
 } from "@/components/territoires/RegionSections";
 import { formatCompte } from "@/lib/territoires/format";
+import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
+import { BudgetResume } from "@/components/territoires/BudgetResume";
+import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
 
 // The 18 regions are a closed list: every page is prerendered, any other slug is a 404.
 export const dynamicParams = false;
@@ -44,11 +52,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `${region.name} : départements, communes et élus`,
     description,
     alternates: { canonical: territoireRegionPath(region.slug) },
-    openGraph: {
+    openGraph: openGraph({
       title: region.name,
       description,
       url: territoireRegionPath(region.slug),
-    },
+      images: SEGMENT_IMAGE_FILE,
+    }),
   };
 }
 
@@ -73,17 +82,46 @@ export default async function RegionPage({ params }: PageProps) {
   const data = await loadRegion(slug);
   if (!data) notFound();
 
-  const elections = await loadRegionElections(data.collectivitesParticulieres.length > 0);
+  const particuliere = data.collectivitesParticulieres.length > 0;
+  const [elections, fil, comptes, rapports] = await Promise.all([
+    loadRegionElections(particuliere),
+    getFilTerritoire("REG", data.region.code),
+    getComptesTerritoire("REG", data.region.code),
+    getRapportsCrcTerritoire("REG", data.region.code),
+  ]);
+
+  // One word each. The first tab names the block shown for this region; the elections tab
+  // exists only with its section.
+  const onglets = [
+    particuliere
+      ? { href: "#collectivite", label: "Collectivité" }
+      : { href: "#conseil", label: "Conseil" },
+    { href: "#departements", label: "Départements" },
+    ...(elections.length > 0 ? [{ href: "#elections", label: "Élections" }] : []),
+    { href: "#parlement", label: "Parlement" },
+    // The block speaks of the conseil régional: not where a single collectivité replaces it.
+    ...(particuliere ? [] : [{ href: "#agir", label: "Agir" }]),
+  ];
 
   return (
     <>
-      <RegionHero data={data} />
-      <div className="container mx-auto grid gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <RegionBandeau data={data} />
+      <TerritoireOnglets onglets={onglets} />
+      <div className="container mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
-          <RegionDepartements data={data} />
+          <FilTerritoire evenements={fil} />
           <RegionCollectivites data={data} />
           <RegionConseil data={data} />
+          {/* Under the first tab (« Conseil » or « Collectivité »), after the council. */}
+          <BudgetResume
+            comptes={comptes}
+            scale="REG"
+            budgetHref={territoireRegionBudgetPath(data.region.slug)}
+          />
+          <RapportsCrc rapports={rapports} />
+          <RegionDepartements data={data} />
           <RegionElections elections={elections} />
+          {!particuliere && <Agir niveau="region" />}
         </div>
         <aside className="space-y-6" aria-label="Compléments">
           <RegionParlement data={data} />

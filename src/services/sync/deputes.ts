@@ -244,7 +244,7 @@ async function syncDeputy(
       await politicianService.setCurrentParty(existing.id, partyId);
 
       // Upsert external IDs
-      await upsertExternalIds(existing.id, dep.id, slug);
+      await upsertExternalIds(existing.id, dep.id);
 
       // Update or create current mandate
       const existingMandate = existing.mandates.find(
@@ -304,7 +304,7 @@ async function syncDeputy(
       await politicianService.setCurrentParty(newPolitician.id, partyId);
 
       // Create external IDs
-      await upsertExternalIds(newPolitician.id, dep.id, slug);
+      await upsertExternalIds(newPolitician.id, dep.id);
 
       return "created";
     }
@@ -326,21 +326,13 @@ function getOrdinalSuffix(n: string): string {
 /**
  * Upsert external IDs for a politician
  */
-async function upsertExternalIds(politicianId: string, anId: string, slug: string): Promise<void> {
+async function upsertExternalIds(politicianId: string, anId: string): Promise<void> {
   // Assemblée Nationale ID
   await upsertPoliticianExternalId(
     politicianId,
     DataSource.ASSEMBLEE_NATIONALE,
     anId,
     `https://www.assemblee-nationale.fr/dyn/deputes/${anId}`
-  );
-
-  // NosDéputés ID (uses slug)
-  await upsertPoliticianExternalId(
-    politicianId,
-    DataSource.NOSDEPUTES,
-    slug,
-    `https://www.nosdeputes.fr/${slug}`
   );
 }
 

@@ -2,6 +2,7 @@ import { MetadataRoute } from "next";
 import { SITE_URL } from "@/config/site";
 import { OG_IMAGE_DISALLOW_PATHS, SOCIAL_PREVIEW_USER_AGENTS } from "@/lib/seo/og-image-robots";
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { SITEMAP_SHARD_IDS } from "@/lib/seo/sitemap-tags";
 
 const isProduction =
   process.env.VERCEL_ENV === "production" ||
@@ -24,6 +25,10 @@ const SHARED_DISALLOW = [
   // Paginated listings are duplicate content (canonical points to
   // page 1): block crawl to avoid regenerating every ?page= variant.
   "/*?*page=",
+  // The feedback form is linked from every page with a `?from=` of its own, so one address per
+  // page of the site, each rendered on demand. It was already noindex: nothing to lose in the
+  // index, and the crawl was the cost.
+  "/signaler",
 ];
 
 /**
@@ -67,6 +72,17 @@ const INDEXER_DISALLOW = [
   ...POLITICIAN_TAB_DISALLOW,
 ];
 
+/**
+ * Crawlers whose operator documents `Crawl-delay` (seconds between two requests) as the way to
+ * slow them down without blocking them: Parallel for ShapBot, Anthropic for ClaudeBot. ShapBot
+ * walked the site in bursts of several thousand pages an hour, each one rendered on demand.
+ * The other AI crawlers document no such setting (Amazonbot rejects the directive outright), so
+ * nothing is declared for them here.
+ */
+// Seconds between two requests, per crawler. ClaudeBot used the whole allowance of a ten-second
+// delay, day after day (one page every ten seconds, around the clock), so it gets a longer one.
+const CRAWL_DELAYS: Record<string, number> = { ShapBot: 10, ClaudeBot: 60 };
+
 export default function robots(): MetadataRoute.Robots {
   if (!isProduction) {
     return { rules: [{ userAgent: "*", disallow: ["/"] }] };
@@ -89,14 +105,15 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         disallow: SHARED_DISALLOW,
       },
+      // A crawler obeys only the most specific group that names it: each of these restates
+      // every rule of the generic group, plus its delay.
+      ...Object.entries(CRAWL_DELAYS).map(([userAgent, crawlDelay]) => ({
+        userAgent,
+        allow: "/",
+        disallow: INDEXER_DISALLOW,
+        crawlDelay,
+      })),
     ],
-    sitemap: [
-      `${SITE_URL}/sitemap/0.xml`,
-      `${SITE_URL}/sitemap/1.xml`,
-      `${SITE_URL}/sitemap/2.xml`,
-      `${SITE_URL}/sitemap/3.xml`,
-      `${SITE_URL}/sitemap/4.xml`,
-      `${SITE_URL}/sitemap/5.xml`,
-    ],
+    sitemap: SITEMAP_SHARD_IDS.map((id) => `${SITE_URL}/sitemap/${id}.xml`),
   };
 }

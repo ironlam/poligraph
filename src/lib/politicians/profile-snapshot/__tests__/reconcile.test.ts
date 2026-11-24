@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ db: { politician: { findMany: vi.fn() } } }));
 
-import { runReconcileBatch } from "../reconcile";
+import { db } from "@/lib/db";
+import { listActiveProfilePoliticianIds, runReconcileBatch } from "../reconcile";
 import type { RefreshOutcome } from "../refresh";
 
 const ids = (n: number) =>
@@ -137,5 +138,25 @@ describe("runReconcileBatch", () => {
       },
     ]);
     errorSpy.mockRestore();
+  });
+});
+
+describe("listActiveProfilePoliticianIds", () => {
+  it("ne retient que les parlementaires en cours et les fiches citées par un fact-check", async () => {
+    const findMany = vi.mocked(db.politician.findMany);
+    findMany.mockResolvedValue([{ id: "p002" }, { id: "p005" }] as never);
+
+    expect(await listActiveProfilePoliticianIds("p001", 50)).toEqual(["p002", "p005"]);
+
+    const args = findMany.mock.calls[0]![0]!;
+    expect(args.where).toMatchObject({
+      id: { gt: "p001" },
+      OR: [
+        { mandates: { some: { isCurrent: true, type: { in: ["DEPUTE", "SENATEUR"] } } } },
+        { factCheckMentions: { some: {} } },
+      ],
+    });
+    expect(args.orderBy).toEqual({ id: "asc" });
+    expect(args.take).toBe(50);
   });
 });

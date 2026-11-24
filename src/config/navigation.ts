@@ -5,6 +5,7 @@ import {
   TERRITOIRES_REGIONS_ANCHOR,
   TERRITOIRES_DEPARTEMENTS_PATH,
 } from "@/lib/territoires/paths";
+import { YOUTUBE_CHANNEL_URL } from "@/config/youtube";
 
 export interface NavItem {
   href: string;
@@ -190,7 +191,8 @@ export const NAV_ELECTIONS: ElectionNavItem[] = [
 ];
 
 // Mobile menu, grouped by what the reader is trying to do. The four sections of the tab bar
-// (NAV_TABS) are left out: the bar already holds them. Search is the field at the top of the menu.
+// (NAV_TABS) stay in the bar. Affaires also appears alongside Patrimoine et déclarations so that
+// readers can find both under Transparence et probité. Search is at the top of the menu.
 export const NAV_MENU_GROUPS: NavGroup[] = [
   {
     label: "Près de chez moi",
@@ -199,6 +201,13 @@ export const NAV_MENU_GROUPS: NavGroup[] = [
       { href: "/mon-depute", label: "Mon député", featureFlag: "MON_DEPUTE_SECTION" },
       { href: TERRITOIRES_DEPARTEMENTS_PATH, label: "Départements" },
       { href: TERRITOIRES_REGIONS_ANCHOR, label: "Régions" },
+    ],
+  },
+  {
+    label: "Transparence et probité",
+    items: [
+      { href: "/affaires", label: "Affaires judiciaires" },
+      { href: "/declarations-et-patrimoine", label: "Patrimoine et déclarations" },
     ],
   },
   {
@@ -241,6 +250,8 @@ export interface TabNavItem {
   icon: TabIcon;
   /** Path prefix that lights the tab: a tab stands for its whole section, not for one page */
   match: string;
+  /** Sets the tab apart from the other three: the election put forward while its campaign runs */
+  highlight?: boolean;
 }
 
 // Bottom tab bar, below `lg`. Four links to existing pages; the menu button is added by the
@@ -256,6 +267,7 @@ export const NAV_TABS: TabNavItem[] = [
     ariaLabel: "Présidentielle 2027",
     icon: "vote",
     match: "/elections/presidentielle-2027",
+    highlight: true,
   },
 ];
 
@@ -322,6 +334,7 @@ export const FOOTER_SECTIONS: FooterSection[] = [
       { href: "/parlement", label: "Travail parlementaire" },
       { href: "/parlement/assemblee-nationale", label: "Assemblée nationale" },
       { href: "/parlement/senat", label: "Sénat" },
+      { href: "/parlement/votes/archives", label: "Archives des votes" },
       {
         href: "/parlement/dossiers",
         label: "Dossiers législatifs",
@@ -387,15 +400,23 @@ export const RSS_FEEDS = [
   { href: "/api/rss/factchecks.xml", label: "Fact-checks" },
 ] as const;
 
-// Social media links for footer
+// Social networks: footer on every page, mobile menu, and the homepage hero on desktop.
+export type SocialIconName = "youtube" | "instagram" | "tiktok" | "x" | "bluesky" | "github";
+
 export interface SocialLink {
   href: string;
   label: string;
-  /** Lucide icon name, or "x" for custom SVG */
-  icon: "x" | "bluesky" | "instagram" | "github";
+  icon: SocialIconName;
 }
 
 export const SOCIAL_LINKS: SocialLink[] = [
+  { href: YOUTUBE_CHANNEL_URL, label: "YouTube", icon: "youtube" },
+  {
+    href: "https://www.instagram.com/poligraph_fr",
+    label: "Instagram",
+    icon: "instagram",
+  },
+  { href: "https://www.tiktok.com/@poligraph_fr", label: "TikTok", icon: "tiktok" },
   { href: "https://x.com/poligraph_fr", label: "X (Twitter)", icon: "x" },
   {
     href: "https://bsky.app/profile/poligraph-fr.bsky.social",
@@ -403,13 +424,11 @@ export const SOCIAL_LINKS: SocialLink[] = [
     icon: "bluesky",
   },
   {
-    href: "https://www.instagram.com/poligraph_fr",
-    label: "Instagram",
-    icon: "instagram",
-  },
-  {
     href: "https://github.com/ironlam/poligraph",
     label: "GitHub",
     icon: "github",
   },
 ];
+
+/** The accounts a reader follows: GitHub is a code repository and stays in the footer. */
+export const FOLLOW_LINKS: SocialLink[] = SOCIAL_LINKS.filter((link) => link.icon !== "github");

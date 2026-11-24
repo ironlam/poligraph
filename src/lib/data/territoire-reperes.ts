@@ -3,6 +3,12 @@ import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isMissingTableError } from "@/lib/data/commune-population";
 import { repereIndicator, type RepereTerritoryKind } from "@/config/territoire-reperes";
+import {
+  COMPTES_AGREGATS,
+  COMPTES_DERNIER_EXERCICE,
+  COMPTES_INDICATOR_PREFIX,
+  COMPTES_PREMIER_EXERCICE,
+} from "@/config/territoire-comptes";
 
 /**
  * Reader of "Le territoire en chiffres" (#1052, lot R0). One page, one query, one territory:
@@ -27,7 +33,8 @@ export interface RepereSourceRef {
   licenceName: string;
   licenceUrl: string;
   attribution: string;
-  methodSlug: string;
+  /** Null when the source feeds several method pages: the indicator config names its page. */
+  methodSlug: string | null;
   /** ISO timestamp of the import that wrote the row. */
   importedAt: string;
 }
@@ -53,6 +60,13 @@ export interface RepereRow {
 /** Upper bound of one page read: a territory never carries more than this many figures. */
 export const REPERES_PAGE_LIMIT = 200;
 
+/**
+ * Upper bound of one accounts read: five aggregates, two measures, one row per exercise of the
+ * series (D28 keeps the accounts out of "Le territoire en chiffres", and out of its read).
+ */
+export const COMPTES_PAGE_LIMIT =
+  COMPTES_AGREGATS.length * 2 * (COMPTES_DERNIER_EXERCICE - COMPTES_PREMIER_EXERCICE + 1);
+
 interface RawRow {
   indicatorKey: string;
   periodStart: Date;
@@ -70,7 +84,7 @@ interface RawRow {
   licenceName: string;
   licenceUrl: string;
   attribution: string;
-  methodSlug: string;
+  methodSlug: string | null;
   importedAt: Date;
 }
 
@@ -86,7 +100,7 @@ function toRow(r: RawRow): RepereRow {
     scopeKind: r.scopeKind,
     scopeId: r.scopeId,
     scopeLabel: r.scopeLabel,
-    value: hasValue ? r.value : null,
+    value: hasValue && r.value !== null ? Number(r.value) : null,
     unit: r.unit,
     sampleSize: r.sampleSize,
     state: r.state,
@@ -103,16 +117,23 @@ function toRow(r: RawRow): RepereRow {
   };
 }
 
-/** Published figures of one territory, in a single query. Empty while nothing is published. */
-export async function getTerritoireReperes(
-  type: RepereTerritoryKind,
-  code: string
-): Promise<RepereRow[]> {
-  "use cache";
-  // No tag is set by a publication: pages follow the 24 h `synced` profile (no mass revalidation).
-  cacheTag("territoires", `reperes:${type}:${code}`);
-  cacheLife("synced");
+type RepereFamily = "CHIFFRES" | "COMPTES";
 
+/**
+ * Published rows of one territory and one family, in a single query on the unique index
+ * (territoryType, territoryCode, indicatorKey, ...). Measured on 2026-11-22 for Brest: index scan,
+ * 0.8 ms, at most 27 published rows per territory before the accounts.
+ */
+async function queryReperes(
+  type: RepereTerritoryKind,
+  code: string,
+  family: RepereFamily
+): Promise<RepereRow[]> {
+  const familyFilter =
+    family === "COMPTES"
+      ? Prisma.sql`AND starts_with(r."indicatorKey", ${COMPTES_INDICATOR_PREFIX})`
+      : Prisma.sql`AND NOT starts_with(r."indicatorKey", ${COMPTES_INDICATOR_PREFIX})`;
+  const limit = family === "COMPTES" ? COMPTES_PAGE_LIMIT : REPERES_PAGE_LIMIT;
   try {
     const rows = await db.$queryRaw<RawRow[]>(Prisma.sql`
       SELECT r."indicatorKey", r."periodStart", r."periodEnd", r."scopeKind", r."scopeId", r."scopeLabel",
@@ -123,8 +144,9 @@ export async function getTerritoireReperes(
       JOIN "RepereImport" i ON i."id" = r."importId" AND i."status" = 'PUBLISHED'
       JOIN "RepereSource" s ON s."id" = i."sourceId"
       WHERE r."territoryType" = ${type}::"RepereTerritoryType" AND r."territoryCode" = ${code}
+        ${familyFilter}
       ORDER BY r."indicatorKey", r."periodEnd" DESC, r."scopeLabel", r."scopeId"
-      LIMIT ${REPERES_PAGE_LIMIT}
+      LIMIT ${limit}
     `);
     return rows.map(toRow);
   } catch (error) {
@@ -132,6 +154,29 @@ export async function getTerritoireReperes(
     if (isMissingTableError(error)) return [];
     throw error;
   }
+}
+
+/** Published figures of "Le territoire en chiffres" for one territory. Empty while nothing is published. */
+export async function getTerritoireReperes(
+  type: RepereTerritoryKind,
+  code: string
+): Promise<RepereRow[]> {
+  "use cache";
+  // No tag is set by a publication: pages follow the 24 h `synced` profile (no mass revalidation).
+  cacheTag("territoires", `reperes:${type}:${code}`);
+  cacheLife("synced");
+  return queryReperes(type, code, "CHIFFRES");
+}
+
+/** Published rows of "Les comptes de la collectivité" for one territory, every exercise. */
+export async function getTerritoireComptesRows(
+  type: RepereTerritoryKind,
+  code: string
+): Promise<RepereRow[]> {
+  "use cache";
+  cacheTag("territoires", `comptes:${type}:${code}`);
+  cacheLife("synced");
+  return queryReperes(type, code, "COMPTES");
 }
 
 export interface RepereReading {

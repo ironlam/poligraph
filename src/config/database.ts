@@ -91,6 +91,41 @@ export function resolveConnectionTimeout(isWebRuntime: boolean): number {
 }
 
 /**
+ * How long an unused connection stays open before the pool closes it.
+ *
+ * On Vercel this is also how long an instance stays up after its last query: `attachDatabasePool`
+ * (see @/lib/db) holds the function until idle connections have closed, so that a suspended
+ * instance never keeps sockets open toward Supavisor. At ten seconds, a request that had answered
+ * in a few hundred milliseconds kept its instance up ten seconds more. Measured over a day on
+ * 2026-11-18: the 99th percentile of function duration sat flat at 10.3 s on routes whose render
+ * takes well under a second, and the time spent waiting dwarfed the time spent computing.
+ *
+ * Two seconds keeps a connection warm between the requests of one page load, which is what the
+ * pool is for, and the cost of the alternative is known: opening a connection takes 126 to 159 ms
+ * (measurements above). Closing sooner also leaves fewer sockets open toward the pooler, the side
+ * the 2026-10-01 incident came from. If connection churn ever shows up as latency, raise this
+ * before touching the pool size.
+ */
+export const POOL_IDLE_TIMEOUT_MS = 2_000;
+
+/**
+ * Waits before asking the pooler again after it refused a new connection (client ceiling reached,
+ * or Postgres not reached in time). One entry per retry, so three retries after the first attempt.
+ *
+ * On 2026-11-16 a burst started 267 instances within a minute, each with its own pool, and the
+ * pooler refused past its 400 clients: every refused render became a 500, all inside that minute.
+ * Idle connections close after POOL_IDLE_TIMEOUT_MS, so slots free up within seconds. The waits add
+ * up to 2.3 s at most, and each one is shortened by a random share so that instances refused
+ * together do not come back together. The connection timeout bounds the retries as a whole: none
+ * starts once that much time has passed since the first attempt (see ObservedPool).
+ *
+ * Not measured: whether 2.3 s would have been enough on that day. The list is short on purpose,
+ * because on Vercel waiting is billed, and a saturation that lasts should fail rather than hold
+ * every instance up.
+ */
+export const POOLER_REFUSAL_RETRY_DELAYS_MS: readonly number[] = [200, 600, 1_500];
+
+/**
  * Backends Supavisor opens toward Postgres for this user+db, read from the Supabase dashboard on
  * 2026-09-22 (Small compute). Shared by every process, so it is the ceiling that actually binds.
  */

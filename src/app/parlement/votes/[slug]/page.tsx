@@ -49,6 +49,8 @@ import { ScrutinResultCard } from "@/components/votes/ScrutinResultCard";
 import { ScrutinOfficialGroups } from "@/components/votes/ScrutinOfficialGroups";
 import { GroupPositions } from "@/components/votes/GroupPositions";
 import { ScrutinContext } from "@/components/votes/ScrutinContext";
+import { ScrutinParDepartement } from "@/components/votes/ScrutinParDepartement";
+import { getScrutinVotesParDepartement } from "@/lib/data/scrutin-departements";
 import { HistoricalGroupPositions } from "@/components/votes/HistoricalGroupPositions";
 import { HISTORICAL_GROUP_POSITIONS_PUBLIC } from "@/config/historical-positions";
 import { readHistoricalGroupPositions } from "@/lib/data/historical-group-positions";
@@ -85,9 +87,8 @@ export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on
 //
 // This is only safe because the route does NOT access `searchParams`: combining
 // generateStaticParams + searchParams + the "use cache" data functions triggers
-// DYNAMIC_SERVER_USAGE. The date-archive `type` tab is therefore read client-side
-// inside DailyVotesList (useSearchParams), so /parlement/votes/YYYY-MM-DD?type=
-// still works while the route stays cacheable.
+// DYNAMIC_SERVER_USAGE. The date archive renders every scrutin of the day for that reason,
+// with no tab to read from the URL.
 export async function generateStaticParams() {
   return [];
 }
@@ -257,8 +258,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function ScrutinPage({ params }: PageProps) {
   const { slug } = await params;
 
-  // Date archive page (e.g., /votes/2026-03-04). The `type` tab is handled
-  // client-side in DailyVotesList, so this route never reads searchParams.
+  // Date archive page (e.g., /votes/2026-03-04). This route never reads searchParams.
   if (isVoteDateArchiveSlug(slug)) {
     const date = new Date(slug + "T00:00:00Z");
     if (!isNaN(date.getTime())) {
@@ -285,6 +285,10 @@ export default async function ScrutinPage({ params }: PageProps) {
       ? getScrutinOfficialGroups(scrutin.id, scrutin.legislature)
       : Promise.resolve(null),
   ]);
+  // After the batch above, not inside it: the pool holds four connections and this page already
+  // opens three at once. One indexed query (9 to 18 ms by EXPLAIN on the largest scrutins,
+  // 2026-11-15), cached per scrutin.
+  const parDepartement = await getScrutinVotesParDepartement(scrutin.id);
 
   const isKeyVote = !!scrutin.importance?.isKeyVote;
 
@@ -463,19 +467,23 @@ export default async function ScrutinPage({ params }: PageProps) {
               className="flex items-center gap-3 mb-8 p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors group"
             >
               <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground">Dossier législatif</p>
-                <p className="font-medium group-hover:underline">
-                  {scrutin.dossierLegislatif.shortTitle || scrutin.dossierLegislatif.title}
-                </p>
-              </div>
-              <div className="shrink-0 flex items-center gap-2">
-                {scrutin.dossierLegislatif.number && (
-                  <Badge variant="secondary" className="font-mono text-xs">
-                    {scrutin.dossierLegislatif.number}
-                  </Badge>
-                )}
-                <StatusBadge status={scrutin.dossierLegislatif.status} />
+              {/* Below `sm` the badges sit under the title: they must never compete with it for
+                  width on a narrow screen. */}
+              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-muted-foreground">Dossier législatif</p>
+                  <p className="font-medium group-hover:underline">
+                    {scrutin.dossierLegislatif.shortTitle || scrutin.dossierLegislatif.title}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {scrutin.dossierLegislatif.number && (
+                    <Badge variant="secondary" className="font-mono text-xs">
+                      {scrutin.dossierLegislatif.number}
+                    </Badge>
+                  )}
+                  <StatusBadge status={scrutin.dossierLegislatif.status} />
+                </div>
               </div>
             </Link>
           )}
@@ -540,6 +548,8 @@ export default async function ScrutinPage({ params }: PageProps) {
             </Link>
           )}
         </ScrutinVideoLayout>
+
+        <ScrutinParDepartement departements={parDepartement} chamber={scrutin.chamber} />
 
         {/* Synthèse PoliGraph, enjeux et B. Votes individuels (tabbed) */}
         <ScrutinContext

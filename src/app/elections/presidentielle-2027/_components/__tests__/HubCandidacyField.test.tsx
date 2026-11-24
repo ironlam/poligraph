@@ -271,3 +271,118 @@ describe("annuaire présidentiel", () => {
     expect(screen.getByText("2 personnalités affichées")).toBeInTheDocument();
   });
 });
+
+describe("annuaire présidentiel : filtres repliés sur mobile", () => {
+  beforeEach(() => {
+    navigation.searchParams = new URLSearchParams();
+    window.history.replaceState(null, "", "/elections/presidentielle-2027/candidats");
+  });
+
+  it("replie les statuts derrière un bouton qui dit s'il est ouvert", () => {
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    const toggle = screen.getByRole("button", { name: "Filtrer" });
+    const filters = document.getElementById("candidacy-filters")!;
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(filters.className).toContain("max-sm:hidden");
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(filters.className).not.toContain("max-sm:hidden");
+  });
+
+  it("compte les filtres actifs sur le bouton, recherche exclue", () => {
+    navigation.searchParams = new URLSearchParams(
+      "statut=pressenties&propositions=publiees&q=alix"
+    );
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    expect(screen.getByRole("button", { name: "Filtrer (2)" })).toBeInTheDocument();
+  });
+});
+
+describe("annuaire présidentiel : ordre", () => {
+  const field = [
+    candidacy({ id: "a", candidateName: "Alix Dupont", lastMeasurePublishedAt: null }),
+    candidacy({
+      id: "b",
+      candidateName: "Bao Martin",
+      politicianSlug: "bao-martin",
+      lastMeasurePublishedAt: new Date("2026-11-01"),
+    }),
+    candidacy({
+      id: "c",
+      candidateName: "Chloé Petit",
+      politicianSlug: "chloe-petit",
+      lastMeasurePublishedAt: new Date("2026-11-17"),
+    }),
+  ];
+  const names = () =>
+    screen
+      .getAllByRole("link")
+      .map((link) => link.textContent ?? "")
+      .map((text) => ["Alix Dupont", "Bao Martin", "Chloé Petit"].find((n) => text.includes(n)))
+      .filter(Boolean);
+
+  beforeEach(() => {
+    navigation.searchParams = new URLSearchParams();
+    window.history.replaceState(null, "", "/elections/presidentielle-2027/candidats");
+  });
+
+  it("garde l'ordre reçu par défaut et nomme Poligraph dans le tri par mesures", () => {
+    render(<CandidacyFieldBrowser candidacies={field} />);
+
+    expect(names()).toEqual(["Alix Dupont", "Bao Martin", "Chloé Petit"]);
+    const select = screen.getByRole("combobox", { name: "Trier les candidatures" });
+    expect([...select.querySelectorAll("option")].map((o) => o.textContent)).toEqual([
+      "Ordre alphabétique",
+      "Dernières mises à jour",
+      "Mesures publiées par Poligraph",
+    ]);
+    expect(screen.queryByText(/ne dit rien de l'ampleur/)).toBeNull();
+  });
+
+  it("trie par mesures publiées en disant que le compte est celui de Poligraph", () => {
+    render(
+      <CandidacyFieldBrowser
+        candidacies={[
+          candidacy({ id: "a", candidateName: "Alix Dupont", measureCount: 2 }),
+          candidacy({ id: "b", candidateName: "Bao Martin", measureCount: 40 }),
+          candidacy({ id: "c", candidateName: "Chloé Petit", measureCount: 40 }),
+        ]}
+      />
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Trier les candidatures" }), {
+      target: { value: "mesures" },
+    });
+
+    // Equal counts keep the alphabetical order they arrived in.
+    expect(names()).toEqual(["Bao Martin", "Chloé Petit", "Alix Dupont"]);
+    expect(
+      screen.getByText(/nombre de mesures que Poligraph a publiées.*ne dit rien de l'ampleur/)
+    ).toBeInTheDocument();
+  });
+
+  it("remonte les dernières publications, les candidatures sans mesure en fin de liste", () => {
+    render(<CandidacyFieldBrowser candidacies={field} />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Trier les candidatures" }), {
+      target: { value: "recentes" },
+    });
+
+    expect(names()).toEqual(["Chloé Petit", "Bao Martin", "Alix Dupont"]);
+    expect(window.location.search).toBe("?tri=recentes");
+  });
+
+  it("garde l'ordre choisi quand un filtre réécrit l'adresse", () => {
+    render(<CandidacyFieldBrowser candidacies={field} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Trier les candidatures" }), {
+      target: { value: "recentes" },
+    });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /propositions publiées/i }));
+
+    expect(new URLSearchParams(window.location.search).get("tri")).toBe("recentes");
+  });
+});

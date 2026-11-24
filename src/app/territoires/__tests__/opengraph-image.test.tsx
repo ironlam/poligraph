@@ -13,6 +13,7 @@ vi.mock("next/og", () => ({
   },
 }));
 
+import { TERRITOIRES_OG_IMAGE } from "@/lib/territoires/og-image";
 import OgImage, { alt, size } from "../opengraph-image";
 
 function decode(uri: string): string {
@@ -37,6 +38,8 @@ describe("image Open Graph de l'entrée Territoires", () => {
     expect(tree).toContain("data:image/svg+xml;base64,");
     expect(tree).not.toMatch(/[—–]/);
     expect(size).toEqual({ width: 1200, height: 630 });
+    // The commune pages declare this image by hand: their copy of its size and text must match.
+    expect(TERRITOIRES_OG_IMAGE).toMatchObject({ ...size, alt });
     expect(alt).toContain("Territoires");
   });
 });

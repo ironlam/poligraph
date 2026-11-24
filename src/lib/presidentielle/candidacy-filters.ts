@@ -7,10 +7,13 @@ import type { CandidacyStatus } from "@/generated/prisma";
  * "pressenties" covering both PRESSENTI and ENVISAGE is a decision about what the reader is being
  * shown, and it deserves a test that does not have to render a list to make its point.
  *
- * There is deliberately no sort control. The only defensible order is the one the section
- * announces, by surname, and a menu offering one option is furniture. A "par mesures" order would
- * rank candidacies by the volume of OUR extraction, which reads as a leaderboard of programme
- * quality and is exactly the ranking this site does not publish.
+ * The default order is the one the section announces, by surname. Two other orders are offered:
+ * by latest update, which says when we last wrote about a candidacy (a measure published or
+ * revised, or a change of status such as a declaration or a withdrawal), and by published
+ * measures. The second was long refused, because it ranks candidacies by the volume of OUR
+ * extraction and can read as a leaderboard of programme quality. It was accepted on 2026-11-19 on
+ * one condition, which the label and `CANDIDACY_SORT_NOTES` carry: the reader is told that the
+ * count is Poligraph's coverage, not the size of the programme. Do not drop either wording.
  */
 
 export const CANDIDACY_FILTERS = [
@@ -126,4 +129,53 @@ export function matchesCandidacyQuery(candidacy: FilterableCandidacy, query: str
     matchesFoldedValue(candidacy.partyLabel ?? "", needle) ||
     matchesFoldedValue(candidacy.partyShortName ?? "", needle)
   );
+}
+
+export const CANDIDACY_SORTS = ["alphabetique", "recentes", "mesures"] as const;
+
+export type CandidacySort = (typeof CANDIDACY_SORTS)[number];
+
+export const CANDIDACY_SORT_LABELS: Record<CandidacySort, string> = {
+  alphabetique: "Ordre alphabétique",
+  recentes: "Dernières mises à jour",
+  mesures: "Mesures publiées par Poligraph",
+};
+
+/** Shown under the control while the order is active. None for the orders that need no caveat. */
+export const CANDIDACY_SORT_NOTES: Partial<Record<CandidacySort, string>> = {
+  mesures:
+    "Ce tri suit le nombre de mesures que Poligraph a publiées à ce jour. Il ne dit rien de l'ampleur ni de la qualité d'un programme.",
+};
+
+export function parseCandidacySort(raw: string | null): CandidacySort {
+  return (CANDIDACY_SORTS as readonly string[]).includes(raw ?? "")
+    ? (raw as CandidacySort)
+    : "alphabetique";
+}
+
+/**
+ * `candidacies` arrives by surname and that order is kept as is, and as the tie-break: candidacies
+ * with nothing published yet, and no change of status on record, close the two other orders, still
+ * by surname.
+ */
+export function sortCandidacies<
+  T extends {
+    lastMeasurePublishedAt?: Date | null;
+    statusChangedAt?: Date | null;
+    measureCount: number;
+  },
+>(candidacies: readonly T[], sort: CandidacySort): T[] {
+  if (sort === "alphabetique") return [...candidacies];
+  const rank =
+    sort === "mesures"
+      ? (candidacy: T) => candidacy.measureCount
+      : (candidacy: T) =>
+          Math.max(
+            candidacy.lastMeasurePublishedAt?.getTime() ?? -Infinity,
+            candidacy.statusChangedAt?.getTime() ?? -Infinity
+          );
+  return candidacies
+    .map((candidacy, index) => ({ candidacy, index }))
+    .sort((a, b) => rank(b.candidacy) - rank(a.candidacy) || a.index - b.index)
+    .map(({ candidacy }) => candidacy);
 }

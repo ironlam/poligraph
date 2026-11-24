@@ -14,8 +14,13 @@ import {
   detectEvidenceDrift,
 } from "@/app/admin/policy-titles/approve-guard";
 import { buildInputHashInput } from "@/services/scrutin-policy-title";
-import { computeInputHash } from "@/services/scrutin-policy-title/input-hash";
+import {
+  computeInputHash,
+  isAgreementOnlyTitleDrift,
+} from "@/services/scrutin-policy-title/input-hash";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
+import { checkManualTitle } from "@/services/scrutin-policy-title/fallback-recovery";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import type {
   EvidenceQuote,
   GenerationWarning,
@@ -28,6 +33,10 @@ import { POLICY_TITLE_CRON } from "@/config/policy-titles";
  *  admin UI's "admin" so the revision history shows which approvals were
  *  automated. */
 export const CRON_ACTOR = "system:cron";
+
+/** Revision written when only the agreement of the official title was corrected
+ *  at the source and the stored snapshot + hash are refreshed. */
+export const OFFICIAL_TITLE_REFRESHED_ACTION = "official_title_refreshed";
 
 export interface ApprovalContext {
   row: ScrutinPolicyTitle;
@@ -57,7 +66,10 @@ export function snapshot(row: ScrutinPolicyTitle): Prisma.InputJsonValue {
  * warnings and evidence drift FRESH. Never trusts the stored values: every
  * approval decision must reflect what the official text says today.
  */
-export async function recomputeApprovalContext(scrutinId: string): Promise<ApprovalContext> {
+export async function recomputeApprovalContext(
+  scrutinId: string,
+  { readOnly = false }: { readOnly?: boolean } = {}
+): Promise<ApprovalContext> {
   const policy = await db.scrutinPolicyTitle.findUnique({
     where: { scrutinId },
     include: {
@@ -79,20 +91,54 @@ export async function recomputeApprovalContext(scrutinId: string): Promise<Appro
   const { scrutin, ...row } = policy;
 
   const resolved = await resolveSubstanceSources(scrutinId);
-  const currentInputHash = computeInputHash(
-    buildInputHashInput(
-      {
-        title: scrutin.title,
-        sourceUrl: scrutin.sourceUrl,
-        amendmentLinks: scrutin.amendmentLinks.map((l) => ({
-          role: l.role,
-          amendment: { id: l.amendment.id, number: l.amendment.number },
-        })),
-      },
-      row.proceduralLabel,
-      resolved.blocks
-    )
+  const currentInput = buildInputHashInput(
+    {
+      title: scrutin.title,
+      sourceUrl: scrutin.sourceUrl,
+      amendmentLinks: scrutin.amendmentLinks.map((l) => ({
+        role: l.role,
+        amendment: { id: l.amendment.id, number: l.amendment.number },
+      })),
+    },
+    row.proceduralLabel,
+    resolved.blocks
   );
+  const currentInputHash = computeInputHash(currentInput);
+
+  // The source sometimes fixes the agreement in a bill's name after generation.
+  // That is not a change of inputs: refresh the stored snapshot and hash (with a
+  // revision) so the guard does not report INPUT_DRIFT on an unchanged scrutin.
+  // REJECTED and STALE rows are left alone: isRejectedNotRevised reads the latest
+  // revision, and a STALE row must be regenerated anyway.
+  // A read-only caller (dry run) keeps the refreshed values in memory only.
+  const agreementOnlyDrift =
+    row.status !== "REJECTED" &&
+    row.status !== "STALE" &&
+    isAgreementOnlyTitleDrift({
+      storedHash: row.inputHash,
+      storedTitle: row.officialTitleSnapshot,
+      current: currentInput,
+    });
+  if (agreementOnlyDrift && !readOnly) {
+    await db.$transaction(async (tx) => {
+      await tx.scrutinPolicyTitleRevision.create({
+        data: {
+          policyTitleId: row.id,
+          snapshot: snapshot(row as ScrutinPolicyTitle),
+          action: OFFICIAL_TITLE_REFRESHED_ACTION,
+          actorId: "system",
+        },
+      });
+      await tx.scrutinPolicyTitle.update({
+        where: { id: row.id },
+        data: { officialTitleSnapshot: scrutin.title, inputHash: currentInputHash },
+      });
+    });
+  }
+  if (agreementOnlyDrift) {
+    policy.officialTitleSnapshot = row.officialTitleSnapshot = scrutin.title;
+    policy.inputHash = row.inputHash = currentInputHash;
+  }
 
   const evidenceQuotes = (row.evidenceQuotes ?? []) as unknown as EvidenceQuote[];
   const currentWarnings = computeCurrentWarnings(
@@ -200,6 +246,102 @@ export async function persistApproval(
       },
     });
   });
+}
+
+export interface ManualApprovalInput {
+  title: string;
+  subtitle?: string;
+  /** Verbatim quotes from the current official blocks: the title's grounding. */
+  evidenceQuotes: EvidenceQuote[];
+  /** Who wrote the title, e.g. "session:budget-2026". Stored on both revisions. */
+  actor: string;
+  /** Why this title is published by hand. Stored in the approved revision. */
+  reason: string;
+  dryRun?: boolean;
+}
+
+export type ManualApprovalResult = { ok: true; written: boolean } | { ok: false; reason: string };
+
+/**
+ * The only way for a one-off script to publish a hand-written title. Runs the
+ * generator's validators and the single-mode guard on the new title, then writes
+ * an "edited" revision and the title (back to NEEDS_REVIEW, so a failure before
+ * the approval leaves nothing public), then approves through persistApproval.
+ * The input hash is recomputed because the title was written against today's
+ * inputs. A STALE row stays blocked: regenerate it first.
+ */
+export async function approveManualPolicyTitle(
+  scrutinId: string,
+  input: ManualApprovalInput
+): Promise<ManualApprovalResult> {
+  if (!input.actor.trim()) return { ok: false, reason: "MISSING_ACTOR" };
+  if (!input.reason.trim()) return { ok: false, reason: "MISSING_REASON" };
+
+  const ctx = await recomputeApprovalContext(scrutinId, { readOnly: input.dryRun });
+  const { row, blocks, currentInputHash } = ctx;
+  if (await isRejectedNotRevised(row)) return { ok: false, reason: "REJECTED_NOT_REVISED" };
+
+  const check = checkManualTitle(input, blocks, ctx.scrutin.title);
+  if (!check.ok) return { ok: false, reason: check.reason };
+
+  const override = { reason: input.reason.trim(), actor: input.actor };
+  const edited = {
+    ...row,
+    policyTitle: check.title,
+    policySubtitle: check.subtitle,
+    evidenceQuotes: asJson(check.evidenceQuotes),
+    generationSource: "MANUAL" as const,
+    inputHash: currentInputHash,
+    currentWarnings: asJson(check.warnings),
+    status: row.status === "APPROVED" ? ("NEEDS_REVIEW" as const) : row.status,
+  };
+  const guard = approveGuard({
+    row: edited,
+    currentInputHash,
+    currentWarnings: check.warnings,
+    evidenceDrift: detectEvidenceDrift(check.evidenceQuotes, blocks),
+    mode: "single",
+    override,
+  });
+  if (!guard.ok) {
+    return { ok: false, reason: guard.hardBlockers.join("+") || "GUARD" };
+  }
+  if (input.dryRun) return { ok: true, written: false };
+
+  await db.$transaction(async (tx) => {
+    await tx.scrutinPolicyTitleRevision.create({
+      data: {
+        policyTitleId: row.id,
+        snapshot: {
+          ...(snapshot(row) as object),
+          previousPolicyTitle: row.policyTitle,
+          previousPolicySubtitle: row.policySubtitle,
+        } as Prisma.InputJsonValue,
+        action: "edited",
+        actorId: input.actor,
+      },
+    });
+    await tx.scrutinPolicyTitle.update({
+      where: { id: row.id },
+      data: {
+        policyTitle: edited.policyTitle,
+        policySubtitle: edited.policySubtitle,
+        evidenceQuotes: edited.evidenceQuotes,
+        generationSource: edited.generationSource,
+        inputHash: edited.inputHash,
+        currentWarnings: edited.currentWarnings,
+        status: edited.status,
+        editedFromGenerated: true,
+      },
+    });
+  });
+  await persistApproval(
+    { ...ctx, row: edited as ScrutinPolicyTitle, currentWarnings: check.warnings },
+    { actor: input.actor, approvalOverride: override }
+  );
+  // The profile document embeds the approved title of a politician's latest votes.
+  await requestProfileRefresh({ scrutinIds: [scrutinId] }, "script:titre-scrutin-approuvé");
+  return { ok: true, written: true };
 }
 
 export interface AutoApproveOptions {

@@ -90,6 +90,11 @@ export interface BatchResolveInput {
    * seen. Measured 2026-09-27: 77 of 78 decisions pointed at the record being resolved.
    */
   excludePoliticianIds?: ReadonlySet<string>;
+  /**
+   * False for a read-only report: same screening and scoring, no `IdentityDecision` written.
+   * Defaults to true.
+   */
+  persist?: boolean;
 }
 
 export interface BatchResolveResult {

@@ -5,6 +5,7 @@ export const ROUTES = {
   votes: "/parlement/votes",
   voteDetail: (slug: string) => `/parlement/votes/${slug}`,
   votesToday: "/parlement/votes/aujourd-hui",
+  voteArchives: "/parlement/votes/archives",
   voteStats: "/parlement/votes/stats",
   voteThemes: "/parlement/votes/themes",
   voteTheme: (slug: string) => `/parlement/votes/themes/${slug}`,

@@ -178,7 +178,9 @@ export async function resolveBatch(batchInput: BatchResolveInput): Promise<Batch
       }
     : undefined;
 
-  const [allPoliticians, allDecisions] = await Promise.all([
+  // Mandates come from a flat query: a nested select makes Prisma 7.10 send one bind parameter
+  // per politician, past PostgreSQL's 32,767 limit (P2029 at 49,918 rows, 2026-11-18).
+  const [allPoliticians, allDepartmentMandates, allDecisions] = await Promise.all([
     db.politician.findMany({
       select: {
         id: true,
@@ -187,17 +189,23 @@ export async function resolveBatch(batchInput: BatchResolveInput): Promise<Batch
         birthDate: true,
         civility: true,
         prominenceScore: true,
-        mandates: {
-          where: { departmentCode: { not: null } },
-          select: { departmentCode: true },
-        },
       },
+    }),
+    db.mandate.findMany({
+      where: { departmentCode: { not: null } },
+      select: { politicianId: true, departmentCode: true },
     }),
     db.identityDecision.findMany({
       where: { sourceType, supersededBy: null },
       orderBy: { decidedAt: "desc" },
     }),
   ]);
+  const departmentsByPolitician = new Map<string, string[]>();
+  for (const m of allDepartmentMandates) {
+    const list = departmentsByPolitician.get(m.politicianId);
+    if (list) list.push(m.departmentCode!);
+    else departmentsByPolitician.set(m.politicianId, [m.departmentCode!]);
+  }
 
   // Build politician lookup: normalizedLastName → CachedPolitician[]
   const politicianMap = new Map<string, CachedPolitician[]>();
@@ -210,7 +218,7 @@ export async function resolveBatch(batchInput: BatchResolveInput): Promise<Batch
       firstName: p.firstName,
       lastName: p.lastName,
       birthDate: p.birthDate,
-      departments: p.mandates.map((m) => m.departmentCode).filter((d): d is string => d !== null),
+      departments: departmentsByPolitician.get(p.id) ?? [],
       gender: p.civility === "Mme" ? "F" : p.civility === "M." ? "M" : null,
       prominenceScore: p.prominenceScore,
     };
@@ -373,8 +381,9 @@ export async function resolveBatch(batchInput: BatchResolveInput): Promise<Batch
 
   // ── Phase C: Persist (batch writes in chunks of 100) ──
   const CHUNK_SIZE = 100;
-  for (let i = 0; i < decisionsToCreate.length; i += CHUNK_SIZE) {
-    const chunk = decisionsToCreate.slice(i, i + CHUNK_SIZE);
+  const toPersist = batchInput.persist === false ? [] : decisionsToCreate;
+  for (let i = 0; i < toPersist.length; i += CHUNK_SIZE) {
+    const chunk = toPersist.slice(i, i + CHUNK_SIZE);
     try {
       await db.identityDecision.createMany({ data: chunk });
     } catch {

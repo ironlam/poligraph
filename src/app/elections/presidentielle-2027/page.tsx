@@ -10,18 +10,18 @@ import {
 } from "@/components/ui/RubriqueBandeau";
 import { AddToCalendar } from "@/components/elections/AddToCalendar";
 import { CollectionPageJsonLd, EventJsonLd } from "@/components/seo/JsonLd";
-import { getHubCandidacyField, getHubLatestMeasures, getHubMeasureContext } from "@/lib/data/hub";
+import { getHubCandidacyField, getHubLatestUpdates, getHubMeasureContext } from "@/lib/data/hub";
 import { getHubPress, type HubPressArticle } from "@/lib/data/hub-press";
 import { PRESIDENTIELLE_2027_SLUG, THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { daysUntil } from "@/lib/elections/countdown";
 import { formatDate } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { HubPrimaryPaths } from "./_components/HubPrimaryPaths";
+import { HubParrainagesEntry, HubPrimaryPaths } from "./_components/HubPrimaryPaths";
 import { DaysUntilBadge } from "./_components/DaysUntilBadge";
 import { HubClosedState } from "./_components/HubClosedState";
 import { HubCorpusState } from "./_components/HubCorpusState";
-import { HubLatestMeasures } from "./_components/HubLatestMeasures";
+import { HubLatestUpdates } from "./_components/HubLatestUpdates";
 import { HubPress } from "./_components/HubPress";
 import { HubComparisonLauncher } from "./_components/HubComparisonLauncher";
 import { HubSubjects } from "./_components/HubSubjects";
@@ -29,7 +29,6 @@ import { HubTopics } from "./_components/HubTopics";
 import { HubReaderGuides } from "./_components/HubReaderGuides";
 import { PresidentialHubNav } from "./_components/PresidentialHubNav";
 import { PresidentialCorpusSearch } from "./_components/PresidentialCorpusSearch";
-import { YoutubeBanner } from "@/components/youtube/YoutubeBanner";
 
 // ISR: 24h backstop. Real changes propagate on demand: a measure write busts election-measures:<id>.
 export const revalidate = 86400;
@@ -50,10 +49,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PresidentialHubPage() {
-  const [field, context, latestMeasures, programmesEnabled, pressEnabled] = await Promise.all([
+  const [field, context, latestUpdates, programmesEnabled, pressEnabled] = await Promise.all([
     getHubCandidacyField(PRESIDENTIELLE_2027_SLUG),
     getHubMeasureContext(PRESIDENTIELLE_2027_SLUG),
-    getHubLatestMeasures(PRESIDENTIELLE_2027_SLUG),
+    getHubLatestUpdates(PRESIDENTIELLE_2027_SLUG),
     isFeatureEnabled("PROGRAMMES_ENABLED"),
     // Editorial switch: press-to-candidate links are automatic, the team opens the block once
     // it trusts them (created and toggled in /admin/feature-toggles; absent means off).
@@ -64,7 +63,7 @@ export default async function PresidentialHubPage() {
   let press: HubPressArticle[] = [];
   if (pressEnabled) press = await getHubPress(PRESIDENTIELLE_2027_SLUG);
   let activityLayout = "grid gap-8";
-  if (latestMeasures.length > 0 && press.length > 0) {
+  if (latestUpdates.length > 0 && press.length > 0) {
     activityLayout = "grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]";
   }
 
@@ -100,14 +99,18 @@ export default async function PresidentialHubPage() {
       <RubriqueBandeau labelledBy="hub-title" className="relative">
         <HexPattern className="pointer-events-none absolute inset-0 text-white opacity-[0.06]" />
         <div className="relative space-y-3 sm:space-y-6">
-          <BandeauFilAriane
-            items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
-          />
+          {/* From sm up: on a phone the lone "Élections" link pushed the title down. The other
+              elections are one tap away in the menu, and linked at the foot of this page. */}
+          <div className="max-sm:hidden">
+            <BandeauFilAriane
+              items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
+            />
+          </div>
           <header className="max-w-3xl space-y-3">
             <BandeauSurtitre>Présidentielle 2027</BandeauSurtitre>
             <h1
               id="hub-title"
-              className="font-display text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl md:text-5xl"
+              className="font-display text-xl font-extrabold leading-tight tracking-tight sm:text-3xl md:text-5xl"
             >
               Présidentielle 2027 : programmes et mesures
             </h1>
@@ -137,13 +140,17 @@ export default async function PresidentialHubPage() {
         <PresidentialHubNav active="overview" />
 
         <div className={activityLayout}>
-          <HubLatestMeasures measures={latestMeasures} lastReviewedAt={context.lastReviewedAt} />
+          <HubLatestUpdates updates={latestUpdates} lastReviewedAt={context.lastReviewedAt} />
           <HubPress articles={press} />
         </div>
 
-        {/* From sm up: below it, the hub navigation above already carries these three paths. */}
+        {/* From sm up: below it, the hub navigation above already carries the first three paths,
+            and the presentations entry, which it has no tab for, is shown on its own. */}
         <div className="hidden sm:block">
           <HubPrimaryPaths candidacies={field} themeCount={themeCount} />
+        </div>
+        <div className="sm:hidden">
+          <HubParrainagesEntry />
         </div>
 
         {/* Below the gate the body says so too, instead of leaving the state in a meta tag. */}
@@ -161,10 +168,6 @@ export default async function PresidentialHubPage() {
         <HubReaderGuides guides={context.featuredReaderGuides} />
 
         <HubComparisonLauncher candidacies={field} themes={context.themes} />
-
-        {/* After the content: ahead of it, the banner stood between the navigation and the
-            latest measures. */}
-        <YoutubeBanner />
 
         {programmesEnabled && (
           <p className="text-sm text-muted-foreground">
@@ -184,10 +187,10 @@ export default async function PresidentialHubPage() {
           className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
-            <h2 id="campaign-contact-title" className="font-display text-lg font-bold">
+            <h2 id="campaign-contact-title" className="font-display text-base font-bold sm:text-lg">
               Vous représentez une équipe de campagne ?
             </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground max-sm:hidden">
               Envoyez-nous le programme officiel, une correction ou une source. Chaque ajout reste
               soumis à la même vérification éditoriale.
             </p>
@@ -212,6 +215,16 @@ export default async function PresidentialHubPage() {
           lastReviewedAt={context.lastReviewedAt}
           calendarLink={calendarLink}
         />
+
+        <p className="text-sm text-muted-foreground">
+          Sénatoriales, municipales, scrutins précédents :{" "}
+          <Link
+            href="/elections"
+            className="inline-flex min-h-11 items-center font-semibold text-primary underline underline-offset-4 hover:no-underline"
+          >
+            toutes les élections
+          </Link>
+        </p>
       </div>
     </>
   );

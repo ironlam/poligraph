@@ -45,7 +45,9 @@ describe("lecteur du territoire en chiffres", () => {
     expect(h.queryRaw).toHaveBeenCalledTimes(1);
     const sql = h.queryRaw.mock.calls[0]?.[0] as { sql: string; values: unknown[] };
     expect(sql.sql).toContain(`i."status" = 'PUBLISHED'`);
-    expect(sql.values).toEqual(["COM", "35238", REPERES_PAGE_LIMIT]);
+    expect(sql.values).toEqual(["COM", "35238", "comptes_", REPERES_PAGE_LIMIT]);
+    // D28: the accounts are another family, never read (nor cached) with these figures.
+    expect(sql.sql).toContain(`NOT starts_with(r."indicatorKey",`);
     expect(REPERES_PAGE_LIMIT).toBe(200);
     expect(rows).toHaveLength(2);
     expect(rows[0]?.periodEnd).toBe("2023-12-31");

@@ -110,6 +110,12 @@ export const RSS_FEEDS: RSSFeedConfig[] = [
     url: "https://www.mediacites.fr/feed/",
     priority: 2,
   },
+  {
+    id: "lacroix",
+    name: "La Croix (politique)",
+    url: "https://www.la-croix.com/feeds/rss/politique.xml",
+    priority: 2,
+  },
 
   // ── Priority 2: Presse régionale ──
   {

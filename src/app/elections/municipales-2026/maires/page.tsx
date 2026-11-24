@@ -9,6 +9,7 @@ import { MairesFilterBar } from "@/components/elections/municipales/MairesFilter
 import { getMaireStats, getMaires, getMaireParties } from "@/lib/data/municipales";
 import { DEPARTMENTS } from "@/config/departments";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
+import { openGraph } from "@/lib/seo/open-graph";
 
 export const revalidate = 300; // ISR: 5 minutes
 
@@ -30,11 +31,11 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
       "Explorez l'annuaire des maires de France : parité, couleur politique, ancienneté. Données issues du Répertoire National des Élus.",
     // Filtered/paginated variants: noindex,follow, canonical consolidates on the bare listing.
     ...listingRobotsMetadata(hasActiveListingFilter(params, ["search", "dept", "party", "gender"])),
-    openGraph: {
+    openGraph: openGraph({
       title: "Les maires de France en un coup d'œil",
       description:
         "35 000 maires passés au crible : parité, étiquette politique, ancienneté dans le poste.",
-    },
+    }),
     alternates: { canonical: "/elections/municipales-2026/maires" },
   };
 }

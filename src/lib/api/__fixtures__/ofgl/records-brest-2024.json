@@ -1,0 +1,60 @@
+{
+  "total_count": 5,
+  "results": [
+    {
+      "exer": "2024",
+      "insee": "29019",
+      "siren": "212900195",
+      "categ": "Commune",
+      "lbudg": "BREST",
+      "agregat": "Dépenses d'équipement",
+      "montant": 19302096.09,
+      "euros_par_habitant": 135.70662492793565,
+      "ptot": 142234
+    },
+    {
+      "exer": "2024",
+      "insee": "29019",
+      "siren": "212900195",
+      "categ": "Commune",
+      "lbudg": "BREST",
+      "agregat": "Dépenses de fonctionnement",
+      "montant": 132888085.6,
+      "euros_par_habitant": 934.2919808203383,
+      "ptot": 142234
+    },
+    {
+      "exer": "2024",
+      "insee": "29019",
+      "siren": "212900195",
+      "categ": "Commune",
+      "lbudg": "BREST",
+      "agregat": "Encours de dette",
+      "montant": 19298274.94,
+      "euros_par_habitant": 135.67975969177553,
+      "ptot": 142234
+    },
+    {
+      "exer": "2024",
+      "insee": "29019",
+      "siren": "212900195",
+      "categ": "Commune",
+      "lbudg": "BREST",
+      "agregat": "Epargne brute",
+      "montant": 16677933.51,
+      "euros_par_habitant": 117.25700964607618,
+      "ptot": 142234
+    },
+    {
+      "exer": "2024",
+      "insee": "29019",
+      "siren": "212900195",
+      "categ": "Commune",
+      "lbudg": "BREST",
+      "agregat": "Frais de personnel",
+      "montant": 57873508.68,
+      "euros_par_habitant": 406.88941237678756,
+      "ptot": 142234
+    }
+  ]
+}

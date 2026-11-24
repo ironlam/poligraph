@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { SectionCard } from "@/components/territoires/CommuneSections";
+import { LigneSource, type LigneSourceItem } from "@/components/territoires/LigneSource";
 import {
   AGE_BANDS,
   EAU_LIMIT_SENTENCE,
@@ -15,7 +17,6 @@ import type { RepereRow, RepereState } from "@/lib/data/territoire-reperes";
 import { formatPct, formatPopulation } from "@/lib/territoires/commune-display";
 import { evolutionSentence, type EvolutionRefusal } from "@/lib/territoires/population-evolution";
 import { populationVintageLabel, formatEffectiveDate } from "@/lib/territoires/population-label";
-import { formatDate } from "@/lib/utils";
 
 /**
  * "Le territoire en chiffres" (#1052, kit v3). Server component, no client state.
@@ -66,25 +67,6 @@ function Card({
   );
 }
 
-function sourceLine(row: RepereRow) {
-  return (
-    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-      Source :{" "}
-      <a href={row.source.resourceUrl} target="_blank" rel="noopener noreferrer" className={LINK}>
-        {row.source.producer}
-        <span className="sr-only"> (nouvel onglet)</span>
-      </a>
-      , licence{" "}
-      <a href={row.source.licenceUrl} target="_blank" rel="noopener noreferrer" className={LINK}>
-        {row.source.licenceName}
-        <span className="sr-only"> (nouvel onglet)</span>
-      </a>
-      . Période du {formatEffectiveDate(row.periodStart)} au {formatEffectiveDate(row.periodEnd)},
-      importé le {formatDate(row.source.importedAt)}.
-    </p>
-  );
-}
-
 function PopulationCard({ chiffres }: { chiffres: CommuneChiffres }) {
   const { population, evolution } = chiffres;
   return (
@@ -132,7 +114,9 @@ function AgeCard({ rows }: { rows: RepereRow[] }) {
           })}
         </tbody>
       </table>
-      {sourceLine(first)}
+      <p className="mt-1 text-xs text-muted-foreground">
+        Du {formatEffectiveDate(first.periodStart)} au {formatEffectiveDate(first.periodEnd)}.
+      </p>
     </Card>
   );
 }
@@ -162,7 +146,6 @@ function EauCard({ rows }: { rows: RepereRow[] }) {
         Une unité de distribution peut desservir une partie seulement de la commune, ou plusieurs
         communes.
       </p>
-      {sourceLine(first)}
     </Card>
   );
 }
@@ -201,7 +184,6 @@ function ClimatCard({ rows }: { rows: RepereRow[] }) {
           </li>
         ))}
       </ul>
-      {sourceLine(rows[0] as RepereRow)}
     </Card>
   );
 }
@@ -241,6 +223,25 @@ export function hasChiffres(chiffres: CommuneChiffres | null): chiffres is Commu
   );
 }
 
+export interface ChiffresSourceLigne {
+  label: string;
+  row: RepereRow;
+}
+
+/**
+ * One row per card for « Sources de cette page »: producer, licence, period and import date of
+ * the figures shown. The block itself names its producers once, on its source line.
+ */
+export function chiffresSourceLignes(chiffres: CommuneChiffres): ChiffresSourceLigne[] {
+  const { ageRows, climatRows, eauRows } = rowsOf(chiffres);
+  const lignes: [string, RepereRow | undefined][] = [
+    ["Structure par âge", ageRows[0]],
+    ["Eau du robinet, nitrates", eauRows[0]],
+    ["Climat", climatRows[0]],
+  ];
+  return lignes.flatMap(([label, row]) => (row ? [{ label, row }] : []));
+}
+
 /** Themes with at least one figure. A theme with nothing to show is not shown at all. */
 export function TerritoireChiffres({ chiffres }: { chiffres: CommuneChiffres }) {
   const { ageRows, climatRows, eauRows } = rowsOf(chiffres);
@@ -270,22 +271,42 @@ export function TerritoireChiffres({ chiffres }: { chiffres: CommuneChiffres }) 
   }
   if (themes.length === 0) return null;
 
+  // Producers of the block, linked ones first. The population names its producer without a link,
+  // and is not repeated when a linked row already names it ("INSEE", "Insee").
+  const sources: LigneSourceItem[] = chiffresSourceLignes(chiffres).map(({ row }) => ({
+    label: row.source.producer,
+    url: row.source.resourceUrl,
+  }));
+  const producteur = chiffres.population?.producer;
+  if (producteur && !sources.some((s) => s.label.toLowerCase() === producteur.toLowerCase())) {
+    sources.push({ label: producteur });
+  }
+
   return (
     <SectionCard id="chiffres" title="Le territoire en chiffres">
       <p className="mb-4 text-sm text-muted-foreground">
-        Des repères sur le territoire, sans lien avec ses élus. Chaque chiffre porte sa source et sa
-        période.
+        Des repères sur le territoire, sans lien avec ses élus. Chaque chiffre porte sa période ;
+        les sources sont détaillées dans « Sources de cette page ».
       </p>
       <div className="space-y-5">
         {themes.map(({ theme, cards }) => (
-          <section key={theme} aria-labelledby={`chiffres-${theme}`}>
-            <h3 id={`chiffres-${theme}`} className="mb-2 font-display text-lg font-bold">
-              {REPERE_THEME_LABELS[theme]}
-            </h3>
-            <div className="grid gap-3 md:grid-cols-2">{cards}</div>
-          </section>
+          // Every theme folded, demography included: the commune page stays short on a phone,
+          // and the figures stay in the served HTML.
+          <details key={theme} className="group rounded-xl border">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+              <h3 id={`chiffres-${theme}`} className="font-display text-lg font-bold">
+                {REPERE_THEME_LABELS[theme]}
+              </h3>
+              <ChevronDown
+                className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                aria-hidden="true"
+              />
+            </summary>
+            <div className="grid gap-3 border-t p-3 md:grid-cols-2">{cards}</div>
+          </details>
         ))}
       </div>
+      <LigneSource className="mt-4" sources={sources} />
     </SectionCard>
   );
 }

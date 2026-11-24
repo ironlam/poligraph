@@ -184,6 +184,12 @@ export default async function AdminFactchecksPage({ searchParams }: PageProps) {
         <p className="text-sm text-muted-foreground mt-1">
           {stats.total} fact-checks — {stats.totalMentions} mentions
         </p>
+        <Link
+          href="/admin/factchecks/themes"
+          className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
+        >
+          Valider les thèmes proposés
+        </Link>
       </div>
 
       {/* Stats */}

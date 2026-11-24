@@ -28,7 +28,10 @@ export const ALL_TAGS = [
  * so a routine sync must never regenerate those pages. They stay individually
  * selectable by an operator who knows what they are doing.
  */
-export const FROZEN_TAGS = ["elections-municipales-2026"] as const;
+// "parrainages" is the presidential presentations (src/lib/data/parrainages.ts): a list changes
+// only when the Conseil constitutionnel publishes, so the importer purges it by name and a
+// routine sync leaves those pages alone.
+export const FROZEN_TAGS = ["elections-municipales-2026", "parrainages"] as const;
 
 /**
  * Narrow sub-tags applied ALONGSIDE a broad tag on specific data functions
@@ -49,9 +52,12 @@ export const FROZEN_TAGS = ["elections-municipales-2026"] as const;
 // "politician-votes" is the vote record of one politician on the profile (counts per legislature,
 // participation, parliamentary path). Those readers depend on votes and on deputy mandates only,
 // so they carry "votes" and this tag INSTEAD of "politicians": the daily sync purges "politicians"
-// three times a day for prominence and publication changes, which re-ran the heaviest queries of
-// the profile for no change in what they read. Purged with a mandate or a politician edit
+// for prominence and publication changes, which re-ran the heaviest queries of the profile for no
+// change in what they read. Purged with a mandate or a politician edit
 // (`invalidateEntity`); a full purge reaches them through "votes".
+// "press" is the press listing, its counters and the press block of the presidential hub. The
+// daily sync purges it after the RSS import, so those readers no longer depend on "politicians"
+// being purged on every run.
 export const NARROW_TAGS = [
   "votes-key",
   "homepage",
@@ -61,6 +67,7 @@ export const NARROW_TAGS = [
   "changelog",
   "scrutin-analysis",
   "politician-votes",
+  "press",
 ] as const;
 
 export const POLITICIAN_VOTES_TAG = "politician-votes" satisfies (typeof NARROW_TAGS)[number];

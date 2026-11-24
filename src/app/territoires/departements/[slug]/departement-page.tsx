@@ -1,12 +1,31 @@
+import { ParrainagesDepartement } from "@/components/parrainages/ParrainagesTerritoire";
+import { getParrainagesDepartementResumes } from "@/lib/data/parrainages";
 import { notFound } from "next/navigation";
 import { getDepartmentBySlug } from "@/config/departments";
 import { getDeputesByDepartment, getSenateursByDepartment } from "@/lib/data/departments";
-import { getDepartementTerritoire } from "@/lib/data/territoires";
+import { getDepartementGrandesCommunes, getDepartementTerritoire } from "@/lib/data/territoires";
 import type { CommuneListQuery } from "@/lib/territoires/departement-communes";
-import { DepartementHero } from "@/components/territoires/DepartementHero";
+import { DepartementBandeau } from "@/components/territoires/DepartementBandeau";
+import { TerritoireOnglets } from "@/components/territoires/TerritoireOnglets";
+import { COMMUNES_ANCHOR } from "@/lib/territoires/departement-communes";
+import { Agir } from "@/components/territoires/Agir";
+import { FilTerritoire } from "@/components/territoires/FilTerritoire";
+import { VotesParlementaires } from "@/components/territoires/VotesParlementaires";
+import {
+  getVotesDeputesDepartement,
+  getVotesSenateursDepartement,
+} from "@/lib/data/territoire-votes";
+import { getFilTerritoire, getRapportsCrcTerritoire } from "@/lib/data/territoire-fil";
+import { RapportsCrc } from "@/components/territoires/RapportsCrc";
+import { territoireDepartementBudgetPath } from "@/lib/territoires/paths";
 import { CommuneIndex } from "@/components/territoires/CommuneIndex";
-import { DepartementConseil } from "@/components/territoires/DepartementConseil";
+import {
+  DepartementConseil,
+  remplaceLeDepartement,
+} from "@/components/territoires/DepartementConseil";
 import { DepartementParlement } from "@/components/territoires/DepartementParlement";
+import { BudgetResume } from "@/components/territoires/BudgetResume";
+import { getComptesTerritoire } from "@/lib/data/territoire-comptes";
 
 /**
  * Body shared by `/territoires/departements/[slug]` and its commune-list variants
@@ -23,10 +42,30 @@ export async function DepartementPageBody({
   const dept = getDepartmentBySlug(slug);
   if (!dept) notFound();
 
-  const [territoire, deputies, senators] = await Promise.all([
+  // The bare page opens on the largest communes; the A to Z views list them all.
+  const accueil = query.letter === null && query.page === 1;
+  const [
+    territoire,
+    deputies,
+    senators,
+    grandes,
+    votes,
+    votesSenat,
+    fil,
+    parrainages,
+    comptes,
+    rapports,
+  ] = await Promise.all([
     getDepartementTerritoire(dept.code, query),
     getDeputesByDepartment(dept.code),
     getSenateursByDepartment(dept.code),
+    accueil ? getDepartementGrandesCommunes(dept.code) : [],
+    getVotesDeputesDepartement(dept.code),
+    getVotesSenateursDepartement(dept.code),
+    getFilTerritoire("DEP", dept.code),
+    getParrainagesDepartementResumes(dept.code),
+    getComptesTerritoire("DEP", dept.code),
+    getRapportsCrcTerritoire("DEP", dept.code),
   ]);
 
   if (!territoire) notFound();
@@ -46,9 +85,19 @@ export async function DepartementPageBody({
     return 0;
   });
 
+  // The first tab names the block `DepartementConseil` renders for this territory.
+  const premier = territoire.territoireHorsRegion
+    ? { href: "#statut", label: "Statut" }
+    : remplaceLeDepartement(territoire.collectivitesParticulieres)
+      ? { href: "#collectivite-competente", label: "Collectivité" }
+      : { href: "#conseil", label: "Conseil" };
+
+  // The block speaks of the conseil départemental: it is shown only where there is one.
+  const agir = premier.href === "#conseil";
+
   return (
     <div className="pb-10">
-      <DepartementHero
+      <DepartementBandeau
         slug={slug}
         name={dept.name}
         code={dept.code}
@@ -56,10 +105,30 @@ export async function DepartementPageBody({
         deputeCount={deputies.length}
         senateurCount={senators.length}
       />
-      <div className="container mx-auto grid items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
+      <TerritoireOnglets
+        onglets={[
+          premier,
+          { href: `#${COMMUNES_ANCHOR}`, label: "Communes" },
+          { href: "#parlement", label: "Parlement" },
+          ...(parrainages.length > 0 ? [{ href: "#parrainages", label: "Parrainages" }] : []),
+          ...(agir ? [{ href: "#agir", label: "Agir" }] : []),
+        ]}
+      />
+      <div className="container mx-auto grid max-w-6xl items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
         <div className="flex min-w-0 flex-col gap-5">
-          <CommuneIndex slug={slug} territoire={territoire} />
+          <FilTerritoire evenements={fil} />
           <DepartementConseil territoire={territoire} />
+          {/* Under the first tab: the accounts of the collectivity that holds the council. */}
+          <BudgetResume
+            comptes={comptes}
+            scale="DEP"
+            budgetHref={territoireDepartementBudgetPath(slug)}
+          />
+          <RapportsCrc rapports={rapports} />
+          <CommuneIndex slug={slug} territoire={territoire} grandes={grandes} />
+          <VotesParlementaires votes={votes} mode={{ kind: "decompte" }} senat={votesSenat} />
+          <ParrainagesDepartement resumes={parrainages} departmentSlug={slug} />
+          {agir && <Agir niveau="departement" departmentCode={dept.code} />}
         </div>
         <DepartementParlement deputies={deputies} senators={senators} />
       </div>

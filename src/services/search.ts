@@ -215,11 +215,38 @@ export async function searchPoliticians(
   const { query, partyId, mandateType, department, hasAffairs, isActive } = filters;
   const skip = (page - 1) * limit;
 
-  if (query && query.length >= 2) {
-    return searchWithFTS(filters, page, limit);
+  const hasTextQuery = query.length >= 2;
+  if (hasTextQuery) {
+    try {
+      return await searchWithFTS(filters, page, limit);
+    } catch (error) {
+      const adapterError =
+        error instanceof Prisma.PrismaClientKnownRequestError
+          ? error.meta?.driverAdapterError
+          : undefined;
+      const cause = adapterError instanceof Error ? adapterError.cause : undefined;
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== "P2010" ||
+        typeof cause !== "object" ||
+        cause === null ||
+        !("kind" in cause && cause.kind === "ColumnNotFound") ||
+        !("column" in cause && cause.column === "p.searchVector")
+      ) {
+        throw error;
+      }
+    }
   }
 
   const whereConditions: Prisma.PoliticianWhereInput[] = [{ publicationStatus: "PUBLISHED" }];
+  if (hasTextQuery) {
+    whereConditions.push({
+      OR: [
+        { fullName: { contains: query, mode: "insensitive" } },
+        { lastName: { contains: query, mode: "insensitive" } },
+      ],
+    });
+  }
 
   if (partyId) {
     whereConditions.push({ currentPartyId: partyId });

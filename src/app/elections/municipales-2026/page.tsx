@@ -18,6 +18,7 @@ import {
 } from "@/lib/data/municipales";
 import { PartyMap } from "@/components/elections/municipales/PartyMap";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
+import { openGraph } from "@/lib/seo/open-graph";
 
 export const revalidate = 300; // ISR: 5 minutes
 
@@ -38,10 +39,10 @@ export const metadata: Metadata = {
   title: "Municipales 2026 — Candidats, listes et résultats",
   description:
     "Découvrez les candidats et listes aux élections municipales 2026 dans votre commune. Recherche par ville, carte des forces politiques, parité et cumul des mandats.",
-  openGraph: {
+  openGraph: openGraph({
     title: "Municipales 2026 — Qui se présente chez vous ?",
     description: "Découvrez les candidats aux élections municipales 2026 dans votre commune.",
-  },
+  }),
   alternates: { canonical: "/elections/municipales-2026" },
 };
 

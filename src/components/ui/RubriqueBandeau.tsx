@@ -13,10 +13,13 @@ export function RubriqueBandeau({
   children,
   className,
   labelledBy,
+  contentClassName,
 }: {
   children: React.ReactNode;
   className?: string;
   labelledBy: string;
+  /** Added to the inner container, to align the banner with a narrower page body. */
+  contentClassName?: string;
 }) {
   return (
     <section
@@ -29,7 +32,7 @@ export function RubriqueBandeau({
         <span className="flex-1" style={{ backgroundColor: BRAND_PAGE }} />
         <span className="flex-1" style={{ backgroundColor: BRAND_RED }} />
       </div>
-      <div className="container mx-auto px-4 py-4 sm:py-10">{children}</div>
+      <div className={cn("container mx-auto px-4 py-4 sm:py-10", contentClassName)}>{children}</div>
     </section>
   );
 }
@@ -50,7 +53,10 @@ export function BandeauFilAriane({ items }: { items: { label: string; href?: str
   return (
     <>
       <BreadcrumbJsonLd
-        items={all.map((item) => ({ name: item.label, url: `${SITE_URL}${item.href ?? ""}` }))}
+        items={all
+          // An intermediate step without a page has no URL to declare.
+          .filter((item, i) => item.href || i === all.length - 1)
+          .map((item) => ({ name: item.label, url: `${SITE_URL}${item.href ?? ""}` }))}
       />
       <nav aria-label="Fil d'Ariane" className="text-sm text-white/85">
         <ol className="flex flex-wrap items-center gap-x-1">
@@ -58,28 +64,36 @@ export function BandeauFilAriane({ items }: { items: { label: string; href?: str
             // Below sm the trail shows the parent step only, like `Breadcrumb`: the title names
             // the page. Every step stays in the HTML.
             const hiddenOnPhone = i !== all.length - 2 && "max-sm:hidden";
-            return i < all.length - 1 && item.href ? (
-              <li key={item.label} className={cn("flex items-center gap-1", hiddenOnPhone)}>
-                <Link
-                  href={item.href}
-                  className="inline-flex min-h-11 items-center gap-1 underline underline-offset-4 hover:text-white"
+            if (i === all.length - 1) {
+              return (
+                <li
+                  key={item.label}
+                  aria-current="page"
+                  className={cn("font-medium text-white", hiddenOnPhone)}
                 >
-                  <span aria-hidden="true" className="sm:hidden">
-                    ‹
-                  </span>
                   {item.label}
-                </Link>
+                </li>
+              );
+            }
+            return (
+              <li key={item.label} className={cn("flex items-center gap-1", hiddenOnPhone)}>
+                {item.href ? (
+                  <Link
+                    href={item.href}
+                    className="inline-flex min-h-11 items-center gap-1 underline underline-offset-4 hover:text-white"
+                  >
+                    <span aria-hidden="true" className="sm:hidden">
+                      ‹
+                    </span>
+                    {item.label}
+                  </Link>
+                ) : (
+                  // A step without a page (no link) is not the current page.
+                  <span className="inline-flex min-h-11 items-center">{item.label}</span>
+                )}
                 <span aria-hidden="true" className="max-sm:hidden">
                   ›
                 </span>
-              </li>
-            ) : (
-              <li
-                key={item.label}
-                aria-current="page"
-                className={cn("font-medium text-white", hiddenOnPhone)}
-              >
-                {item.label}
               </li>
             );
           })}

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { PersonJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ProfileReturnLink } from "@/components/governments/ProfileReturnLink";
+import { ParrainagesFiche } from "@/components/parrainages/ParrainagesFiche";
 import { getPoliticianProfile } from "@/lib/data/politician-profile";
 import { loadParliamentaryPath } from "@/lib/data/politician-parliamentary-path";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -136,6 +137,8 @@ export default async function PoliticianPage({ params }: PageProps) {
           governmentsEnabled={governmentsEnabled}
           parliamentaryPath={parliamentaryPath}
         />
+
+        <ParrainagesFiche parrainages={profile.parrainages} recus={profile.parrainagesRecus} />
 
         <aside className="mt-12 p-4 rounded-lg border bg-muted/30">
           <p className="text-sm text-muted-foreground">

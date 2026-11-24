@@ -32,12 +32,19 @@ function SubjectLink({
         className={`h-6 w-1 shrink-0 rounded-full ${THEME_ACCENT_BAR[theme]}`}
       />
       <span className="min-w-0 flex-1">{label}</span>
-      <ChevronRight
-        aria-hidden="true"
-        className="h-4 w-4 shrink-0 text-muted-foreground md:hidden"
-      />
     </Link>
   );
+}
+
+function plural(count: number, singular: string): string {
+  return `${count} ${singular}${count > 1 ? "s" : ""}`;
+}
+
+/** "17 candidats · 260 mesures", with the reason a theme page is not open yet when it is not. */
+function coverageLine(entry: ThemesIndexData["themes"][number]): string {
+  if (entry.currentlyDefendedMeasureCount === 0) return "Aucune mesure publiée";
+  const counts = `${plural(entry.documentedCandidacyCount, "candidat")} · ${plural(entry.currentlyDefendedMeasureCount, "mesure")}`;
+  return entry.publishable ? counts : `${counts} · pas encore comparable`;
 }
 
 export function ThemesIndexList({ data }: ThemesIndexListProps) {
@@ -47,40 +54,28 @@ export function ThemesIndexList({ data }: ThemesIndexListProps) {
 
   return (
     <>
-      <ul className="space-y-3 md:hidden">
+      {/* One 52px row per theme: a phone screen then lists nine of them instead of one card. The
+          withdrawn count and the review date stay in the table from md up and on the theme page. */}
+      <ul className="divide-y divide-border rounded-2xl border border-border bg-card md:hidden">
         {data.themes.map((entry) => (
-          <li key={entry.theme} className="rounded-2xl border border-border bg-card p-4">
-            <SubjectLink slug={entry.slug} theme={entry.theme} label={entry.label} />
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-3 text-sm">
-              <div>
-                <dt className="text-xs text-muted-foreground">Candidats avec des mesures</dt>
-                <dd className="mt-0.5 font-display text-xl font-bold tabular-nums">
-                  {entry.documentedCandidacyCount}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Mesures publiées</dt>
-                <dd className="mt-0.5">
-                  <span className="block font-display text-xl font-bold tabular-nums">
-                    {entry.currentlyDefendedMeasureCount}
-                  </span>
-                </dd>
-              </div>
-              {hasWithdrawnMeasures && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Mesures retirées</dt>
-                  <dd className="mt-0.5 font-display text-xl font-bold tabular-nums">
-                    {entry.documentedMeasureCount - entry.currentlyDefendedMeasureCount}
-                  </dd>
-                </div>
-              )}
-              <div>
-                <dt className="text-xs text-muted-foreground">Dernière revue éditoriale</dt>
-                <dd className="mt-1 text-xs">
-                  <ReviewDate value={entry.lastReviewedAt} />
-                </dd>
-              </div>
-            </dl>
+          <li key={entry.theme}>
+            <Link
+              href={`/elections/presidentielle-2027/themes/${entry.slug}`}
+              prefetch={false}
+              className="flex min-h-[52px] items-center gap-3 px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              <span
+                aria-hidden="true"
+                className={`h-7 w-1 shrink-0 rounded-full ${THEME_ACCENT_BAR[entry.theme]}`}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold leading-tight">{entry.label}</span>
+                <span className="mt-0.5 block text-xs tabular-nums text-muted-foreground">
+                  {coverageLine(entry)}
+                </span>
+              </span>
+              <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </Link>
           </li>
         ))}
       </ul>

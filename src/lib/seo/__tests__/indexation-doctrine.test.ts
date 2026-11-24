@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { describe, it, expect, vi } from "vitest";
@@ -7,14 +7,26 @@ import {
   MAIRE_MIN_COMMUNE_POPULATION,
   type PoliticianIndexSignals,
 } from "../politician-robots";
+import {
+  PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS,
+  isIndexableParrainagesCandidat,
+  parrainagesCandidatRobotsMetadata,
+  parrainagesSitemapEntries,
+} from "../parrainages-robots";
 import { communeRobotsMetadata, COMMUNE_MIN_POPULATION } from "../commune-robots";
 import {
+  territoireBudgetRobotsMetadata,
   territoireCommuneRobotsMetadata,
   TERRITOIRE_COMMUNE_MIN_POPULATION,
 } from "../territoire-robots";
 import { hasActiveListingFilter, listingRobotsMetadata } from "../listing-robots";
 import { voteDateArchiveRobotsMetadata } from "../parliament-robots";
 import { scrutinRobotsMetadata, type ScrutinIndexSignals } from "../scrutin-robots";
+import {
+  factCheckRobotsMetadata,
+  isIndexableFactCheck,
+  type FactCheckIndexSignals,
+} from "../factcheck-robots";
 import { OG_IMAGE_ROBOTS_SOURCE } from "../og-image-robots";
 import { API_NOINDEX_HEADERS, API_ROBOTS_SOURCE } from "../api-robots";
 import { NEXT_STATIC_NOINDEX_HEADERS, NEXT_STATIC_ROBOTS_SOURCE } from "../next-static-robots";
@@ -24,6 +36,7 @@ import {
   VOTES_LISTING_FILTER_KEYS,
   DOSSIERS_LISTING_FILTER_KEYS,
   PRESIDENTIAL_CANDIDATES_FILTER_KEYS,
+  PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
 } from "../listing-filters";
 
 // votes/page.tsx renders <ScrutinsListing>, whose data-layer import chain
@@ -107,9 +120,32 @@ const BARE_AMENDMENT: ScrutinIndexSignals = {
 };
 const BARE_VOTE_SOLENNEL: ScrutinIndexSignals = { ...BARE_AMENDMENT, type: "FINAL" };
 
+const factCheckRobots = (signals: FactCheckIndexSignals) =>
+  factCheckRobotsMetadata(isIndexableFactCheck(signals));
+const FACTCHECK_NO_AUTHOR: FactCheckIndexSignals = {
+  hasPublishedAuthor: false,
+  authorFactCheckCount: 0,
+  hasCandidacy: false,
+  hasClaimDayVotes: false,
+  hasThemeVotes: false,
+};
+const FACTCHECK_AUTHOR_WITH_RECORD: FactCheckIndexSignals = {
+  hasPublishedAuthor: true,
+  authorFactCheckCount: 6,
+  hasCandidacy: false,
+  hasClaimDayVotes: false,
+  hasThemeVotes: false,
+};
+
 describe("doctrine — strong surfaces stay indexable", () => {
   it("presidential affairs hub with published content stays indexable", async () => {
-    vi.mocked(getPresidentialAffairs).mockResolvedValue({ affairs: [], total: 1 });
+    vi.mocked(getPresidentialAffairs).mockResolvedValue({
+      affairs: [],
+      total: 1,
+      candidates: [],
+      candidat: null,
+      tri: "recentes",
+    });
     const metadata = await presidentialAffairsGenerateMetadata({});
     expect(metadata.robots).toBeUndefined();
     expect(metadata.alternates?.canonical).toBe(
@@ -143,6 +179,13 @@ describe("doctrine — strong surfaces stay indexable", () => {
   it("mayor of a significant commune", () => {
     expect(politicianRobotsMetadata(BIG_MAYOR)).toEqual(INDEXABLE);
   });
+  it("council president created from the RNE, with no other signal (D22)", () => {
+    for (const type of ["PRESIDENT_DEPARTEMENT", "PRESIDENT_REGION"]) {
+      expect(politicianRobotsMetadata({ mandates: [{ type }], ...NO_OTHER_SIGNAL })).toEqual(
+        INDEXABLE
+      );
+    }
+  });
   it("significant commune page (>= threshold)", () => {
     expect(communeRobotsMetadata(COMMUNE_MIN_POPULATION)).toEqual(INDEXABLE);
   });
@@ -156,6 +199,10 @@ describe("doctrine — strong surfaces stay indexable", () => {
         maireEtabli: true,
       })
     ).toEqual(INDEXABLE);
+  });
+  it("Territoires /budget of a department or region with accounts of its own", () => {
+    expect(territoireBudgetRobotsMetadata("DEP", "29")).toEqual({});
+    expect(territoireBudgetRobotsMetadata("REG", "53")).toEqual({});
   });
   it("bare /affaires listing", () => {
     expect(listingRobots({}, AFFAIRES_LISTING_FILTER_KEYS)).toEqual(INDEXABLE);
@@ -183,6 +230,16 @@ describe("doctrine — strong surfaces stay indexable", () => {
   it("editorially promoted key vote", () => {
     expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, isKeyVote: true })).toEqual(INDEXABLE);
   });
+  it("fact-check with a vote of its author on the day of the claim, and a record", () => {
+    expect(factCheckRobots({ ...FACTCHECK_AUTHOR_WITH_RECORD, hasClaimDayVotes: true })).toEqual(
+      INDEXABLE
+    );
+  });
+  it("fact-check with votes of its author on the validated theme, and a record", () => {
+    expect(factCheckRobots({ ...FACTCHECK_AUTHOR_WITH_RECORD, hasThemeVotes: true })).toEqual(
+      INDEXABLE
+    );
+  });
 });
 
 describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
@@ -207,6 +264,13 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
     expect(territoireCommuneRobotsMetadata({ population: 500_000, maireEtabli: false })).toEqual(
       NOINDEX_FOLLOW
     );
+  });
+  it("Territoires /budget of a commune: one series template on 10 000 pages", () => {
+    expect(territoireBudgetRobotsMetadata("COM", "29019")).toEqual(NOINDEX_FOLLOW);
+  });
+  it("Territoires /budget whose page only explains why it has no accounts of its own", () => {
+    expect(territoireBudgetRobotsMetadata("DEP", "2A")).toEqual(NOINDEX_FOLLOW);
+    expect(territoireBudgetRobotsMetadata("REG", "06")).toEqual(NOINDEX_FOLLOW);
   });
   it("filtered /affaires (?parti)", () => {
     expect(listingRobots({ parti: "rn" }, AFFAIRES_LISTING_FILTER_KEYS)).toEqual(NOINDEX_FOLLOW);
@@ -235,6 +299,27 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
       NOINDEX_FOLLOW
     );
   });
+  it("presidential affairs filtered by candidate (?candidat)", async () => {
+    vi.mocked(getPresidentialAffairs).mockResolvedValue({
+      affairs: [],
+      total: 3,
+      candidates: [],
+      candidat: null,
+      tri: "recentes",
+    });
+    const metadata = await presidentialAffairsGenerateMetadata({
+      searchParams: Promise.resolve({ candidat: "jean-dupont" }),
+    });
+    expect(metadata.robots).toEqual(NOINDEX_FOLLOW.robots);
+    expect(metadata.alternates?.canonical).toBe(
+      "/elections/presidentielle-2027/affaires-judiciaires"
+    );
+  });
+  it("sorted presidential affairs (?tri)", () => {
+    expect(listingRobots({ tri: "anciennes" }, PRESIDENTIAL_AFFAIRS_FILTER_KEYS)).toEqual(
+      NOINDEX_FOLLOW
+    );
+  });
   it("presidential comparison combinations stay noindex,follow", () => {
     expect(presidentialComparisonMetadata.robots).toEqual({ index: false, follow: true });
     expect(presidentialComparisonMetadata.alternates?.canonical).toBe(
@@ -257,6 +342,24 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
       NOINDEX_FOLLOW
     );
   });
+  it("fact-check with no single published author (duplicate of the source)", () => {
+    expect(factCheckRobots(FACTCHECK_NO_AUTHOR)).toEqual(NOINDEX_FOLLOW);
+  });
+  it("fact-check whose author is well known but nothing is specific to the claim", () => {
+    // Record, party and candidacy repeat on every page of the author (review of 2026-11-22).
+    expect(factCheckRobots({ ...FACTCHECK_AUTHOR_WITH_RECORD, hasCandidacy: true })).toEqual(
+      NOINDEX_FOLLOW
+    );
+  });
+  it("fact-check with a claim-day vote but nothing on its author", () => {
+    expect(
+      factCheckRobots({
+        ...FACTCHECK_AUTHOR_WITH_RECORD,
+        authorFactCheckCount: 1,
+        hasClaimDayVotes: true,
+      })
+    ).toEqual(NOINDEX_FOLLOW);
+  });
   it("scrutin with no ballot recorded, whatever its type", () => {
     expect(scrutinRobotsMetadata({ ...BARE_VOTE_SOLENNEL, totalVotes: 0 })).toEqual(NOINDEX_FOLLOW);
   });
@@ -274,6 +377,11 @@ describe("doctrine — listing noindex perimeters can't silently shrink", () => 
       route: "/parlement/votes",
       keys: VOTES_LISTING_FILTER_KEYS,
       mandatory: ["chamber", "theme", "result", "sort"],
+    },
+    {
+      route: "/elections/presidentielle-2027/affaires-judiciaires",
+      keys: PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
+      mandatory: ["candidat", "tri"],
     },
     {
       route: "/parlement/dossiers",
@@ -329,6 +437,24 @@ describe("doctrine — /parlement/votes sort stays out of the canonical", () => 
 });
 
 describe("doctrine — sitemap shares the indexability thresholds (no drift)", () => {
+  it("Territoires /budget: the sitemap and the three pages read the same predicate", () => {
+    const strip = (f: string) =>
+      readFileSync(join(process.cwd(), f), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    const sitemap = strip("src/app/sitemap.ts");
+    expect(sitemap).toContain('isIndexableTerritoireBudget("REG"');
+    expect(sitemap).toContain('isIndexableTerritoireBudget("DEP"');
+    expect(sitemap).not.toMatch(/territoireCommuneBudgetPath/);
+    for (const [route, scale] of [
+      ["communes/[code]", "COM"],
+      ["departements/[slug]", "DEP"],
+      ["regions/[slug]", "REG"],
+    ] as const) {
+      expect(strip(`src/app/territoires/${route}/budget/page.tsx`), route).toContain(
+        `...territoireBudgetRobotsMetadata("${scale}"`
+      );
+    }
+  });
+
   const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
 
   it("imports the predicate constants from the shared helper", () => {
@@ -385,6 +511,58 @@ describe("doctrine — sitemap shares the indexability thresholds (no drift)", (
   });
 });
 
+describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => {
+  const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
+
+  it("imports the thresholds from the shared helper", () => {
+    expect(src).toContain('from "@/lib/seo/factcheck-robots"');
+  });
+
+  // Scoped to the shard, comments stripped, like the scrutin guard above.
+  const factChecksShard = (() => {
+    const start = src.indexOf("async function buildFactChecksSitemap");
+    expect(start).toBeGreaterThan(-1);
+    const end = src.indexOf("\n}", start);
+    return src
+      .slice(start, end)
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*|--)/.test(line))
+      .join("\n");
+  })();
+
+  it.each([
+    "FACTCHECK_RECORD_MIN_TOTAL",
+    "SCRUTIN_THEMES",
+    "PUBLIC_POLITICIAN_PUBLICATION_STATUS",
+    'getPublicFactCheckSqlWhere("fc")',
+  ])("uses %s rather than a hardcoded value", (name) => {
+    expect(factChecksShard).toContain(name);
+  });
+
+  it("lists the politician landing pages from the shared threshold", () => {
+    expect(factChecksShard).toContain("/factchecks/politique/");
+    expect(factChecksShard).toContain("FACTCHECK_POLITICIAN_MIN_CLAIMS");
+    expect(factChecksShard).toContain('m."isClaimant"');
+  });
+
+  // The party sat on 95 % of the pages with a single author: it discriminated nothing.
+  it("does not count the current party any more", () => {
+    expect(factChecksShard).not.toContain("currentPartyId");
+  });
+
+  it("keeps a single claimant as the precondition", () => {
+    expect(factChecksShard).toContain("HAVING count(*) = 1");
+  });
+
+  // One condition per block counted by isIndexableFactCheck().
+  it.each(['"Candidacy"', '"Vote"', '"themeReviewedAt"', '"FactCheckMention" m2'])(
+    "counts the block read from %s",
+    (signal) => {
+      expect(factChecksShard).toContain(signal);
+    }
+  );
+});
+
 describe("doctrine — the Territoires shard mirrors isIndexableTerritoireCommune()", () => {
   const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
 
@@ -423,7 +601,10 @@ describe("doctrine — the Territoires shard mirrors isIndexableTerritoireCommun
   });
 
   it("lists the dedicated elections page only for the same communes, and only with results", () => {
-    expect(territoiresShard).toContain("territoireCommuneElectionsPath(c.id)");
+    // Readable address: the sitemap must announce the canonical URL, never the bare code that
+    // only answers by a 308.
+    expect(territoiresShard).toContain("territoireCommunePath(c.id, c.name)");
+    expect(territoiresShard).toContain("territoireCommuneElectionsPath(c.id, c.name)");
     expect(territoiresShard).toContain("c.electionsLastmod != null");
     expect(territoiresShard).toContain('"CommuneElectionRound" r WHERE r."communeId" = c."id"');
     // The lastmod follows the results, not the mayor's mandate.
@@ -436,7 +617,9 @@ describe("doctrine — the Territoires shard mirrors isIndexableTerritoireCommun
       "utf8"
     );
     expect(page).toContain("territoireCommuneRobotsMetadata(data.indexSignals)");
-    expect(page).toContain("territoireCommuneElectionsPath(data.commune.inseeCode)");
+    expect(page).toContain(
+      "territoireCommuneElectionsPath(data.commune.inseeCode, data.commune.name)"
+    );
   });
 
   it("never filters the mayors on publication before counting them", () => {
@@ -742,11 +925,9 @@ describe("doctrine — indexable routes the 2026-11-12 audit found missing from 
     expect(dossiersShard).not.toMatch(/legislature: \d+/);
   });
 
-  // Deliberately left out: third-party fact-check summaries (near-duplicates of their source),
-  // the daily view (same content as a noindex date archive), the flagged chatbot, the
+  // Deliberately left out: the daily view (same content as a noindex date archive), the flagged chatbot, the
   // group evidence pages, and the 2026 municipal department pages (overlap with Territoires).
   it.each([
-    "/factchecks/${",
     "/parlement/votes/aujourd-hui",
     "/chat",
     "/projets-gouvernementaux",
@@ -755,4 +936,202 @@ describe("doctrine — indexable routes the 2026-11-12 audit found missing from 
   ])("does not list %s", (fragment) => {
     expect(code).not.toContain(fragment);
   });
+});
+
+describe("doctrine : parrainages présidentiels", () => {
+  const page = (path: string) =>
+    readFileSync(join(process.cwd(), "src/app/elections/[slug]/parrainages", path), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+  const NOINDEX = "robots: { index: false, follow: true }";
+  const tableau = {
+    dernierePublication: "2022-03-07",
+    candidats: [
+      { slug: "pecresse-valerie", total: 2636 },
+      { slug: "koenig-gaspard", total: PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS },
+      { slug: "kuzmanovic-georges", total: PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS - 1 },
+    ],
+    departements: [{ code: "29" }, { code: "984" }],
+  };
+
+  it("page candidat indexable à partir du seuil", () => {
+    expect(parrainagesCandidatRobotsMetadata(PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS)).toEqual({});
+    expect(isIndexableParrainagesCandidat(2636)).toBe(true);
+  });
+
+  it("page candidat sous le seuil : noindex, follow", () => {
+    expect(parrainagesCandidatRobotsMetadata(PARRAINAGES_CANDIDAT_MIN_PRESENTATIONS - 1)).toEqual({
+      robots: { index: false, follow: true },
+    });
+    expect(parrainagesCandidatRobotsMetadata(1)).toEqual({
+      robots: { index: false, follow: true },
+    });
+  });
+
+  it("la page candidat tient son verdict du prédicat partagé, sans valeur en dur", () => {
+    const src = page("[candidat]/page.tsx");
+    expect(src).toContain("parrainagesCandidatRobotsMetadata(detail.candidat.total)");
+    expect(src).not.toContain(NOINDEX);
+  });
+
+  it("tableau de bord et pages département indexables", () => {
+    expect(page("departements/[departement]/page.tsx")).not.toContain(NOINDEX);
+    // The dashboard file also serves the waiting page of an election without a list.
+    const dashboard = page("page.tsx");
+    expect(dashboard.split(NOINDEX)).toHaveLength(2);
+    expect(dashboard.indexOf(NOINDEX)).toBeLessThan(
+      dashboard.indexOf("return {", dashboard.indexOf(NOINDEX))
+    );
+    expect(dashboard).toContain("slug in PARRAINAGES_A_VENIR");
+  });
+
+  it("page de méthode hors de l'index", () => {
+    expect(page("methode/page.tsx")).toContain(NOINDEX);
+  });
+
+  it("aucune page par élu : aucune route sous un nom de parrain", () => {
+    const dirs = readdirSync(join(process.cwd(), "src/app/elections/[slug]/parrainages"), {
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+    expect(dirs).toEqual(["[candidat]", "departements", "methode"]);
+  });
+
+  it("le sitemap liste le tableau de bord, les candidats au seuil et les départements, datés de la publication", () => {
+    const entries = parrainagesSitemapEntries(
+      "https://poligraph.fr",
+      "presidentielle-2022",
+      tableau
+    );
+    const base = "https://poligraph.fr/elections/presidentielle-2022/parrainages";
+    expect(entries.map((entry) => entry.url)).toEqual([
+      base,
+      `${base}/pecresse-valerie`,
+      `${base}/koenig-gaspard`,
+      `${base}/departements/finistere`,
+    ]);
+    for (const entry of entries) {
+      expect(entry.lastModified).toEqual(new Date("2022-03-07T00:00:00Z"));
+    }
+  });
+
+  it("le sitemap ne liste rien tant qu'aucune présentation n'est publiée", () => {
+    expect(
+      parrainagesSitemapEntries("https://poligraph.fr", "presidentielle-2027", {
+        dernierePublication: null,
+        candidats: [],
+        departements: [],
+      })
+    ).toEqual([]);
+  });
+
+  it("le sitemap passe par le prédicat partagé", () => {
+    const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
+    expect(src).toContain('from "@/lib/seo/parrainages-robots"');
+    expect(src).toContain("parrainagesSitemapEntries(SITE_URL, slug,");
+  });
+});
+
+describe("doctrine : l'annuaire des candidats ne lit ni n'écrit de paramètre hors périmètre", () => {
+  // A new key in the address (a sort, a view) creates a new URL of the same directory. It has to
+  // be declared in PRESIDENTIAL_CANDIDATES_FILTER_KEYS, or that URL is indexable: `tri` shipped
+  // without it in #1400. Comments are stripped so a key named in prose does not count.
+  const code = readFileSync(
+    join(
+      process.cwd(),
+      "src/app/elections/presidentielle-2027/_components/CandidacyFieldBrowser.tsx"
+    ),
+    "utf8"
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+  const keys = [...code.matchAll(/\.(?:get|set|delete)\(\s*"([^"]+)"/g)].map((match) => match[1]);
+
+  it("trouve bien les paramètres du composant", () => {
+    expect(new Set(keys)).toEqual(new Set(["q", "statut", "propositions", "tri"]));
+  });
+
+  it("déclare chacun d'eux dans le périmètre noindex", () => {
+    for (const key of new Set(keys)) {
+      expect(PRESIDENTIAL_CANDIDATES_FILTER_KEYS as readonly string[]).toContain(key);
+    }
+  });
+});
+
+describe("doctrine : un listing ne lit aucun paramètre d'adresse sans verdict d'indexation", () => {
+  // Every key a listing page reads creates URLs of the same listing. Each one must either sit in
+  // the listing's noindex perimeter (listing-filters.ts) or be named here with the reason its
+  // verdict is decided elsewhere in the page. A key added to the page's `searchParams` type
+  // without one of the two fails this test, before the URL can reach the index.
+  const READ_BY_LISTING = [
+    {
+      route: "/affaires",
+      page: "src/app/affaires/page.tsx",
+      keys: AFFAIRES_LISTING_FILTER_KEYS,
+      // page: hasActiveListingFilter() pagination. mode: `hasNonDefaultMode`.
+      decidedInPage: ["page", "mode"],
+    },
+    {
+      route: "/politiques",
+      page: "src/app/politiques/page.tsx",
+      keys: POLITIQUES_LISTING_FILTER_KEYS,
+      // conviction, financing: `hasConvictionFilter`. sort: `hasNonDefaultSort`.
+      decidedInPage: ["page", "conviction", "financing", "sort"],
+    },
+    {
+      route: "/parlement/votes",
+      page: "src/app/parlement/votes/page.tsx",
+      keys: VOTES_LISTING_FILTER_KEYS,
+      // filter: the bare ?filter=expliques view is indexable on purpose (`isBareExplainedView`).
+      decidedInPage: ["page", "filter"],
+    },
+    {
+      route: "/elections/presidentielle-2027/affaires-judiciaires",
+      page: "src/app/elections/presidentielle-2027/affaires-judiciaires/page.tsx",
+      keys: PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
+      decidedInPage: ["page"],
+    },
+    {
+      route: "/elections/presidentielle-2027/affaires-judiciaires",
+      page: "src/app/elections/presidentielle-2027/affaires-judiciaires/page.tsx",
+      keys: PRESIDENTIAL_AFFAIRS_FILTER_KEYS,
+      decidedInPage: ["page"],
+    },
+    {
+      route: "/parlement/dossiers",
+      page: "src/app/parlement/dossiers/page.tsx",
+      keys: DOSSIERS_LISTING_FILTER_KEYS,
+      decidedInPage: ["page"],
+    },
+  ];
+
+  function declaredKeys(file: string): string[] {
+    const code = readFileSync(join(process.cwd(), file), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    const block = code.match(/searchParams\??:\s*Promise<\{([\s\S]*?)\}>/)?.[1];
+    // An untyped `Record<string, …>` would hide every key from this guard.
+    if (block === undefined) throw new Error(`${file} : searchParams sans clés déclarées`);
+    return [...block.matchAll(/(\w+)\??:/g)].map((match) => match[1]!);
+  }
+
+  it.each(READ_BY_LISTING)(
+    "$route : chaque paramètre lu est hors index ou décidé dans la page",
+    ({ page, keys, decidedInPage }) => {
+      const declared = declaredKeys(page);
+      expect(declared.length).toBeGreaterThan(0);
+      const known = new Set<string>([...keys, ...decidedInPage]);
+      expect(declared.filter((key) => !known.has(key))).toEqual([]);
+    }
+  );
+
+  it.each(READ_BY_LISTING)(
+    "$route : la liste des exceptions ne nomme que des paramètres encore lus",
+    ({ page, decidedInPage }) => {
+      const declared = new Set(declaredKeys(page));
+      expect(decidedInPage.filter((key) => !declared.has(key))).toEqual([]);
+    }
+  );
 });

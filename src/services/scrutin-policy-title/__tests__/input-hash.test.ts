@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { computeInputHash, type InputHashInput } from "@/services/scrutin-policy-title/input-hash";
+import {
+  computeInputHash,
+  isAgreementOnlyTitleDrift,
+  type InputHashInput,
+} from "@/services/scrutin-policy-title/input-hash";
 
 const baseInput = (): InputHashInput => ({
   scrutinTitle: "le sous-amendement n° 2368 ...",
@@ -58,5 +62,49 @@ describe("computeInputHash", () => {
     const changed = baseInput();
     changed.links[1]!.role = "SUB_AMENDMENT"; // was PARENT_AMENDMENT
     expect(computeInputHash(changed)).not.toBe(a);
+  });
+});
+
+describe("isAgreementOnlyTitleDrift", () => {
+  const OLD = "l'amendement n° 12 à l'article 3 du projet de loi relative à la résilience";
+  const NEW = "l'amendement n° 12 à l'article 3 du projet de loi relatif à la résilience";
+  const stored = () => computeInputHash({ ...baseInput(), scrutinTitle: OLD });
+
+  it("accepts a title whose only change is the relatif/relative agreement", () => {
+    expect(
+      isAgreementOnlyTitleDrift({
+        storedHash: stored(),
+        storedTitle: OLD,
+        current: { ...baseInput(), scrutinTitle: NEW },
+      })
+    ).toBe(true);
+  });
+
+  it("refuses when the amendment number changed too", () => {
+    expect(
+      isAgreementOnlyTitleDrift({
+        storedHash: stored(),
+        storedTitle: OLD,
+        current: { ...baseInput(), scrutinTitle: NEW.replace("n° 12", "n° 112") },
+      })
+    ).toBe(false);
+  });
+
+  it("refuses when a source text changed along with the agreement", () => {
+    const current = { ...baseInput(), scrutinTitle: NEW };
+    current.sources[0]!.text = "rétablit l'exonération";
+    expect(isAgreementOnlyTitleDrift({ storedHash: stored(), storedTitle: OLD, current })).toBe(
+      false
+    );
+  });
+
+  it("is false when the title did not change", () => {
+    expect(
+      isAgreementOnlyTitleDrift({
+        storedHash: stored(),
+        storedTitle: OLD,
+        current: { ...baseInput(), scrutinTitle: OLD },
+      })
+    ).toBe(false);
   });
 });

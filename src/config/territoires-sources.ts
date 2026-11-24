@@ -57,6 +57,10 @@ const INSEE_ATTRIBUTION =
 const LO2_ATTRIBUTION =
   "Nom du producteur et date de dernière mise à jour des données réutilisées.";
 
+/** Attribution field of the OFGL datasets' metadata (« calcul OFGL - source DGFiP »), read 2026-11-21. */
+const OFGL_ATTRIBUTION =
+  "« Calcul OFGL, source DGFiP », avec la date de dernière mise à jour des données.";
+
 export const TERRITOIRES_SOURCES: readonly TerritoireSource[] = [
   {
     id: "insee-cog",
@@ -351,6 +355,47 @@ export const TERRITOIRES_SOURCES: readonly TerritoireSource[] = [
       "Météo-France, fiches climatologiques des stations, avec la date de dernière mise à jour des données.",
     reuse:
       "Température moyenne annuelle et précipitations annuelles de la station de référence, avec la période mesurée par cette station.",
+    status: "PREVU",
+  },
+  ...(
+    [
+      ["communes", "communes 2018-2025"],
+      ["departements", "départements 2012-2025"],
+      ["regions", "régions 2012-2025"],
+    ] as const
+  ).map(
+    ([key, label]): TerritoireSource => ({
+      id: `ofgl-comptes-${key}`,
+      name: `Comptes consolidés des ${label}`,
+      producer: "Observatoire des finances et de la gestion publique locales (OFGL)",
+      url: `https://data.ofgl.fr/explore/dataset/ofgl-base-${key}-consolidee/`,
+      licence: {
+        ...LICENCE_OUVERTE_2,
+        verifiedOn: `https://data.ofgl.fr/api/explore/v2.1/catalog/datasets/ofgl-base-${key}-consolidee`,
+        verifiedAt: "2026-11-21",
+        note: "Licence lue dans les métadonnées du jeu : « Licence Ouverte v2.0 (Etalab) ».",
+      },
+      attribution: OFGL_ATTRIBUTION,
+      reuse:
+        "Dépenses de fonctionnement, frais de personnel, dépenses d'équipement, encours de dette et épargne brute de la collectivité, en montant et en euros par habitant.",
+      status: "PREVU",
+    })
+  ),
+  {
+    id: "ofgl-disponibilite-communes",
+    name: "Disponibilité des comptes des communes 2012-2025",
+    producer: "Observatoire des finances et de la gestion publique locales (OFGL)",
+    url: "https://data.ofgl.fr/explore/dataset/disponibilite-des-comptes-des-communes/",
+    licence: {
+      ...LICENCE_OUVERTE_2,
+      verifiedOn:
+        "https://data.ofgl.fr/api/explore/v2.1/catalog/datasets/disponibilite-des-comptes-des-communes",
+      verifiedAt: "2026-11-22",
+      note: "Licence lue dans les métadonnées du jeu : « Licence Ouverte v2.0 (Etalab) ».",
+    },
+    attribution: "« OFGL, source DGCL-DGFiP », avec la date de dernière mise à jour des données.",
+    reuse:
+      "Rattachement des comptes de chaque exercice à la commune d'aujourd'hui, par son numéro SIREN, et existence d'un compte pour l'année.",
     status: "PREVU",
   },
 ];

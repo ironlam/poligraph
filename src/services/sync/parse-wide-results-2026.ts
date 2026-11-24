@@ -35,6 +35,17 @@ export interface ListResult2026 {
   seatsCC: number | null;
 }
 
+/**
+ * A commune whose lists total no seat has not been decided by this file. The first-round file
+ * writes "0" on every list of a commune that went to a second round (1 526 communes in 2026,
+ * none of the 33 310 others totals zero): those zeros are an absence, not a result, so the seats
+ * are cleared and nothing is written for them.
+ */
+export function withDecidedSeats(commune: CommuneResult2026): CommuneResult2026 {
+  if (commune.lists.some((list) => (list.seatsCM ?? 0) > 0)) return commune;
+  return { ...commune, lists: commune.lists.map((list) => ({ ...list, seatsCM: null })) };
+}
+
 export interface CommuneResult2026 {
   inseeCode: string;
   communeName: string;

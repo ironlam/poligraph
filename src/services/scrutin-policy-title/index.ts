@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { callMistral, extractMistralText } from "@/lib/api/mistral";
+import { MISTRAL_LARGE_MODEL } from "@/config/mistral-models";
 import { resolveSubstanceSources } from "./substance-resolver";
 import { extractEvidenceCandidates } from "./evidence-extractor";
 import { computeInputHash, type InputHashInput } from "./input-hash";
@@ -19,7 +20,7 @@ import type {
 import type { Prisma } from "@/generated/prisma";
 
 /** Mistral model used for policy-title generation. Not exported by the mistral lib. */
-const MISTRAL_MODEL = "mistral-large-latest";
+const MISTRAL_MODEL = MISTRAL_LARGE_MODEL;
 
 interface ScrutinAmendmentLink {
   role: string;

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Extrait de https://www.ccomptes.fr/fr/rss/juridiction/143 (CRC Grand Est), relevé le 22 novembre 2026 : trois éléments sur dix, descriptions vidées (le client ne les lit pas). -->
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0" xml:base="https://www.ccomptes.fr/fr">
+  <channel>
+    <title>Jurisdiction</title>
+    <link>https://www.ccomptes.fr/fr</link>
+    <description></description>
+    <language>fr</language>
+    
+    <item>
+  <title>Département de la Meuse</title>
+  <link>https://www.ccomptes.fr/fr/publications/departement-de-la-meuse-5</link>
+  <description></description>
+  <pubDate>Sat, 21 Nov 2026 14:33:39 +0100</pubDate>
+    <guid isPermaLink="true">https://www.ccomptes.fr/fr/publications/departement-de-la-meuse-5</guid>
+    </item>
+<item>
+  <title>DuoDay à la chambre : deux journées d’immersion</title>
+  <link>https://www.ccomptes.fr/fr/actualites/duoday-la-chambre-deux-journees-dimmersion</link>
+  <description/>
+  <pubDate>Thu, 19 Nov 2026 09:48:11 +0100
+</pubDate>
+    <guid isPermaLink="true">https://www.ccomptes.fr/fr/actualites/duoday-la-chambre-deux-journees-dimmersion</guid>
+    </item>
+<item>
+  <title>Commune de Minorville (Meurthe-et-Moselle)</title>
+  <link>https://www.ccomptes.fr/fr/publications/commune-de-minorville-meurthe-et-moselle</link>
+  <description></description>
+  <pubDate>Thu, 05 Nov 2026 09:43:37 +0100</pubDate>
+    <guid isPermaLink="true">https://www.ccomptes.fr/fr/publications/commune-de-minorville-meurthe-et-moselle</guid>
+    </item>
+  </channel>
+</rss>

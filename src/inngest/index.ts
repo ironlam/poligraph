@@ -10,7 +10,6 @@ import { syncLegislation } from "./functions/sync-legislation";
 import { syncPoliticians } from "./functions/sync-politicians";
 import { syncDaily } from "./functions/sync-daily";
 import { regenerateLegacyImpactsFn } from "./functions/regenerate-legacy-impacts";
-import { generateSocialDrafts, publishApprovedPost } from "./functions/post-social";
 import { sendNewsletter } from "./functions/send-newsletter";
 import { onboardingSend } from "./functions/onboarding-send";
 import { syncEngagement } from "./functions/sync-engagement";
@@ -20,6 +19,7 @@ import { syncPlatformUpdates } from "./functions/sync-platform-updates";
 import { pipelineDigest } from "./functions/pipeline-digest";
 import { affairMonitoringReconcile } from "./functions/affair-monitoring-reconcile";
 import {
+  reconcileActivePoliticianProfilesFn,
   reconcilePoliticianProfilesFn,
   refreshPoliticianProfileFn,
 } from "./functions/profile-snapshots";
@@ -40,8 +40,6 @@ const groupedFunctions = [
   discoverAffairsWebWave,
   syncDaily,
   regenerateLegacyImpactsFn,
-  generateSocialDrafts,
-  publishApprovedPost,
   sendNewsletter,
   onboardingSend,
   syncEngagement,
@@ -50,6 +48,7 @@ const groupedFunctions = [
   syncPlatformUpdates,
   refreshPoliticianProfileFn,
   reconcilePoliticianProfilesFn,
+  reconcileActivePoliticianProfilesFn,
 ];
 
 // --- Individual script wrappers (admin SCRIPT_CATALOG) ---

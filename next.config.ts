@@ -40,9 +40,6 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/territoires/departements/[slug]/opengraph-image": ["./public/data/departements.geojson"],
     "/elections/senatoriales-2026": ["./public/data/departements.geojson"],
-    "/elections/municipales-2026/communes/[inseeCode]/opengraph-image": [
-      "./public/data/departements.geojson",
-    ],
     "/parlement/votes/[slug]/opengraph-image": ["./src/fonts/og/*.ttf"],
     "/parlement/groupes/[slug]/opengraph-image": ["./src/fonts/og/*.ttf"],
     "/parlement/groupes/[slug]/projets-gouvernementaux/opengraph-image": ["./src/fonts/og/*.ttf"],

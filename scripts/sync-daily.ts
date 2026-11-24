@@ -7,8 +7,11 @@
  * Usage:
  *   npm run sync:daily              # Run all daily sync steps
  *   npm run sync:daily -- --dry-run # Preview without writing to DB
+ *   npm run sync:daily -- --group=votes # Run the steps of one group only
  *
- * Designed to run 3x/day via GitHub Actions (6h, 12h, 20h Paris time).
+ * Designed to run 3x/day via GitHub Actions (6h, 12h, 20h Paris time), one job
+ * per group (see .github/workflows/sync-daily.yml) so that a failing group no
+ * longer fails the others.
  * Each step uses --today to only process new items from the current day.
  */
 
@@ -16,6 +19,7 @@ import "dotenv/config";
 import { execSync } from "child_process";
 import { revalidateRemoteCache } from "./lib/revalidate-cache";
 import { createScrutinWriteGate } from "./lib/scrutin-write-gate";
+import { createPoliticiansPurgeGate } from "./lib/politicians-purge-gate";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const dryRunFlag = DRY_RUN ? " --dry-run" : "";
@@ -26,8 +30,34 @@ const dryRunFlag = DRY_RUN ? " --dry-run" : "";
 const RETRY_BACKOFF_MS = 20 * 1000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// One GitHub Actions job per group. A gate and the purge it decides share a
+// group: the scrutin gate keeps its marker in memory between the two steps.
+const SYNC_GROUPS = [
+  "votes",
+  "legislation",
+  "press-import",
+  "press-analysis",
+  "factchecks",
+  "scores",
+  "purge",
+] as const;
+type SyncGroup = (typeof SYNC_GROUPS)[number];
+
+function parseGroup(argv: string[]): SyncGroup | undefined {
+  const value = argv.find((arg) => arg.startsWith("--group="))?.slice("--group=".length);
+  if (value === undefined) return undefined;
+  if (!(SYNC_GROUPS as readonly string[]).includes(value)) {
+    console.error(`Groupe inconnu : « ${value} ». Groupes : ${SYNC_GROUPS.join(", ")}.`);
+    process.exit(1);
+  }
+  return value as SyncGroup;
+}
+
+const GROUP = parseGroup(process.argv);
+
 interface SyncStep {
   name: string;
+  group: SyncGroup;
   command: string;
   run?: () => Promise<void>;
   /**
@@ -48,12 +78,14 @@ interface SyncStep {
 const AN_RECENT_DAYS = 7;
 
 const scrutinWriteGate = createScrutinWriteGate();
+const politiciansPurgeGate = createPoliticiansPurgeGate();
 
-const steps: SyncStep[] = [
+const allSteps: SyncStep[] = [
   ...(!DRY_RUN
     ? [
         {
           name: "Repère des scrutins",
+          group: "votes" as const,
           command: "max(Scrutin.updatedAt)",
           run: () => scrutinWriteGate.capture(),
         },
@@ -63,12 +95,14 @@ const steps: SyncStep[] = [
     // A 7-day window, not today only: the AN open data publishes a day's votes one or
     // two days late, and a today-only run never sees them once they land.
     name: "Votes AN (7 derniers jours)",
+    group: "votes",
     command: `npx tsx scripts/sync-scrutins-an.ts --since-days=${AN_RECENT_DAYS}${dryRunFlag}`,
   },
   {
     // Current session, cursor-based: picks up every scrutin published since the last
     // run, even one senat.fr posts a day late.
     name: "Votes Sénat (session en cours)",
+    group: "votes",
     command: `npx tsx scripts/sync-scrutins-senat.ts${dryRunFlag}`,
   },
   ...(!DRY_RUN
@@ -77,6 +111,7 @@ const steps: SyncStep[] = [
           // "votes" is carried by most readers of the site: purging it when both syncs found
           // nothing new regenerated every profile and listing three times a day for no change.
           name: "Votes cache revalidation",
+          group: "votes" as const,
           command: "POST /api/cron/revalidate (votes), si un scrutin a été écrit",
           run: async () => {
             if (await scrutinWriteGate.scrutinsWritten()) {
@@ -90,24 +125,29 @@ const steps: SyncStep[] = [
     : []),
   {
     name: "Législation (active, 3j)",
+    group: "legislation",
     command: `npx tsx scripts/sync-legislation.ts --active --since-days=3${dryRunFlag}`,
     allowFailure: true,
   },
   {
     name: "Exposés des motifs (limit 20)",
+    group: "legislation",
     command: `npx tsx scripts/sync-legislation-content.ts --limit=20${dryRunFlag}`,
     allowFailure: true,
   },
   {
     name: "Résumés IA dossiers (limit 10)",
+    group: "legislation",
     command: `npx tsx scripts/generate-summaries.ts --limit=10${dryRunFlag}`,
   },
   {
     name: "Résumés IA scrutins (limit 20)",
+    group: "legislation",
     command: `npx tsx scripts/generate-scrutin-summaries.ts --limit=20${dryRunFlag}`,
   },
   {
     name: "Presse (RSS)",
+    group: "press-import",
     command: `npx tsx scripts/sync-press.ts${dryRunFlag}`,
   },
   {
@@ -123,6 +163,7 @@ const steps: SyncStep[] = [
     // so this workflow is now the sole scheduler for press analysis: --force
     // is safe because there is no longer a second process to race against.
     name: "Analyse presse IA (limit 100)",
+    group: "press-analysis",
     command: `npx tsx scripts/sync-press-analysis.ts --limit=100 --force${dryRunFlag}`,
   },
   // Judilibre step disabled 2026-05-15 (Option C).
@@ -135,34 +176,51 @@ const steps: SyncStep[] = [
   // },
   {
     name: "Réconciliation affaires",
+    group: "press-analysis",
     command: `npx tsx scripts/reconcile-affairs.ts --auto-merge${dryRunFlag}`,
   },
   {
     name: "Fact-checks (Google API)",
+    group: "factchecks",
     command: `npx tsx scripts/sync-factchecks.ts --limit=50${dryRunFlag}`,
   },
   {
     name: "Classification thématique (limit 30)",
+    group: "factchecks",
     command: `npx tsx scripts/classify-themes.ts --limit=30${dryRunFlag}`,
   },
   {
     name: "Embeddings fact-checks (delta)",
+    group: "factchecks",
     command: `npx tsx scripts/index-embeddings.ts --type=FACTCHECK --limit=200`,
   },
   {
+    // Drafts only, published by a person in /admin/territoires/rapports-crc; no cache to purge.
+    // Here on GitHub Actions only, never in the Inngest copy of the daily sync, which runs on
+    // Vercel functions. Non-blocking: ccomptes.fr is a third-party site.
+    name: "Rapports des chambres régionales des comptes",
+    group: "factchecks",
+    command: `npx tsx scripts/sync-rapports-crc.ts${DRY_RUN ? "" : " --write"}`,
+    allowFailure: true,
+  },
+  {
     name: "Embeddings presse (delta)",
+    group: "factchecks",
     command: `npx tsx scripts/index-embeddings.ts --type=PRESS_ARTICLE --limit=200`,
   },
   {
     name: "Prominence scores",
+    group: "scores",
     command: `npx tsx scripts/recalculate-prominence.ts${dryRunFlag}`,
   },
   {
     name: "Publication status",
+    group: "scores",
     command: `npx tsx scripts/assign-publication-status.ts${dryRunFlag}`,
   },
   {
     name: "Compute participation stats",
+    group: "scores",
     command: `npx tsx scripts/compute-stats.ts${dryRunFlag}`,
     // Blocking step recurrently killed by transient Supabase connection drops
     // (#442). One retry (6587772) was not enough on 2026-07-16: both back-to-back
@@ -175,11 +233,13 @@ const steps: SyncStep[] = [
     // 1.2M-row Candidacy table on the request path (POLIGRAPH-1H). Non-blocking: the page falls
     // back to computing it live, so a failure here costs speed, never accuracy.
     name: "Snapshots présidentielle",
+    group: "scores",
     command: `npx tsx scripts/compute-presidential-snapshots.ts${dryRunFlag}`,
     allowFailure: true,
   },
   {
     name: "IndexNow",
+    group: "scores",
     command: `npx tsx scripts/submit-indexnow.ts`,
   },
   {
@@ -187,6 +247,7 @@ const steps: SyncStep[] = [
     // unanalyzed (dry credits, upstream slowness, volume). The manual
     // /analyse-presse skill drains the backlog without spending API credits.
     name: "Notification backlog presse",
+    group: "press-analysis",
     command: `npx tsx scripts/notify-press-backlog.ts${dryRunFlag}`,
     allowFailure: true,
   },
@@ -194,21 +255,41 @@ const steps: SyncStep[] = [
     ? [
         {
           // Scoped tags only — never use { all: true }.
-          // The four tags below match the remaining data domains touched by
-          // the daily sync. Votes are invalidated immediately after both vote
-          // syncs, before the longer steps below can time out the workflow.
-          // Adding "elections" here would purge caches that the daily sync did
-          // NOT update. "factchecks" is not one of those: the Google API step
-          // above imports fact-checks on every run, and the listing that shows
-          // them holds its cache for 24h, so leaving the tag out kept a new
-          // fact-check off the site for a day after it was stored.
+          // Votes are invalidated immediately after both vote syncs, before the longer steps
+          // below can time out the workflow. Adding "elections" here would purge caches that the
+          // daily sync did NOT update.
+          // "dossiers", "stats", "factchecks" and "press" are purged on every run: the steps
+          // above write to each of them, and few readers carry them. "factchecks" is there because
+          // the Google API step imports fact-checks on every run and the listing holds its cache
+          // for 24h. "press" keeps the press listing and the press block of the presidential hub
+          // in step with the RSS import.
+          // "politicians" is carried by every commune, department and region page, the listings
+          // and the homepage: it is purged only when politicians or mandates changed since the
+          // last purge, and once a day whatever happened (scripts/lib/politicians-purge-gate.ts).
           name: "Cache revalidation",
-          command: "POST /api/cron/revalidate (dossiers, stats, politicians, factchecks)",
-          run: () => revalidateRemoteCache(["dossiers", "stats", "politicians", "factchecks"]),
+          group: "purge" as const,
+          command:
+            "POST /api/cron/revalidate (dossiers, stats, factchecks, press, et politicians au besoin)",
+          run: async () => {
+            const politicians = await politiciansPurgeGate.decide();
+            console.log(
+              `Purge de politicians : ${politicians.purge ? "oui" : "non"} (${politicians.reason}).`
+            );
+            await revalidateRemoteCache([
+              "dossiers",
+              "stats",
+              "factchecks",
+              "press",
+              ...(politicians.purge ? ["politicians"] : []),
+            ]);
+            if (politicians.purge) await politiciansPurgeGate.recordPurge();
+          },
         },
       ]
     : []),
 ];
+
+const steps = GROUP ? allSteps.filter((step) => step.group === GROUP) : allSteps;
 
 async function main() {
   const startTime = Date.now();
@@ -217,6 +298,7 @@ async function main() {
   console.log("=".repeat(60));
   console.log(`Daily Sync — ${today}`);
   console.log(`Mode: ${DRY_RUN ? "DRY RUN" : "LIVE"}`);
+  console.log(`Groupe: ${GROUP ?? "tous"}`);
   console.log("=".repeat(60));
   console.log("");
 

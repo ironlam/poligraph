@@ -1,5 +1,12 @@
 import { db } from "@/lib/db";
-import type { DateEvidence, GovernmentFunctionEnd, PublicationStatus } from "@/generated/prisma";
+import { isMissingTableError } from "@/lib/data/commune-population";
+import {
+  Prisma,
+  type DateEvidence,
+  type GovernmentFunctionEnd,
+  type PublicationStatus,
+} from "@/generated/prisma";
+import { PARRAINAGES_FICHES_CANDIDATS } from "@/config/parrainages";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { PUBLIC_EVENT_WHERE } from "@/lib/affairs/events/public";
@@ -362,3 +369,99 @@ export async function readProfileVoteStats(
 }
 
 export type ProfileVoteStats = Awaited<ReturnType<typeof readProfileVoteStats>>;
+
+/** One presidential presentation made by the person, as published by the Conseil constitutionnel. */
+export interface ProfileParrainage {
+  electionSlug: string;
+  candidateName: string;
+  mandateLabel: string;
+  constituencyLabel: string;
+  /** ISO date (yyyy-mm-dd) of the publication. */
+  publishedOn: string;
+}
+
+/**
+ * Presentations linked to this politician, oldest first. Only rows whose link was established by
+ * the identity step carry a `politicianId`, so nothing here rests on a name. Empty for almost
+ * everyone, and empty too when the table does not exist yet.
+ */
+export async function readProfileParrainages(politicianId: string): Promise<ProfileParrainage[]> {
+  let rows;
+  try {
+    rows = await db.parrainage.findMany({
+      where: { politicianId },
+      orderBy: [{ publishedOn: "asc" }, { candidateName: "asc" }],
+      take: 20,
+      select: {
+        candidateName: true,
+        mandateLabel: true,
+        constituencyLabel: true,
+        publishedOn: true,
+        election: { select: { slug: true } },
+      },
+    });
+  } catch (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
+  return rows.map(({ election, publishedOn, ...row }) => ({
+    ...row,
+    electionSlug: election.slug,
+    publishedOn: publishedOn.toISOString().slice(0, 10),
+  }));
+}
+
+/** Presentations a person received as a presidential candidate, for one election. */
+export interface ProfileParrainagesRecus {
+  electionSlug: string;
+  /** As published by the Conseil constitutionnel: "NOM Prénom". */
+  candidateName: string;
+  total: number;
+  /** Departments and collectivities, counted on the published label. */
+  departements: number;
+}
+
+/**
+ * Counts of the presentations received by this person as a candidate. Two links only, never a
+ * name: the candidacy in base that the importer matched, or the hand-checked table of
+ * `PARRAINAGES_FICHES_CANDIDATS`. Either one designates a published candidate of an election,
+ * and every presentation of that candidate is counted. Empty for almost everyone, and when the table does not exist.
+ */
+export async function readProfileParrainagesRecus(politician: {
+  id: string;
+  slug: string;
+}): Promise<ProfileParrainagesRecus[]> {
+  const viaTable = Object.entries(PARRAINAGES_FICHES_CANDIDATS).flatMap(([electionSlug, table]) =>
+    Object.entries(table)
+      .filter(([, slug]) => slug === politician.slug)
+      .map(
+        ([candidateName]) =>
+          Prisma.sql`(e."slug" = ${electionSlug} AND p."candidateName" = ${candidateName})`
+      )
+  );
+  // The link names a (election, published candidate) pair; the count then covers every row of
+  // that pair. Rows imported before the candidacy existed keep a null `candidacyId`: counting
+  // only the linked rows would give a smaller figure than the candidate page.
+  const viaCandidacy = Prisma.sql`(p."electionId", p."candidateName") IN (
+    SELECT linked."electionId", linked."candidateName"
+    FROM "Parrainage" linked JOIN "Candidacy" c ON c."id" = linked."candidacyId"
+    WHERE c."politicianId" = ${politician.id}
+  )`;
+  const where = viaTable.length
+    ? Prisma.sql`${viaCandidacy} OR ${Prisma.join(viaTable, " OR ")}`
+    : viaCandidacy;
+  try {
+    return await db.$queryRaw<ProfileParrainagesRecus[]>(Prisma.sql`
+      SELECT e."slug" AS "electionSlug", p."candidateName",
+             count(*)::int AS "total", count(DISTINCT p."departmentLabel")::int AS "departements"
+      FROM "Parrainage" p
+      JOIN "Election" e ON e."id" = p."electionId"
+      WHERE ${where}
+      GROUP BY 1, 2
+      ORDER BY 1, 2
+    `);
+  } catch (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
+}

@@ -120,4 +120,6 @@ export interface GeneratePolicyTitlesStats {
   skipped: number;
   errors: { scrutinId: string; error: string }[];
   durationMs: number;
+  /** Set when the batch stopped early because the model kept returning unusable output. */
+  aborted?: "LLM_OUTPUT_INVALID";
 }
