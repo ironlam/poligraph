@@ -124,6 +124,14 @@ Unité : une PR de moins de 400 lignes avec ses tests.
   remontée à 8 657 px à 390 px de large.
 - Reste du lot C : notices des rapports des chambres régionales des comptes.
 
+### État au 24 novembre 2026
+
+- Corrections du lot C en production (PR #1434 à #1436) : rappel de l'intercommunalité sur le bloc
+  et la sous-page des communes, intertitre à chaque changement de collectivité dans les séries,
+  cinq blocs repliés. Page commune de Brest : 6 667 px à 390 px de large, contre 8 657.
+- Rapports des chambres régionales des comptes : PR #1437 à #1445 fusionnées, 13 événements
+  `RAPPORT_CRC` dans le fil. Recette complète à faire.
+
 ### Parrainages, liste 2022 (vérifiée le 17 novembre 2026)
 
 Jeu « Parrainages des candidats à l'élection présidentielle française de 2022 », Conseil
