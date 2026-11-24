@@ -129,8 +129,13 @@ Unité : une PR de moins de 400 lignes avec ses tests.
 - Corrections du lot C en production (PR #1434 à #1436) : rappel de l'intercommunalité sur le bloc
   et la sous-page des communes, intertitre à chaque changement de collectivité dans les séries,
   cinq blocs repliés. Page commune de Brest : 6 667 px à 390 px de large, contre 8 657.
-- Rapports des chambres régionales des comptes : PR #1437 à #1445 fusionnées, 13 événements
-  `RAPPORT_CRC` dans le fil. Recette complète à faire.
+- Rapports des chambres régionales des comptes : en production (PR #1437 à #1445). 13 notices
+  publiées après validation dans l'admin (13 publications et 1 rattachement corrigé dans
+  `auditLog`), rattachements contrôlés un à un. Relève quotidienne en brouillon, fenêtre de 30
+  jours, sans reprise d'historique. Lot C clos.
+- À améliorer : deux rapports publiés le même jour sur une même collectivité donnent deux phrases
+  identiques ; afficher le titre officiel du rapport les distinguerait.
+- Prochain lot : D, élections complètes, pages intercommunalité et canton.
 
 ### Parrainages, liste 2022 (vérifiée le 17 novembre 2026)
 
