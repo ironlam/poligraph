@@ -44,6 +44,15 @@ describe("VotesParlementaires", () => {
     expect(tons[0]!.className).toContain("red");
   });
 
+  it("garde une cible tactile de 44 px sur chaque lien, même dans une phrase", () => {
+    const { container } = render(
+      <VotesParlementaires votes={votes("s-an", { a: "POUR" })} mode={{ kind: "renvoi" }} />
+    );
+    const liens = [...container.querySelectorAll("a")];
+    expect(liens.map((a) => a.textContent)).toContain("Mon député");
+    expect(liens.every((a) => a.className.includes("min-h-11"))).toBe(true);
+  });
+
   it("commune : nomme le député et dit sa position en mots", () => {
     const { container } = render(
       <VotesParlementaires

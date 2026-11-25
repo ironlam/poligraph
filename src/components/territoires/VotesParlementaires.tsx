@@ -114,7 +114,11 @@ export function VotesParlementaires({
       {mode.kind === "renvoi" && (
         <p className="text-sm text-muted-foreground">
           Le député dépend de votre adresse. Pour retrouver le vôtre et ses positions, utilisez{" "}
-          <Link href="/mon-depute" prefetch={false} className={LINK}>
+          <Link
+            href="/mon-depute"
+            prefetch={false}
+            className={`inline-flex min-h-11 items-center ${LINK}`}
+          >
             Mon député
           </Link>
           .
