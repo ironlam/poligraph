@@ -3,8 +3,7 @@
 Date : 14 novembre 2026. Statut : validé en revue, implémentation à lancer par le lot A.
 
 Prolonge [`territoires-plan-implementation.md`](territoires-plan-implementation.md) (10 octobre 2026)
-sans le remplacer. Le document complet, avec maquettes mobile, est un artifact privé :
-https://claude.ai/artifact/9GCXgys9GBfjz8A6bahg5e. Toutes les données des maquettes sont fictives.
+sans le remplacer. Les maquettes mobile qui l'accompagnent utilisent des données fictives.
 
 ## 1. Constat (production, 14 novembre 2026)
 
