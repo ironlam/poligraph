@@ -16,6 +16,7 @@ import {
   phraseTableauDeBord,
 } from "@/lib/parrainages/gabarits";
 import { generateSlug } from "@/lib/utils";
+import { SECTION } from "@/components/territoires/classes";
 
 /**
  * Presentation blocks of the Territoires pages. Each renders nothing when the territory has no
@@ -23,6 +24,8 @@ import { generateSlug } from "@/lib/utils";
  */
 
 const CARD = "scroll-mt-32 space-y-3 rounded-2xl border bg-card p-4 sm:p-6";
+/** On a Territoires page the block follows the sections of that page: edge to edge on a phone. */
+const CARD_TERRITOIRE = `space-y-3 ${SECTION}`;
 const TITRE = "font-display text-xl font-extrabold text-primary sm:text-2xl";
 const INLINE = "py-3 font-semibold underline underline-offset-2 hover:text-primary";
 
@@ -126,7 +129,7 @@ export function ParrainagesDepartement({
   const known = resumes.filter((resume) => PARRAINAGES_ELECTIONS[resume.electionSlug]);
   if (!known.length) return null;
   return (
-    <section id="parrainages" aria-labelledby="parrainages-titre" className={CARD}>
+    <section id="parrainages" aria-labelledby="parrainages-titre" className={CARD_TERRITOIRE}>
       <h2 id="parrainages-titre" className={TITRE}>
         Parrainages présidentiels
       </h2>
