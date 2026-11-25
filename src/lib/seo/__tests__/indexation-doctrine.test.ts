@@ -621,6 +621,26 @@ describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => 
     expect(programme).toContain('me."theme" = fc."theme"');
     expect(programme).toContain('me."withdrawnAt" IS NULL');
     expect(programme).toContain('mr."id" = me."publishedRevisionId"');
+    for (const alias of ["mr", "pr"]) {
+      expect(programme).toContain(`${alias}."reviewedAt" IS NOT NULL`);
+      expect(programme).toContain(`${alias}."publishedAt" IS NOT NULL`);
+      for (const field of ["supersededAt", "discardedAt", "rejectedAt"]) {
+        expect(programme).toContain(`${alias}."${field}" IS NULL`);
+      }
+    }
+    expect(programme).toContain('ms."measureRevisionId" = mr."id"');
+    expect(programme).toContain('cp."candidacyId" = ca."id"');
+    expect(programme).toContain("cp.\"publicationStatus\" = 'PUBLISHED'");
+    for (const field of ["status", "sourceUrl", "sourceLabel"]) {
+      expect(programme).toContain(`ca."${field}" IS NOT NULL`);
+    }
+    expect(programme).toContain('pm."candidacyId" = ca."id"');
+    expect(programme).toContain("pm.\"publicationStatus\" = 'PUBLISHED'");
+    expect(programme).toContain('pm."withdrawnAt" IS NULL');
+    expect(programme).toContain('pr."id" = pm."publishedRevisionId"');
+    expect(programme).toContain('ps."measureRevisionId" = pr."id"');
+    expect(programme).toContain("ps.\"tier\" = 'PRIMARY'");
+    expect(factChecksShard).toContain("cacheTag(`election-candidacies:${election.id}`)");
     const page = readFileSync(join(process.cwd(), "src/app/factchecks/[slug]/page.tsx"), "utf8");
     expect(page).toMatch(
       /<Suspense fallback=\{null\}>\s*<ProgrammeThemeBlock context=\{context\} \/>\s*<\/Suspense>/

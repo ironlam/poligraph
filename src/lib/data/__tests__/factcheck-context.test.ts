@@ -34,6 +34,10 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("../factchecks", () => ({ getPoliticianFactcheckContext: mocks.baseContext }));
 
+import {
+  PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+  PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+} from "@/lib/presidentielle/publication";
 import { invalidateMeasureTags } from "@/lib/measures/cache";
 import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 
@@ -547,12 +551,16 @@ describe("programme du thème validé", () => {
     expect(ctx.indexable).toBe(true);
     expect(mocks.measureFindMany).toHaveBeenCalledExactlyOnceWith({
       where: {
-        publicationStatus: "PUBLISHED",
-        withdrawnAt: null,
+        ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
         theme: "SANTE",
         election: { slug: "presidentielle-2027" },
-        candidacy: { is: { politicianId: row.id, election: { slug: "presidentielle-2027" } } },
-        publishedRevision: { isNot: null },
+        candidacy: {
+          is: {
+            ...PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+            politicianId: row.id,
+            election: { slug: "presidentielle-2027" },
+          },
+        },
       },
       take: 5,
       orderBy: { slug: "asc" },

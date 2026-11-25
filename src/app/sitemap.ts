@@ -1145,6 +1145,13 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
   cacheTag(...SITEMAP_SHARD_TAGS[6]);
   cacheLife("synced");
 
+  // A programme also disappears when its candidate fiche is unpublished.
+  const election = await db.election.findUnique({
+    where: { slug: PRESIDENTIELLE_2027_SLUG },
+    select: { id: true },
+  });
+  if (election) cacheTag(`election-candidacies:${election.id}`);
+
   const factChecks = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`
     WITH claimant AS (
       SELECT m."factCheckId", min(m."politicianId") AS "politicianId"
@@ -1187,12 +1194,41 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
             JOIN "Election" ce ON ce."id" = ca."electionId"
             JOIN "Election" e ON e."id" = me."electionId"
             JOIN "MeasureRevision" mr ON mr."id" = me."publishedRevisionId"
+            JOIN "CandidacyPresidential" cp ON cp."candidacyId" = ca."id"
             WHERE ca."politicianId" = c."politicianId"
               AND ce."slug" = ${PRESIDENTIELLE_2027_SLUG}
               AND e."slug" = ${PRESIDENTIELLE_2027_SLUG}
               AND me."publicationStatus" = 'PUBLISHED'
               AND me."withdrawnAt" IS NULL
               AND me."theme" = fc."theme"
+              -- PUBLIC_PRESIDENTIAL_MEASURE_WHERE / PUBLIC_MEASURE_REVISION_WHERE.
+              AND mr."reviewedAt" IS NOT NULL
+              AND mr."publishedAt" IS NOT NULL
+              AND mr."supersededAt" IS NULL
+              AND mr."discardedAt" IS NULL
+              AND mr."rejectedAt" IS NULL
+              AND EXISTS (
+                SELECT 1 FROM "MeasureSource" ms WHERE ms."measureRevisionId" = mr."id"
+              )
+              -- PUBLIC_PRESIDENTIAL_FICHE_WHERE. The claimant join already proves a public person.
+              AND ca."status" IS NOT NULL
+              AND ca."sourceUrl" IS NOT NULL
+              AND ca."sourceLabel" IS NOT NULL
+              AND cp."publicationStatus" = 'PUBLISHED'
+              AND EXISTS (
+                SELECT 1 FROM "Measure" pm
+                JOIN "MeasureRevision" pr ON pr."id" = pm."publishedRevisionId"
+                JOIN "MeasureSource" ps ON ps."measureRevisionId" = pr."id"
+                WHERE pm."candidacyId" = ca."id"
+                  AND pm."publicationStatus" = 'PUBLISHED'
+                  AND pm."withdrawnAt" IS NULL
+                  AND pr."reviewedAt" IS NOT NULL
+                  AND pr."publishedAt" IS NOT NULL
+                  AND pr."supersededAt" IS NULL
+                  AND pr."discardedAt" IS NULL
+                  AND pr."rejectedAt" IS NULL
+                  AND ps."tier" = 'PRIMARY'
+              )
           ))
       )
       -- A block that situates the author.

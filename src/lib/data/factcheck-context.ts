@@ -14,6 +14,10 @@ import { VERDICT_GROUPS } from "@/config/labels";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { SCRUTIN_THEMES, type ScrutinTheme } from "@/config/scrutin-themes";
 import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
+import {
+  PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+  PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+} from "@/lib/presidentielle/publication";
 import { isIndexableFactCheck } from "@/lib/seo/factcheck-robots";
 import { getPoliticianFactcheckContext } from "./factchecks";
 
@@ -525,7 +529,8 @@ async function queryThemeVotes(
 /** Stable slug order, independent of edits to the formulation or of the candidate's party.
  * Only the published formulation is read, never the latest draft or generated context.
  * Withdrawn measures have no public detail page and cannot be linked from this block.
- * The published revision is also required by the SQL mirror: no invisible indexing signal.
+ * The full public predicate keeps every link reachable after a fiche or revision depublication.
+ * These gates are mirrored in the sitemap SQL: no invisible indexing signal.
  */
 async function queryThemeProgramme(
   politicianId: string,
@@ -533,12 +538,16 @@ async function queryThemeProgramme(
 ): Promise<ThemeProgramme | null> {
   const measures = await db.measure.findMany({
     where: {
-      publicationStatus: "PUBLISHED",
-      withdrawnAt: null,
+      ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
       theme,
       election: { slug: PRESIDENTIELLE_2027_SLUG },
-      candidacy: { is: { politicianId, election: { slug: PRESIDENTIELLE_2027_SLUG } } },
-      publishedRevision: { isNot: null },
+      candidacy: {
+        is: {
+          ...PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+          politicianId,
+          election: { slug: PRESIDENTIELLE_2027_SLUG },
+        },
+      },
     },
     orderBy: { slug: "asc" },
     take: THEME_PROGRAMME_LIMIT,
