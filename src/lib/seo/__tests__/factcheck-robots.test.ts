@@ -16,6 +16,7 @@ const NO_BLOCK: FactCheckIndexSignals = {
   hasCandidacy: false,
   hasClaimDayVotes: false,
   hasThemeVotes: false,
+  hasThemeProgramme: false,
 };
 
 describe("isIndexableFactCheck", () => {
@@ -24,8 +25,24 @@ describe("isIndexableFactCheck", () => {
       isIndexableFactCheck({ ...NO_BLOCK, hasClaimDayVotes: true, authorFactCheckCount: 5 })
     ).toBe(true);
     expect(
-      isIndexableFactCheck({ ...NO_BLOCK, hasThemeVotes: true, authorFactCheckCount: 5 })
+      isIndexableFactCheck({
+        ...NO_BLOCK,
+        hasThemeVotes: true,
+        hasThemeProgramme: true,
+        authorFactCheckCount: 5,
+      })
     ).toBe(true);
+  });
+
+  it("indexe le programme du thème avec un bilan ou une candidature, sans vote", () => {
+    const signals = { ...NO_BLOCK, hasThemeProgramme: true };
+    expect(hasClaimSpecificBlock(signals)).toBe(true);
+    expect(isIndexableFactCheck(signals)).toBe(false);
+    expect(isIndexableFactCheck({ ...signals, authorFactCheckCount: 2 })).toBe(true);
+    expect(isIndexableFactCheck({ ...signals, hasCandidacy: true })).toBe(true);
+    expect(
+      isIndexableFactCheck({ ...signals, hasCandidacy: true, hasPublishedAuthor: false })
+    ).toBe(false);
   });
 
   it("accepte la candidature 2027 comme contexte de l'auteur", () => {
@@ -60,6 +77,7 @@ describe("isIndexableFactCheck", () => {
         hasCandidacy: true,
         hasClaimDayVotes: true,
         hasThemeVotes: true,
+        hasThemeProgramme: true,
       })
     ).toBe(false);
   });

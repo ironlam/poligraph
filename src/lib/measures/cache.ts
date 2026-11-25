@@ -26,7 +26,13 @@ export function invalidateMeasureTags(
   } = {}
 ): void {
   try {
-    const tags = [`measure:${measureId}`, `election-measures:${electionId}`];
+    // The election tag reaches fact-check contexts, including an empty programme block.
+    // The narrow tag reaches sitemap shard 6 without purging other page families.
+    const tags = [
+      `measure:${measureId}`,
+      `election-measures:${electionId}`,
+      "factcheck-programmes",
+    ];
     if (visibilityReduced && candidacyId) {
       // Other fiches can display this candidacy's measures as related suggestions.
       tags.push(`candidacy-measure-visibility:${candidacyId}`);

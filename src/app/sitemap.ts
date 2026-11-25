@@ -1135,8 +1135,8 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
 // Sitemap 6: fact-checks that carry Poligraph's own context (priority 0.5). The rule is
 // isIndexableFactCheck() from src/lib/seo/factcheck-robots.ts, fed by getFactCheckContext():
 // exactly one claimant on a published profile, a block specific to the claim (a vote of the author
-// on the UTC day of the claim, or on scrutins of the claim's validated theme) AND a block that
-// situates the author (a record of FACTCHECK_RECORD_MIN_TOTAL public fact-checks or more, or a
+// on the UTC day of the claim, votes or published programme measures on its validated theme)
+// AND a block that situates the author (a record of FACTCHECK_RECORD_MIN_TOTAL public fact-checks or more, or a
 // sourced 2027 candidacy). Keep both in sync. The other fact-checks are noindex,follow on the page
 // and stay out of this list. The shard also lists the indexable landing pages
 // /factchecks/politique/[slug] (priority 0.6).
@@ -1178,6 +1178,21 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
             WHERE v."politicianId" = c."politicianId"
               AND v."position"::text IN (${Prisma.join([...PARTICIPATION_POSITIONS])})
               AND s."theme" = fc."theme"
+          ))
+        OR (fc."themeReviewedAt" IS NOT NULL
+          AND fc."theme"::text IN (${Prisma.join([...SCRUTIN_THEMES])})
+          AND EXISTS (
+            SELECT 1 FROM "Measure" me
+            JOIN "Candidacy" ca ON ca."id" = me."candidacyId"
+            JOIN "Election" ce ON ce."id" = ca."electionId"
+            JOIN "Election" e ON e."id" = me."electionId"
+            JOIN "MeasureRevision" mr ON mr."id" = me."publishedRevisionId"
+            WHERE ca."politicianId" = c."politicianId"
+              AND ce."slug" = ${PRESIDENTIELLE_2027_SLUG}
+              AND e."slug" = ${PRESIDENTIELLE_2027_SLUG}
+              AND me."publicationStatus" = 'PUBLISHED'
+              AND me."withdrawnAt" IS NULL
+              AND me."theme" = fc."theme"
           ))
       )
       -- A block that situates the author.

@@ -39,7 +39,8 @@ export const SITEMAP_SHARD_TAGS = {
   5: ["politicians", "territoires", "elections"],
   // Indexable fact-checks. "politicians": the author's publication and current party; "votes": the
   // claim-day block; "elections": the presidential candidacy block.
-  6: ["factchecks", "politicians", "votes", "elections"],
+  // "factcheck-programmes": publication changes can add or remove the claim-specific block.
+  6: ["factchecks", "politicians", "votes", "elections", "factcheck-programmes"],
 } as const satisfies Record<SitemapShardId, readonly SelectableCacheTag[]>;
 
 /**

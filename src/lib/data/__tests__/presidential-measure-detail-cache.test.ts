@@ -101,7 +101,11 @@ describe("page mesure : tags de cache", () => {
       candidacyId: "candidacy-2",
     });
 
-    const publicationTags = ["measure:measure-2", "election-measures:election-1"];
+    const publicationTags = [
+      "measure:measure-2",
+      "election-measures:election-1",
+      "factcheck-programmes",
+    ];
     const removalTag = "candidacy-measure-visibility:candidacy-2";
     expect(tags()).toContain(removalTag);
     expect(mocks.revalidateTags).toHaveBeenNthCalledWith(1, publicationTags, undefined);
