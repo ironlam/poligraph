@@ -7,6 +7,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ProfileReturnLink } from "@/components/governments/ProfileReturnLink";
 import { ParrainagesFiche } from "@/components/parrainages/ParrainagesFiche";
 import { getPoliticianProfile } from "@/lib/data/politician-profile";
+import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
 import { loadParliamentaryPath } from "@/lib/data/politician-parliamentary-path";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
@@ -48,7 +49,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return missingEntityMetadata("Politicien non trouvé");
   }
 
-  return buildPoliticianMetadata(profile.identity, slug);
+  // Both reads are the page's own cache entries: the snippet costs no extra query.
+  const candidacy = await getPoliticianPresidentialCandidacy(profile.identity.id);
+  return buildPoliticianMetadata(profile.identity, slug, {
+    voteStats: profile.voteStats,
+    candidacy,
+  });
 }
 
 export default async function PoliticianPage({ params }: PageProps) {
