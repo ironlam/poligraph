@@ -4,6 +4,7 @@ import { Collapsible } from "@/components/territoires/CommuneSections";
 import { LigneSource } from "@/components/territoires/LigneSource";
 import type { Barreau } from "@/lib/territoires/echelle";
 import { formatDateFrUTC } from "@/lib/utils";
+import { SECTION_TITRE, SECTION } from "@/components/territoires/classes";
 
 /** "Commune, intercommunalité, département et région": the rungs, as the folded summary. */
 export function echelleResume(barreaux: Barreau[]): string {
@@ -20,8 +21,8 @@ export function echelleResume(barreaux: Barreau[]): string {
 export function EchelleTerritoires({ barreaux }: { barreaux: Barreau[] }) {
   if (barreaux.length === 0) return null;
   return (
-    <section aria-labelledby="echelle-titre" className="rounded-2xl border bg-card p-5">
-      <h2 id="echelle-titre" className="mb-3 font-display text-lg font-bold text-primary">
+    <section aria-labelledby="echelle-titre" className={SECTION}>
+      <h2 id="echelle-titre" className={`mb-3 ${SECTION_TITRE}`}>
         Qui s{"'"}occupe de quoi
       </h2>
       <Collapsible summary={echelleResume(barreaux)}>

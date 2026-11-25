@@ -108,8 +108,10 @@ describe("Le territoire en chiffres", () => {
     const { doc } = render(
       base({ reperes: [row("age_tranche_0_14", null), row("age_tranche_15_29", 20)] })
     );
-    const cells = [...doc.querySelectorAll("table td")].map((c) => c.textContent);
+    const cells = [...doc.querySelectorAll("table td:last-child")].map((c) => c.textContent);
     expect(cells[0]).toBe("non établi");
+    // No bar for a band that is not established.
+    expect(doc.querySelector("table tr")?.querySelector("[aria-hidden]")).toBeNull();
     expect(cells).not.toContain("0,0 %");
   });
 
@@ -117,7 +119,7 @@ describe("Le territoire en chiffres", () => {
     const recent = row("age_tranche_0_14", 17, { periodEnd: "2022-12-31" });
     const old = row("age_tranche_0_14", 99, { periodStart: "2016-01-01", periodEnd: "2016-12-31" });
     const { doc } = render(base({ reperes: [recent, old] }));
-    const cells = [...doc.querySelectorAll("table td")].map((c) => c.textContent);
+    const cells = [...doc.querySelectorAll("table td:last-child")].map((c) => c.textContent);
     expect(cells[0]?.replace(/\s/g, " ")).toBe("17,0 %");
     expect(cells.join(" ")).not.toContain("99");
   });
@@ -130,7 +132,7 @@ describe("Le territoire en chiffres", () => {
       source: { ...source, methodSlug: "climat" },
     });
     const { text, doc } = render(base({ reperes: [climat] }));
-    expect(text).toContain("Environnement");
+    expect(text).toContain("Climat, moyennes de la station");
     expect(text).toContain("Station de l'Aérodrome du Val Fictif, à 14 km");
     expect(text).toContain("11,8 °C");
     expect(doc.querySelector('a[href="/territoires/methode/climat"]')).not.toBeNull();
@@ -155,17 +157,19 @@ describe("Le territoire en chiffres", () => {
     ]);
   });
 
-  it("replie chaque thème, démographie comprise, sans retirer les chiffres du HTML", () => {
+  it("montre sans dépliage la structure par âge et le climat, et replie le reste", () => {
     const climat = row("climat_temp_moyenne", 11.8, { unit: "°C", scopeKind: "STATION" });
     const { doc } = render(base({ reperes: [row("age_tranche_0_14", 17), climat] }));
     const volets = [...doc.querySelectorAll("details")];
-    expect(volets.map((d) => d.querySelector("summary")?.textContent)).toEqual([
-      "Démographie",
-      "Environnement",
-    ]);
+    expect(volets.map((d) => d.querySelector("summary")?.textContent)).toEqual(["Démographie"]);
     expect(volets.every((d) => !d.hasAttribute("open"))).toBe(true);
-    expect(volets[1]!.textContent).toContain("11,8 °C");
-    expect(doc.querySelector("table")?.closest("details")).toBe(volets[0]);
+    expect(doc.querySelector("table")?.closest("details")).toBeNull();
+    const tuile = [...doc.querySelectorAll("li")].find((li) => li.textContent?.includes("11,8"));
+    expect(tuile?.closest("details")).toBeNull();
+    // The bar repeats the written share: hidden from assistive technology.
+    expect(doc.querySelector("table [aria-hidden='true']")).not.toBeNull();
+    // Icons are decorative.
+    expect([...doc.querySelectorAll("svg")].every((s) => s.getAttribute("aria-hidden"))).toBe(true);
   });
 
   it("affiche la période propre à la station, pas 1991-2020 par défaut", () => {

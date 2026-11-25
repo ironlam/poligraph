@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { ArrowRight, ChevronRight } from "lucide-react";
+import { VOTING_RESULT_COLORS } from "@/config/labels";
 import { ROUTES } from "@/config/routes";
 import { formatDateShort } from "@/lib/utils";
 import type { VotesDeputes } from "@/lib/data/territoire-votes";
 import { decompteEnMots, positionEnMots } from "@/lib/territoires/votes-parlementaires";
+import { LIEN, LIEN_BLOC, SECTION, SECTION_TITRE } from "@/components/territoires/classes";
 
-const LINK = "underline underline-offset-2 hover:text-primary";
+const LINK = LIEN;
 
 export type VotesMode =
   /** Commune with one established deputy: the name and the position in words. */
@@ -30,14 +33,23 @@ function Scrutins({
           <Link
             href={ROUTES.voteDetail(s.slug)}
             prefetch={false}
-            className={`flex min-h-11 items-center text-sm font-medium ${LINK}`}
+            className="flex min-h-11 items-start justify-between gap-2 text-sm font-medium hover:text-link"
           >
-            {/* An official title starts in lower case (« l'ensemble du projet de loi... »). */}
-            <span className="block first-letter:uppercase">{s.titre}</span>
+            {/* An official title starts in lower case (« l'ensemble du projet de loi... »). Three
+                lines at most: the full title is in the HTML and on the scrutin page. */}
+            <span className="line-clamp-3 first-letter:uppercase">{s.titre}</span>
+            <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-link" aria-hidden="true" />
           </Link>
-          <p className="text-xs text-muted-foreground">
-            {s.nature && `${s.nature} · `}
-            {s.resultat} · <time dateTime={s.date}>{formatDateShort(s.date)}</time>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            {s.nature && <span>{s.nature}</span>}
+            {/* The outcome of the scrutin, a fact: the tone is the one of the Parlement pages,
+                and the word is always written. Never a tone on a position. */}
+            <span
+              className={`rounded-full px-2 py-0.5 font-semibold ${VOTING_RESULT_COLORS[s.adopte ? "ADOPTED" : "REJECTED"]}`}
+            >
+              {s.resultat}
+            </span>
+            <time dateTime={s.date}>{formatDateShort(s.date)}</time>
           </p>
           {mode.kind === "depute" && (
             <p className="mt-1 text-sm">
@@ -81,12 +93,8 @@ export function VotesParlementaires({
   if (votes.scrutins.length === 0) return null;
   if (mode.kind === "decompte" && votes.deputeSlugs.length === 0) return null;
   return (
-    <section
-      id="votes"
-      aria-labelledby="votes-titre"
-      className="scroll-mt-32 rounded-2xl border bg-card p-5 md:p-6"
-    >
-      <h2 id="votes-titre" className="font-display text-xl font-bold text-primary md:text-2xl">
+    <section id="votes" aria-labelledby="votes-titre" className={SECTION}>
+      <h2 id="votes-titre" className={SECTION_TITRE}>
         Vos parlementaires ont voté
       </h2>
       {senat && senat.scrutins.length > 0 && senat.deputeSlugs.length > 0 ? (
@@ -117,12 +125,9 @@ export function VotesParlementaires({
         </p>
       )}
       <p className="text-sm">
-        <Link
-          href={ROUTES.votes}
-          prefetch={false}
-          className={`inline-flex min-h-11 items-center ${LINK}`}
-        >
+        <Link href={ROUTES.votes} prefetch={false} className={LIEN_BLOC}>
           Tous les votes
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       </p>
     </section>

@@ -5,6 +5,7 @@ import { getJuridictionFinanciere, RAPPORT_CRC_REPONSE } from "@/config/juridict
 import type { FilEvenement } from "@/lib/data/territoire-fil";
 import { phraseEvenement } from "@/lib/territoires/evenements";
 import { TERRITOIRES_METHODE_RAPPORTS_CRC_PATH } from "@/lib/territoires/paths";
+import { SECTION_TITRE, SECTION } from "@/components/territoires/classes";
 
 /** Reports shown before the rest folds. */
 export const RAPPORTS_CRC_VISIBLES = 3;
@@ -45,8 +46,8 @@ export function RapportsCrc({ rapports }: { rapports: FilEvenement[] }) {
   const visibles = rapports.slice(0, RAPPORTS_CRC_VISIBLES);
   const replies = rapports.slice(RAPPORTS_CRC_VISIBLES);
   return (
-    <section aria-labelledby="rapports-crc" className="rounded-2xl border bg-card p-5">
-      <h2 id="rapports-crc" className="font-display text-lg font-bold text-primary">
+    <section aria-labelledby="rapports-crc" className={SECTION}>
+      <h2 id="rapports-crc" className={SECTION_TITRE}>
         Rapports de la chambre {territoriale ? "territoriale" : "régionale"} des comptes
       </h2>
       <ul className="mt-3 divide-y divide-border">

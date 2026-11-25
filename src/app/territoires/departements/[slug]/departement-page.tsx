@@ -114,7 +114,7 @@ export async function DepartementPageBody({
           ...(agir ? [{ href: "#agir", label: "Agir" }] : []),
         ]}
       />
-      <div className="container mx-auto grid max-w-6xl items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
+      <div className="territoire-lecture container mx-auto grid max-w-6xl items-start gap-5 px-4 pt-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-6">
         <div className="flex min-w-0 flex-col gap-5">
           <FilTerritoire evenements={fil} />
           <DepartementConseil territoire={territoire} />

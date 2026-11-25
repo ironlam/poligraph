@@ -89,6 +89,7 @@ describe("getVotesDeputesDepartement", () => {
     expect(scrutins[0]).toMatchObject({
       nature: "Texte final",
       resultat: "Rejeté",
+      adopte: false,
       date: "2026-11-12",
     });
   });

@@ -107,7 +107,7 @@ export default async function RegionPage({ params }: PageProps) {
     <>
       <RegionBandeau data={data} />
       <TerritoireOnglets onglets={onglets} />
-      <div className="container mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="territoire-lecture container mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
           <FilTerritoire evenements={fil} />
           <RegionCollectivites data={data} />

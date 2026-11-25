@@ -13,6 +13,7 @@ import {
   formatMontant,
 } from "@/lib/territoires/comptes-phrase";
 import { formatDateFrUTC } from "@/lib/utils";
+import { LIEN } from "@/components/territoires/classes";
 
 /**
  * Series of "Les comptes de la collectivité", 2018 to the last exercise: one small table per
@@ -20,7 +21,7 @@ import { formatDateFrUTC } from "@/lib/utils";
  * component. A figure that is not established reads "Non établi", its reason under the table.
  */
 
-const LINK = "underline underline-offset-2 hover:text-primary";
+const LINK = LIEN;
 
 function cell(v: CompteValeur, format: (n: number) => string) {
   return v.value === null ? (

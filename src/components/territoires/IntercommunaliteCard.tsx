@@ -2,6 +2,7 @@ import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import type { CommuneDossier, SourceRef } from "@/lib/data/territoires";
 import type { IntercommunaliteBlock } from "@/lib/data/territoires-intercommunalites";
 import { formatDateFrUTC } from "@/lib/utils";
+import { SOUS_BLOC } from "@/components/territoires/classes";
 
 /**
  * Intercommunality of a commune (#1052, lot 1.8): name, nature in words, situation date and
@@ -92,7 +93,7 @@ export function IntercommunaliteCard({ dossier }: { dossier: CommuneDossier }) {
   }
 
   return (
-    <div className="rounded-xl border p-4">
+    <div className={SOUS_BLOC}>
       <p className="text-sm text-muted-foreground">{label}</p>
       {body}
     </div>

@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import {
+  ChevronDown,
+  CloudRain,
+  Home,
+  Leaf,
+  Shield,
+  Thermometer,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { SectionCard } from "@/components/territoires/CommuneSections";
 import { LigneSource, type LigneSourceItem } from "@/components/territoires/LigneSource";
 import {
@@ -17,6 +26,7 @@ import type { RepereRow, RepereState } from "@/lib/data/territoire-reperes";
 import { formatPct, formatPopulation } from "@/lib/territoires/commune-display";
 import { evolutionSentence, type EvolutionRefusal } from "@/lib/territoires/population-evolution";
 import { populationVintageLabel, formatEffectiveDate } from "@/lib/territoires/population-label";
+import { LIEN, SOUS_BLOC } from "@/components/territoires/classes";
 
 /**
  * "Le territoire en chiffres" (#1052, kit v3). Server component, no client state.
@@ -24,9 +34,13 @@ import { populationVintageLabel, formatEffectiveDate } from "@/lib/territoires/p
  * It describes the territory and never its elected officials: its props carry no politician, no
  * mandate, no party. One neutral palette, no semantic colour, no score, no ranking. A figure that
  * is not established is said in words, with a dashed border, and is never rendered as a zero.
+ *
+ * The age structure and the climate averages are read without a tap, as bars and tiles; the
+ * population (already in the banner) and the water analyses are one tap away. Icons name a theme
+ * and are decorative: every figure keeps its label in words.
  */
 
-const LINK = "underline underline-offset-2 hover:text-primary";
+const LINK = LIEN;
 const TAP = "inline-flex min-h-11 items-center";
 
 const STATE_WORDS: Record<Exclude<RepereState, "ETABLI">, string> = {
@@ -55,7 +69,7 @@ function Card({
   established?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border p-4 ${established ? "" : "border-dashed"}`}>
+    <div className={established ? "" : "rounded-xl border border-dashed p-4"}>
       <h4 className="text-sm text-muted-foreground">{title}</h4>
       {children}
       <p className="mt-2 text-sm">
@@ -88,36 +102,74 @@ function PopulationCard({ chiffres }: { chiffres: CommuneChiffres }) {
   );
 }
 
-function AgeCard({ rows }: { rows: RepereRow[] }) {
+const METHODE = `${TAP} ${LINK}`;
+
+const THEME_ICONS: Record<RepereTheme, LucideIcon> = {
+  DEMOGRAPHIE: Users,
+  LOGEMENT: Home,
+  ENVIRONNEMENT: Leaf,
+  SECURITE: Shield,
+};
+
+const CLIMAT_ICONS: Record<string, LucideIcon> = {
+  climat_temp_moyenne: Thermometer,
+  climat_precipitations: CloudRain,
+};
+
+/** Bars on the scale of the widest band: they compare the bands of one commune, nothing else. */
+function AgeBars({ rows }: { rows: RepereRow[] }) {
   const byKey = new Map(rows.map((r) => [r.indicatorKey, r]));
   const first = rows[0];
   if (!first) return null;
+  const valueOf = (key: string) => {
+    const row = byKey.get(key);
+    return row?.value != null && row.state !== "NON_ETABLI" ? row.value : null;
+  };
+  const max = Math.max(0, ...AGE_BANDS.map((band) => valueOf(band.key) ?? 0));
   return (
-    <Card title="Structure par âge" methodSlug="structure-par-age">
-      <table className="mt-1 w-full text-sm">
+    <div>
+      <h3 className="flex items-center gap-2 font-semibold">
+        <Users className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+        Structure par âge
+      </h3>
+      <table className="mt-2 w-full text-sm">
         <caption className="sr-only">Part de chaque tranche d{"'"}âge dans la population</caption>
         <tbody>
           {AGE_BANDS.map((band) => {
-            const row = byKey.get(band.key);
+            const value = valueOf(band.key);
             return (
-              <tr key={band.key} className="border-b last:border-0">
-                <th scope="row" className="py-1 pr-3 text-left font-normal">
+              <tr key={band.key}>
+                <th scope="row" className="whitespace-nowrap py-1 pr-3 text-left font-normal">
                   {band.label}
                 </th>
-                <td className="py-1 text-right tabular-nums">
-                  {row?.value != null && row.state !== "NON_ETABLI"
-                    ? formatPct(row.value)
-                    : "non établi"}
+                <td className="w-full py-1">
+                  {value !== null && max > 0 && (
+                    <div
+                      aria-hidden="true"
+                      className="h-2 overflow-hidden rounded-full bg-primary/15"
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${Math.round((value / max) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </td>
+                <td className="whitespace-nowrap py-1 pl-3 text-right font-semibold tabular-nums">
+                  {value !== null ? formatPct(value) : "non établi"}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Du {formatEffectiveDate(first.periodStart)} au {formatEffectiveDate(first.periodEnd)}.
+      <p className="text-xs text-muted-foreground">
+        Du {formatEffectiveDate(first.periodStart)} au {formatEffectiveDate(first.periodEnd)}.{" "}
+        <Link href={repereMethodePath("structure-par-age")} prefetch={false} className={METHODE}>
+          Méthode
+        </Link>
       </p>
-    </Card>
+    </div>
   );
 }
 
@@ -165,26 +217,36 @@ function periodYears(row: RepereRow): string {
   return `${row.periodStart.slice(0, 4)}-${row.periodEnd.slice(0, 4)}`;
 }
 
-function ClimatCard({ rows }: { rows: RepereRow[] }) {
+function ClimatTuiles({ rows }: { rows: RepereRow[] }) {
   if (rows.length === 0) return null;
   const station = rows.find((r) => r.scopeLabel)?.scopeLabel ?? null;
   return (
-    <Card title="Climat, moyennes de la station" methodSlug="climat">
-      {station && <p className="text-sm">{station}</p>}
-      <ul className="mt-1 space-y-1">
-        {rows.map((row) => (
-          <li key={row.indicatorKey} className="text-sm">
-            <span className="text-muted-foreground">
-              {repereIndicator(row.indicatorKey)?.label ?? row.indicatorKey} :{" "}
-            </span>
-            <span className="font-semibold tabular-nums">{valueText(row)}</span>
-            {row.value !== null && (
-              <span className="text-muted-foreground"> (sur {periodYears(row)})</span>
-            )}
-          </li>
-        ))}
+    <div>
+      <h3 className="sr-only">Climat, moyennes de la station</h3>
+      <ul className="grid grid-cols-2 gap-3">
+        {rows.map((row) => {
+          const Icon = CLIMAT_ICONS[row.indicatorKey];
+          return (
+            <li key={row.indicatorKey} className={SOUS_BLOC}>
+              {Icon && <Icon className="mb-1 h-6 w-6 text-primary" aria-hidden="true" />}
+              <p className="font-display text-2xl font-bold tabular-nums text-primary">
+                {valueText(row)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {repereIndicator(row.indicatorKey)?.label ?? row.indicatorKey}
+                {row.value !== null && ` (sur ${periodYears(row)})`}
+              </p>
+            </li>
+          );
+        })}
       </ul>
-    </Card>
+      <p className="text-xs text-muted-foreground">
+        {station && `${station}. `}
+        <Link href={repereMethodePath("climat")} prefetch={false} className={METHODE}>
+          Méthode
+        </Link>
+      </p>
+    </div>
   );
 }
 
@@ -247,29 +309,28 @@ export function TerritoireChiffres({ chiffres }: { chiffres: CommuneChiffres }) 
   const { ageRows, climatRows, eauRows } = rowsOf(chiffres);
   const themes: { theme: RepereTheme; cards: React.ReactNode }[] = [];
 
+  // The population card also says in words that a population is not established.
   if (chiffres.population || ageRows.length > 0) {
     themes.push({
       theme: "DEMOGRAPHIE",
       cards: (
         <>
           <PopulationCard chiffres={chiffres} />
-          <AgeCard rows={ageRows} />
         </>
       ),
     });
   }
-  if (climatRows.length > 0 || eauRows.length > 0) {
+  if (eauRows.length > 0) {
     themes.push({
       theme: "ENVIRONNEMENT",
       cards: (
         <>
           <EauCard rows={eauRows} />
-          <ClimatCard rows={climatRows} />
         </>
       ),
     });
   }
-  if (themes.length === 0) return null;
+  if (themes.length === 0 && ageRows.length === 0 && climatRows.length === 0) return null;
 
   // Producers of the block, linked ones first. The population names its producer without a link,
   // and is not repeated when a linked row already names it ("INSEE", "Insee").
@@ -289,22 +350,31 @@ export function TerritoireChiffres({ chiffres }: { chiffres: CommuneChiffres }) 
         les sources sont détaillées dans « Sources de cette page ».
       </p>
       <div className="space-y-5">
-        {themes.map(({ theme, cards }) => (
-          // Every theme folded, demography included: the commune page stays short on a phone,
-          // and the figures stay in the served HTML.
-          <details key={theme} className="group rounded-xl border">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
-              <h3 id={`chiffres-${theme}`} className="font-display text-lg font-bold">
-                {REPERE_THEME_LABELS[theme]}
-              </h3>
-              <ChevronDown
-                className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
-                aria-hidden="true"
-              />
-            </summary>
-            <div className="grid gap-3 border-t p-3 md:grid-cols-2">{cards}</div>
-          </details>
-        ))}
+        <AgeBars rows={ageRows} />
+        <ClimatTuiles rows={climatRows} />
+        {themes.map(({ theme, cards }) => {
+          const Icon = THEME_ICONS[theme];
+          return (
+            // Folded: the commune page stays short on a phone, and the figures stay in the served
+            // HTML.
+            <details key={theme} className="group rounded-xl border">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+                <h3
+                  id={`chiffres-${theme}`}
+                  className="flex items-center gap-2 font-display text-lg font-bold"
+                >
+                  <Icon className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                  {REPERE_THEME_LABELS[theme]}
+                </h3>
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                  aria-hidden="true"
+                />
+              </summary>
+              <div className="border-t p-4">{cards}</div>
+            </details>
+          );
+        })}
       </div>
       <LigneSource className="mt-4" sources={sources} />
     </SectionCard>

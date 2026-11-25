@@ -14,6 +14,7 @@ const votes = (
       titre: "l'ensemble du projet de loi",
       nature: "Texte final",
       resultat: "Adopté",
+      adopte: true,
       date: "2026-11-12",
       positions,
       sansVote: [],
@@ -29,6 +30,29 @@ describe("VotesParlementaires", () => {
     ).toBe("");
   });
 
+  it("donne au résultat le ton du site : vert adopté, rouge rejeté, jamais sur une position", () => {
+    const rejete = votes("s-an", { a: "POUR" });
+    rejete.scrutins[0] = { ...rejete.scrutins[0]!, resultat: "Rejeté", adopte: false };
+    const { container } = render(
+      <VotesParlementaires
+        votes={rejete}
+        mode={{ kind: "depute", depute: { slug: "a", fullName: "Claire Martin" } }}
+      />
+    );
+    const tons = [...container.querySelectorAll("[class*='red'], [class*='green']")];
+    expect(tons.map((e) => e.textContent)).toEqual(["Rejeté"]);
+    expect(tons[0]!.className).toContain("red");
+  });
+
+  it("garde une cible tactile de 44 px sur chaque lien, même dans une phrase", () => {
+    const { container } = render(
+      <VotesParlementaires votes={votes("s-an", { a: "POUR" })} mode={{ kind: "renvoi" }} />
+    );
+    const liens = [...container.querySelectorAll("a")];
+    expect(liens.map((a) => a.textContent)).toContain("Mon député");
+    expect(liens.every((a) => a.className.includes("min-h-11"))).toBe(true);
+  });
+
   it("commune : nomme le député et dit sa position en mots", () => {
     const { container } = render(
       <VotesParlementaires
@@ -37,7 +61,10 @@ describe("VotesParlementaires", () => {
       />
     );
     expect(container.textContent).toContain("Claire Martin : contre");
-    expect(container.textContent).toContain("Texte final · Adopté");
+    expect(container.textContent).toContain("Texte final");
+    // The outcome is written in words, in a badge.
+    const badge = [...container.querySelectorAll("span")].find((s) => s.textContent === "Adopté");
+    expect(badge?.className).toContain("rounded-full");
     expect(container.querySelector('a[href="/parlement/votes/s-an"]')).not.toBeNull();
     expect(container.querySelector("h3")).toBeNull();
   });

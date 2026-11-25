@@ -7,8 +7,9 @@ import { TERRITOIRES_DONNEES_PATH, territoireDepartementPath } from "@/lib/terri
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
 import { Executif } from "@/components/territoires/Executif";
 import { rangsExecutif } from "@/lib/territoires/executif";
+import { SECTION, SECTION_TITRE } from "@/components/territoires/classes";
 
-const CARD = "scroll-mt-32 rounded-xl border border-border bg-card p-4 sm:p-6";
+const CARD = SECTION;
 
 function SourceLink({ source }: { source: SourceRef }) {
   if (!source.url) return <>{source.label}</>;
@@ -32,7 +33,7 @@ export function RegionConseil({ data }: { data: RegionTerritoire }) {
   if (data.collectivitesParticulieres.length > 0) return null;
   return (
     <section id="conseil" aria-labelledby="conseil-regional-titre" className={CARD}>
-      <h2 id="conseil-regional-titre" className="font-display text-xl font-extrabold text-primary">
+      <h2 id="conseil-regional-titre" className={SECTION_TITRE}>
         Conseil régional
       </h2>
       <div className="mt-3">
@@ -58,7 +59,7 @@ export function RegionConseil({ data }: { data: RegionTerritoire }) {
 export function RegionDepartements({ data }: { data: RegionTerritoire }) {
   return (
     <section id="departements" aria-labelledby="departements-titre" className={CARD}>
-      <h2 id="departements-titre" className="font-display text-xl font-extrabold text-primary">
+      <h2 id="departements-titre" className={SECTION_TITRE}>
         Départements
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">Ordre alphabétique.</p>
@@ -102,7 +103,7 @@ export function RegionCollectivites({ data }: { data: RegionTerritoire }) {
   if (data.collectivitesParticulieres.length === 0) return null;
   return (
     <section id="collectivite" aria-labelledby="collectivite-titre" className={CARD}>
-      <h2 id="collectivite-titre" className="font-display text-xl font-extrabold text-primary">
+      <h2 id="collectivite-titre" className={SECTION_TITRE}>
         Collectivité compétente
       </h2>
       <ul className="mt-3 space-y-4">
@@ -130,7 +131,7 @@ export function RegionElections({ elections }: { elections: RegionElection[] }) 
   if (elections.length === 0) return null;
   return (
     <section id="elections" aria-labelledby="elections-titre" className={CARD}>
-      <h2 id="elections-titre" className="font-display text-xl font-extrabold text-primary">
+      <h2 id="elections-titre" className={SECTION_TITRE}>
         Élections
       </h2>
       <ul className="mt-3 divide-y divide-border">
@@ -161,7 +162,7 @@ export function RegionElections({ elections }: { elections: RegionElection[] }) 
 export function RegionParlement({ data }: { data: RegionTerritoire }) {
   return (
     <section id="parlement" aria-labelledby="parlement-titre" className={CARD}>
-      <h2 id="parlement-titre" className="font-display text-lg font-extrabold text-primary">
+      <h2 id="parlement-titre" className={SECTION_TITRE}>
         Au Parlement
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
@@ -217,7 +218,7 @@ function coverageText(entry: CoverageEntry): string {
 export function RegionCouverture({ data }: { data: RegionTerritoire }) {
   return (
     <section aria-labelledby="couverture-titre" className={CARD}>
-      <h2 id="couverture-titre" className="font-display text-lg font-extrabold text-primary">
+      <h2 id="couverture-titre" className={SECTION_TITRE}>
         Informations disponibles
       </h2>
       <ul className="mt-2 space-y-2 text-sm">
@@ -243,7 +244,7 @@ export function RegionCouverture({ data }: { data: RegionTerritoire }) {
 export function RegionReutiliser({ apiPath }: { apiPath: string }) {
   return (
     <section aria-labelledby="reutiliser-titre" className={CARD}>
-      <h2 id="reutiliser-titre" className="font-display text-lg font-extrabold text-primary">
+      <h2 id="reutiliser-titre" className={SECTION_TITRE}>
         Réutiliser
       </h2>
       <ul className="mt-2 text-sm">

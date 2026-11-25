@@ -9,6 +9,7 @@ export function MesureBarre({
   ratio,
   detail,
   nonEtabli,
+  vedette = false,
 }: {
   label: string;
   /** Written value, e.g. "934 €". Null when not established. */
@@ -19,17 +20,25 @@ export function MesureBarre({
   detail?: string | null;
   /** Reason shown in place of a figure that is not established. */
   nonEtabli?: string;
+  /** The figure a block puts forward: larger, one per block. */
+  vedette?: boolean;
 }) {
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <span className="text-sm">{label}</span>
-        {valeur !== null && <b className="font-display tabular-nums">{valeur}</b>}
+        {valeur !== null && (
+          <b
+            className={`whitespace-nowrap font-display tabular-nums text-primary ${vedette ? "text-3xl" : "text-xl"}`}
+          >
+            {valeur}
+          </b>
+        )}
       </div>
       {valeur !== null && ratio !== null && (
-        <div aria-hidden="true" className="h-2 overflow-hidden rounded bg-primary/15">
+        <div aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-primary/15">
           <div
-            className="h-full rounded bg-primary"
+            className="h-full rounded-full bg-primary"
             style={{ width: `${Math.round(Math.min(1, Math.max(0, ratio)) * 100)}%` }}
           />
         </div>
