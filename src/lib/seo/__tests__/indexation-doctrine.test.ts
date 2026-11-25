@@ -604,7 +604,9 @@ describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => 
   });
 
   it("joint le programme au même auteur, à la même élection et au même thème", () => {
-    const helper = readFileSync(join(process.cwd(), "src/lib/seo/factcheck-robots.ts"), "utf8");
+    const helper = readFileSync(join(process.cwd(), "src/lib/seo/factcheck-robots.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "");
     const predicate = helper.match(/function hasClaimSpecificBlock[\s\S]*?\n\}/)?.[0];
     expect(predicate).toContain("signals.hasThemeProgramme");
     const start = factChecksShard.indexOf('SELECT 1 FROM "Measure" me');

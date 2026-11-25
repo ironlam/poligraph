@@ -602,8 +602,8 @@ export async function queryFactCheckContext(
 
 /**
  * Cached entry point. Tags: the fact-checks themselves, the author's profile, the votes of the
- * claim day, the elections, and the measures and candidacies of the presidential election, keyed on its id like
- * the candidate fiche so that a candidacy edit reaches this page. The id is read inside the cached
+ * claim day, the elections, and the presidential measures and candidacies, keyed on the election
+ * id like the candidate fiche so that a publication or candidacy edit reaches this page. The id is read inside the cached
  * scope rather than through `getPresidentialElectionId`, whose module also reads affairs: this page
  * shows none, and the MCP surface inventory would count it as an Affair surface.
  */
