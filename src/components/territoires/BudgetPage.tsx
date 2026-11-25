@@ -33,7 +33,7 @@ export function BudgetPage({
   const phrase = comptesPhrase(comptes, scale);
   const seule = scale === "COM" ? communeSeuleLigne(intercommunalites) : null;
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-6 md:py-8">
+    <div className="territoire-lecture container mx-auto max-w-3xl px-4 py-6 md:py-8">
       <nav aria-label="Fil d'Ariane" className="text-sm">
         <Link
           href={retour.href}

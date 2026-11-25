@@ -150,7 +150,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
       <CommuneBandeau dossier={dossier} />
       <TerritoireOnglets onglets={onglets} />
 
-      <div className="container mx-auto max-w-6xl px-4 py-6 md:py-8">
+      <div className="territoire-lecture container mx-auto max-w-6xl px-4 py-6 md:py-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0 space-y-6">
             <FilTerritoire evenements={fil} />

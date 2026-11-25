@@ -1,6 +1,7 @@
 import { RAPPORT_CRC_REPONSE } from "@/config/juridictions-financieres";
 import type { FilEvenement } from "@/lib/data/territoire-fil";
 import { phraseEvenement } from "@/lib/territoires/evenements";
+import { SECTION_TITRE, SECTION } from "@/components/territoires/classes";
 
 const MOIS = [
   "janv.",
@@ -30,8 +31,8 @@ export function dateCourte(iso: string): string {
 export function FilTerritoire({ evenements }: { evenements: FilEvenement[] }) {
   if (evenements.length === 0) return null;
   return (
-    <section aria-labelledby="fil-territoire" className="rounded-2xl border bg-card p-5">
-      <h2 id="fil-territoire" className="font-display text-lg font-bold text-primary">
+    <section aria-labelledby="fil-territoire" className={SECTION}>
+      <h2 id="fil-territoire" className={SECTION_TITRE}>
         Dernières nouvelles
       </h2>
       <ul className="mt-3 divide-y divide-border">
@@ -39,11 +40,11 @@ export function FilTerritoire({ evenements }: { evenements: FilEvenement[] }) {
           <li key={e.id} className="pt-3 first:pt-0">
             <time
               dateTime={e.date}
-              className="text-xs font-semibold tabular-nums text-muted-foreground"
+              className="inline-block rounded-md bg-primary px-2 py-0.5 text-xs font-semibold tabular-nums text-primary-foreground"
             >
               {dateCourte(e.date)}
             </time>
-            <p className="text-sm font-medium">{phraseEvenement(e.evenement)}</p>
+            <p className="mt-1 text-sm font-medium">{phraseEvenement(e.evenement)}</p>
             {e.evenement.type === "RAPPORT_CRC" && (
               <p className="text-xs text-muted-foreground">{RAPPORT_CRC_REPONSE}</p>
             )}
@@ -51,10 +52,13 @@ export function FilTerritoire({ evenements }: { evenements: FilEvenement[] }) {
               href={e.source.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex min-h-11 items-center text-xs text-muted-foreground hover:text-primary"
+              className="flex min-h-11 items-center text-[0.75rem] text-muted-foreground hover:text-primary"
             >
               <span>
-                Source : <span className="underline underline-offset-2">{e.source.label}</span>
+                Source :{" "}
+                <span className="underline decoration-dotted underline-offset-2">
+                  {e.source.label}
+                </span>
                 <span className="sr-only"> (nouvel onglet)</span>
               </span>
             </a>

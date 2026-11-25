@@ -15,6 +15,7 @@ import {
   territoireCommunePath,
 } from "@/lib/territoires/paths";
 import { formatDate } from "@/lib/utils";
+import { LIEN } from "@/components/territoires/classes";
 
 /**
  * Dedicated elections page of a commune (#1052; kit ElectionsHistorique.html and its mobile
@@ -23,7 +24,7 @@ import { formatDate } from "@/lib/utils";
  * uncacheable, and every address of every commune was then rendered on each visit.
  */
 
-const LINK = "underline underline-offset-2 hover:text-primary";
+const LINK = LIEN;
 const TAP = "inline-flex min-h-11 items-center";
 
 export function CommuneElectionsBandeau({ inseeCode, name }: { inseeCode: string; name: string }) {

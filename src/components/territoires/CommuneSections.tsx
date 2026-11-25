@@ -40,13 +40,14 @@ import {
 } from "@/lib/territoires/paths";
 import { formatEffectiveDate, populationVintageLabel } from "@/lib/territoires/population-label";
 import type { ChiffresSourceLigne } from "@/components/territoires/TerritoireChiffres";
+import { LIEN, SECTION, SECTION_TITRE, SOUS_BLOC } from "@/components/territoires/classes";
 
 /**
  * Sections of the Territoires commune page (#1052). Server components only: no map, no client
  * state. Every fact carries its source; every missing fact is said in words.
  */
 
-const LINK = "underline underline-offset-2 hover:text-primary";
+const LINK = LIEN;
 const TAP = "inline-flex min-h-11 items-center";
 const RNE_URL = DATA_SOURCE_URLS.RNE;
 
@@ -72,13 +73,9 @@ export function SectionCard({
 }) {
   const headingId = id ? `${id}-titre` : undefined;
   return (
-    <section
-      id={id}
-      aria-labelledby={headingId}
-      className="scroll-mt-32 rounded-2xl border bg-card p-5 md:p-6"
-    >
+    <section id={id} aria-labelledby={headingId} className={SECTION}>
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id={headingId} className="font-display text-xl font-bold md:text-2xl text-primary">
+        <h2 id={headingId} className={SECTION_TITRE}>
           {title}
         </h2>
         {action}
@@ -158,7 +155,7 @@ function MaireBlock({
   }
 
   return (
-    <div className="rounded-xl border p-4">
+    <div className={SOUS_BLOC}>
       <p className="text-sm text-muted-foreground">Maire</p>
       <p className="font-semibold">
         Aucun maire en fonction n{"'"}est enregistré pour {communeName} dans Poligraph.
@@ -226,7 +223,7 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
       )}
 
       {sansCommune ? (
-        <div className="mt-4 rounded-xl border p-4">
+        <div className={`mt-4 ${SOUS_BLOC}`}>
           <p className="text-sm text-muted-foreground">Conseil municipal</p>
           <p className="font-semibold">Pas de conseil municipal</p>
           <p className="mt-1 text-sm">
@@ -235,7 +232,7 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
           </p>
         </div>
       ) : (
-        <div className="mt-4 rounded-xl border p-4">
+        <div className={`mt-4 ${SOUS_BLOC}`}>
           <p className="text-sm text-muted-foreground">Conseil municipal</p>
           {composition && municipales && (
             <div className="mb-4 mt-1 border-b pb-4">
@@ -323,7 +320,7 @@ function DeputeCard({
 }) {
   const noun = deputeNoun(depute.civility);
   return (
-    <div className="rounded-xl border p-4">
+    <div className={SOUS_BLOC}>
       <p className="text-sm text-muted-foreground">
         {formatCirconscription(circo)}, enregistrée pour la commune
       </p>
@@ -503,8 +500,8 @@ export function ElectionsSection({
 
 function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-card p-5">
-      <h2 className="mb-3 font-display text-lg font-bold text-primary">{title}</h2>
+    <section className={SECTION}>
+      <h2 className={`mb-3 ${SECTION_TITRE}`}>{title}</h2>
       {children}
     </section>
   );

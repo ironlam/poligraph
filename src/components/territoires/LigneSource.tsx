@@ -28,7 +28,8 @@ export function LigneSource({
   return (
     <p
       className={cn(
-        "border-l-2 border-primary/20 pl-2 text-xs leading-relaxed text-muted-foreground",
+        // 12 px on every page: the Territoires reading scale shifts `text-xs`, not this line.
+        "border-l-2 border-primary/20 pl-2 text-[0.75rem] leading-relaxed text-muted-foreground",
         className
       )}
     >
@@ -42,7 +43,7 @@ export function LigneSource({
               href={source.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-primary"
+              className="underline decoration-dotted underline-offset-2 hover:text-primary"
             >
               {source.label}
               <span className="sr-only"> (nouvel onglet)</span>
