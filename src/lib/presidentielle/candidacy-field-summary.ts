@@ -104,7 +104,7 @@ export function candidacyFieldLead(summary: CandidacyFieldSummary): string | nul
 
 export type FaqEntry = { question: string; answer: string };
 
-/** The three questions searchers ask about the field, answered from the field itself. */
+/** Short questions about the field, answered from the field itself. */
 export function candidacyFieldFaq(summary: CandidacyFieldSummary): FaqEntry[] {
   const count = summary.announced.length;
   if (count === 0) return [];

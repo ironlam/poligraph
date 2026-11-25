@@ -55,6 +55,10 @@ vi.mock("@/lib/data/politician-candidacy", () => ({
 vi.mock("@/lib/data/politician-profile", () => ({
   getPoliticianProfile: vi.fn(),
 }));
+vi.mock("@/lib/data/hub", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/data/hub")>()),
+  getHubCandidacyField: vi.fn(),
+}));
 
 import { generateMetadata as votesGenerateMetadata } from "@/app/parlement/votes/page";
 import { generateMetadata as presidentialAffairsGenerateMetadata } from "@/app/elections/presidentielle-2027/affaires-judiciaires/page";
@@ -64,6 +68,8 @@ import { metadata as presidentialMeasuresMethodologyMetadata } from "@/app/metho
 import { generateMetadata as candidateFicheGenerateMetadata } from "@/app/elections/presidentielle-2027/candidats/[slug]/page";
 import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
 import { getPoliticianProfile } from "@/lib/data/politician-profile";
+import { generateMetadata as candidatesDirectoryGenerateMetadata } from "@/app/elections/presidentielle-2027/candidats/page";
+import { getHubCandidacyField } from "@/lib/data/hub";
 
 // Living map of the index-bloat doctrine. If any representative surface flips, this
 // file fails: a strong page must never become noindex, a thin one must never become
@@ -171,6 +177,47 @@ describe("doctrine — strong surfaces stay indexable", () => {
     expect(metadata.alternates?.canonical).toBe(
       "/elections/presidentielle-2027/candidats/camille-riviere"
     );
+  });
+
+  // The directory title and description are computed from the tracked field (count, date). That
+  // must not move its verdict: the bare directory stays indexable with its canonical, whatever
+  // the field holds, and its filtered variants stay out (next describe).
+  it("bare presidential candidates directory with a data-driven title stays indexable", async () => {
+    vi.mocked(getHubCandidacyField).mockResolvedValue([
+      {
+        id: "c1",
+        candidateName: "Camille Rivière",
+        politicianSlug: "camille-riviere",
+        photoUrl: null,
+        blobPhotoUrl: null,
+        status: "DECLARE",
+        sourceUrl: "https://example.org/source",
+        sourceLabel: "Source",
+        partyLabel: null,
+        partyColor: null,
+        partyShortName: null,
+        partyLogoUrl: null,
+        measureCount: 0,
+        themesCoveredCount: 0,
+        programmeAbsence: "non_depouille",
+        recordedAt: new Date("2026-11-20T10:00:00Z"),
+      },
+    ]);
+    const metadata = await candidatesDirectoryGenerateMetadata({
+      searchParams: Promise.resolve({}),
+    });
+    expect(metadata.robots).toBeUndefined();
+    expect(metadata.alternates?.canonical).toBe("/elections/presidentielle-2027/candidats");
+    expect(metadata.title).toEqual({
+      absolute: "Candidats présidentielle 2027 : 1 déclaré (liste à jour)",
+    });
+    expect(String(metadata.description)).toContain("20 novembre 2026");
+
+    const filtered = await candidatesDirectoryGenerateMetadata({
+      searchParams: Promise.resolve({ [PRESIDENTIAL_CANDIDATES_FILTER_KEYS[0]!]: "x" }),
+    });
+    expect(filtered.robots).toEqual(NOINDEX_FOLLOW.robots);
+    expect(filtered.alternates?.canonical).toBe("/elections/presidentielle-2027/candidats");
   });
 
   it("rich politician (député)", () => {

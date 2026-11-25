@@ -44,8 +44,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     PRESIDENTIAL_CANDIDATES_FILTER_KEYS
   );
 
-  // The count leads the title and the description: it is the answer most searches ask for, and
-  // without it Google rewrote the snippet from the list itself.
+  // The count leads the title and the description: the page answers "how many" before the list.
   const summary = summarizeCandidacyField(candidacies);
   const title = candidacyFieldTitle(summary);
 
@@ -109,7 +108,7 @@ export default async function PresidentialCandidatesPage() {
         <h1 className="font-display text-xl font-extrabold tracking-tight sm:text-3xl md:text-5xl">
           Candidatures à la présidentielle 2027
         </h1>
-        {/* The answer to "how many", on every width: Google quotes this sentence. */}
+        {/* The answer to "how many", on every width, before the list. */}
         {lead && <p className="max-w-3xl text-base leading-relaxed sm:text-lg">{lead}</p>}
         {summary.lastUpdatedAt && (
           <p className="text-xs text-muted-foreground">
