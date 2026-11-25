@@ -21,6 +21,8 @@ export interface ScrutinTerritoire {
   nature: string;
   /** « Adopté » or « Rejeté ». */
   resultat: string;
+  /** The same fact as a boolean, for the tone of the result badge. */
+  adopte: boolean;
   /** ISO date (yyyy-mm-dd). */
   date: string;
   /** Recorded position by deputy slug. A deputy without an entry has no recorded position. */
@@ -159,6 +161,7 @@ async function readVotes(
       return {
         sansVote,
         resultat: VOTING_RESULT_LABELS[s.result],
+        adopte: s.result === "ADOPTED",
         slug: s.slug!,
         titre: displayTitleOf(toPublicTitleView(s)),
         nature: s.type ? SCRUTIN_TYPE_LABELS[s.type] : "",

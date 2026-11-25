@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Collapsible, SectionCard } from "@/components/territoires/CommuneSections";
 import { LigneSource } from "@/components/territoires/LigneSource";
 import { MesureBarre } from "@/components/territoires/MesureBarre";
@@ -21,6 +22,7 @@ import {
   formatMontant,
 } from "@/lib/territoires/comptes-phrase";
 import { formatDateFrUTC } from "@/lib/utils";
+import { LIEN, LIEN_BLOC, SOUS_BLOC } from "@/components/territoires/classes";
 
 /**
  * "Les comptes de la collectivité" (Territoires v2, lot C, D28): a family of its own, outside
@@ -36,7 +38,7 @@ const label = (key: string) => compteLabel(COMPTES_AGREGATS.find((a) => a.key ==
 const parHab = (v: CompteValeur) =>
   v.value === null ? null : `${formatEurosParHabitant(v.value)} par habitant`;
 
-const LINK = "inline-flex min-h-11 items-center underline underline-offset-2 hover:text-primary";
+const LINK = `inline-flex min-h-11 items-center ${LIEN}`;
 
 export function BudgetResume({
   comptes,
@@ -75,29 +77,31 @@ export function BudgetResume({
         </Link>
       }
     >
-      <p className="text-base">{phrase}</p>
+      <p className={`${SOUS_BLOC} text-base`}>{phrase}</p>
       {!allAbsent && (
-        // The answer sentence stays visible; the five figures are one tap away.
-        <div className="mt-4">
-          <Collapsible summary={`Le détail ${y} : dépenses, dette, épargne`}>
-            <h3 className="mb-3 font-display text-lg font-bold">Dépenses {y}, par habitant</h3>
-            <div className="space-y-4">
-              {depenses.map(({ key, entry }, i) => {
-                const v = entry?.parHabitant ?? null;
-                const m = entry?.montant ?? null;
-                return (
-                  <MesureBarre
-                    key={key}
-                    label={label(key)}
-                    valeur={v?.value == null ? null : formatEurosParHabitant(v.value)}
-                    ratio={ratios[i] ?? null}
-                    detail={m?.value == null ? null : `${formatMontant(m.value)} au total`}
-                    nonEtabli={v ? absenceWords(v) : undefined}
-                  />
-                );
-              })}
-            </div>
-            <dl className="mt-5 divide-y border-t">
+        // The three spending figures are read without a tap; the debt and the savings are one
+        // tap away.
+        <div className="mt-4 space-y-4">
+          <h3 className="sr-only">Dépenses {y}, par habitant</h3>
+          <div className="space-y-4">
+            {depenses.map(({ key, entry }, i) => {
+              const v = entry?.parHabitant ?? null;
+              const m = entry?.montant ?? null;
+              return (
+                <MesureBarre
+                  key={key}
+                  label={label(key)}
+                  valeur={v?.value == null ? null : formatEurosParHabitant(v.value)}
+                  ratio={ratios[i] ?? null}
+                  detail={m?.value == null ? null : `${formatMontant(m.value)} au total`}
+                  nonEtabli={v ? absenceWords(v) : undefined}
+                  vedette={i === 0}
+                />
+              );
+            })}
+          </div>
+          <Collapsible summary={`Dette et épargne ${y}`}>
+            <dl className="divide-y">
               {SOLDES.map((key) => {
                 const entry = dernierExercice(comptes, key);
                 const v = entry?.parHabitant;
@@ -140,8 +144,9 @@ export function BudgetResume({
       )}
       {seule && <p className="mt-4 text-sm">{seule}</p>}
       <p className="mt-2 text-sm">
-        <Link href={budgetHref} prefetch={false} className={LINK}>
+        <Link href={budgetHref} prefetch={false} className={LIEN_BLOC}>
           {`Les comptes année par année, depuis ${COMPTES_PREMIER_EXERCICE}`}
+          <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
         </Link>
       </p>
       {comptes.source && (

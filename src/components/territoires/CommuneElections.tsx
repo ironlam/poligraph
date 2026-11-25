@@ -9,6 +9,7 @@ import {
 import { formatCount, formatPct } from "@/lib/territoires/commune-display";
 import { TERRITOIRES_DONNEES_PATH } from "@/lib/territoires/paths";
 import { formatDate, formatDateFrUTC } from "@/lib/utils";
+import { LIEN } from "@/components/territoires/classes";
 
 /**
  * Folded election lines of a commune (#1052, kit Commune.html, Mobile.html, ElectionsHistorique.html).
@@ -17,7 +18,7 @@ import { formatDate, formatDateFrUTC } from "@/lib/utils";
  * Bars are neutral navy, never a party colour, and a missing share is a missing bar, not a zero.
  */
 
-const LINK = "underline underline-offset-2 hover:text-primary";
+const LINK = LIEN;
 const TAP = "inline-flex min-h-11 items-center";
 const VISIBLE_ROWS = 5;
 
@@ -218,15 +219,22 @@ export function ScrutinLine({
           <span className="block text-sm text-muted-foreground">
             {tourLabel(tour.round)}
             {tour.date && `, ${formatDate(tour.date)}`}
-            {tour.participationRate != null &&
-              ` · participation ${formatPct(tour.participationRate)}`}
           </span>
           {lead && lead.pct != null && (
-            <span className="hidden truncate text-sm md:block">
-              {lead.label} <span className="font-semibold tabular-nums">{formatPct(lead.pct)}</span>
+            <span className="block text-xs text-muted-foreground md:truncate md:text-sm">
+              {lead.label} <span className="font-medium tabular-nums">{formatPct(lead.pct)}</span>
             </span>
           )}
         </span>
+        {/* The one figure read without unfolding: the turnout of the deciding round. */}
+        {tour.participationRate != null && (
+          <span className="shrink-0 text-right">
+            <span className="block font-display text-2xl font-bold tabular-nums text-primary">
+              {formatPct(tour.participationRate)}
+            </span>
+            <span className="block text-[0.75rem] text-muted-foreground">participation</span>
+          </span>
+        )}
         <ChevronDown
           className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
           aria-hidden="true"
