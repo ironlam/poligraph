@@ -36,7 +36,18 @@ describe("metadata de l'annuaire présidentiel", () => {
 
     expect(metadata.robots).toBeUndefined();
     expect(metadata.alternates?.canonical).toBe("/elections/presidentielle-2027/candidats");
-    expect(String(metadata.title)).toContain("Candidats à l'élection présidentielle 2027");
+    expect(metadata.title).toEqual({
+      absolute: "Candidats présidentielle 2027 : 1 déclaré (liste à jour)",
+    });
+  });
+
+  it("garde le title par défaut tant qu'aucune candidature n'est annoncée", async () => {
+    const [entry] = await getHubCandidacyField("presidentielle-2027");
+    mockGetCandidacies.mockResolvedValue([{ ...entry!, status: "PRESSENTI" }]);
+
+    const metadata = await generateMetadata({ searchParams: Promise.resolve({}) });
+
+    expect(metadata.title).toBe("Candidats à l'élection présidentielle 2027 : liste et programmes");
   });
 
   it("passe les variantes filtrées en noindex,follow", async () => {

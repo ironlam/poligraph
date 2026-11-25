@@ -64,17 +64,116 @@ function latestInterestsDetails(identity: PoliticianIdentity): DeclarationDetail
   return (latestDIA?.details as DeclarationDetails | null | undefined) ?? null;
 }
 
-/** The metadata of a profile, from its identity alone. */
-export function buildPoliticianMetadata(identity: PoliticianIdentity, slug: string): Metadata {
+/** What the search snippet of a profile may say beyond its identity. */
+export type PoliticianSnippetContext = {
+  voteStats?: ProfileVoteStats | null;
+  candidacy?: Pick<PoliticianCandidacy, "status"> | null;
+};
+
+const plural = (count: number, one: string, many: string) => (count > 1 ? many : one);
+const formatCount = (count: number) => count.toLocaleString("fr-FR");
+
+/** Statuses the snippet names: an announced or official run. A press hypothesis is not a run. */
+function announcesCandidacy(candidacy: PoliticianSnippetContext["candidacy"]): boolean {
+  return candidacy?.status === "DECLARE" || candidacy?.status === "OFFICIAL";
+}
+
+/** Votes cast (for, against, abstention) in the chamber the profile shows. */
+function castVotes(voteStats: ProfileVoteStats | null | undefined): number {
+  const stats = voteStats?.voteData.stats;
+  return stats ? stats.pour + stats.contre + stats.abstention : 0;
+}
+
+function hasAssetDeclaration(identity: PoliticianIdentity): boolean {
+  return identity.declarations.some((d) => d.type !== "INTERETS");
+}
+
+/**
+ * Title of a profile: the name, then up to three sections the profile actually holds. Judicial
+ * matters are never named here, for the reason given on `drawJusticeNote`: a word or a count
+ * beside a name cannot tell a conviction from a mention.
+ */
+export function buildPoliticianTitle(
+  identity: PoliticianIdentity,
+  context: PoliticianSnippetContext = {}
+): string {
+  const sections: string[] = [];
+  if (announcesCandidacy(context.candidacy)) sections.push("candidature 2027");
+  if (identity.mandates.length > 0) {
+    sections.push(plural(identity.mandates.length, "mandat", "mandats"));
+  }
+  if (castVotes(context.voteStats) > 0) sections.push("votes");
+  if (hasAssetDeclaration(identity)) sections.push("patrimoine");
+  if (identity._count.factCheckMentions > 0) sections.push("fact-checks");
+
+  const shown = sections.slice(0, 3);
+  if (shown.length === 0) return identity.fullName;
+  const list =
+    shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} et ${shown.at(-1)}`;
+  return `${identity.fullName} : ${list}`;
+}
+
+/**
+ * Meta description of a profile, from the figures the profile shows. Same rule as the title: no
+ * judicial word, no judicial count.
+ */
+export function buildPoliticianDescription(
+  identity: PoliticianIdentity,
+  context: PoliticianSnippetContext = {}
+): string {
+  const sentences: string[] = [];
+
   const currentMandate = identity.mandates.find((m) => m.isCurrent);
-  const role = currentMandate
-    ? `${currentMandate.type === "DEPUTE" ? "Député" : currentMandate.type === "SENATEUR" ? "Sénateur" : "Représentant"}`
-    : "Représentant politique";
+  if (currentMandate) {
+    const title = currentMandate.title.charAt(0).toUpperCase() + currentMandate.title.slice(1);
+    const shortName = identity.currentParty?.shortName;
+    // Some titles already name the party ("Président de l'Union populaire républicaine (UPR)").
+    const party = shortName && !title.includes(`(${shortName})`) ? ` (${shortName})` : "";
+    sentences.push(`${title}${party}.`);
+  } else if (identity.currentParty) {
+    sentences.push(`Parti : ${identity.currentParty.name}.`);
+  }
 
-  // Latest DIA declaration with details, for SEO.
+  if (context.candidacy?.status === "OFFICIAL") {
+    sentences.push("Candidature officielle à la présidentielle 2027.");
+  } else if (context.candidacy?.status === "DECLARE") {
+    sentences.push("Candidature annoncée à la présidentielle 2027.");
+  }
+
+  const facts: string[] = [];
+  // A single mandate is already named by the first sentence, and its start date alone reads as
+  // the start of a career the base may only partly hold.
+  const mandateCount = identity.mandates.length;
+  if (mandateCount > 1) {
+    const firstYear = Math.min(
+      ...identity.mandates.map((m) => new Date(m.startDate).getUTCFullYear())
+    );
+    facts.push(`${formatCount(mandateCount)} mandats depuis ${firstYear}`);
+  }
+  const votes = castVotes(context.voteStats);
+  if (votes > 0) {
+    const chamber =
+      resolveProfileMandateType(identity) === "SENATEUR" ? "au Sénat" : "à l'Assemblée nationale";
+    facts.push(`${formatCount(votes)} ${plural(votes, "vote", "votes")} ${chamber}`);
+  }
+  const factChecks = identity._count.factCheckMentions;
+  if (factChecks > 0) {
+    facts.push(`${formatCount(factChecks)} ${plural(factChecks, "fact-check", "fact-checks")}`);
+  }
+  if (identity.declarations.length > 0) {
+    facts.push(
+      hasAssetDeclaration(identity)
+        ? "déclarations de patrimoine et d'intérêts (HATVP)"
+        : "déclarations d'intérêts (HATVP)"
+    );
+  }
+  if (facts.length > 0) {
+    const text = facts.join(", ");
+    sentences.push(`${text.charAt(0).toUpperCase()}${text.slice(1)}.`);
+  }
+
+  // Latest DIA declaration with details.
   const details = latestInterestsDetails(identity);
-
-  let hatvpDescription = "";
   if (details) {
     const parts: string[] = [];
     if (details.totalPortfolioValue && details.totalPortfolioValue > 0) {
@@ -83,14 +182,29 @@ export function buildPoliticianMetadata(identity: PoliticianIdentity, slug: stri
       );
     }
     if (details.totalCompanies > 0) {
-      parts.push(`${details.totalCompanies} sociétés déclarées`);
+      parts.push(
+        `${details.totalCompanies} ${plural(details.totalCompanies, "société déclarée", "sociétés déclarées")}`
+      );
     }
     if (parts.length > 0) {
-      hatvpDescription = ` ${parts.join(", ")}.`;
+      const text = parts.join(", ");
+      sentences.push(`${text.charAt(0).toUpperCase()}${text.slice(1)}.`);
     }
   }
 
-  const description = `${role} ${identity.currentParty ? `(${identity.currentParty.shortName})` : ""} - Consultez ses mandats, déclarations d'intérêts et affaires judiciaires.${hatvpDescription}`;
+  return sentences.length > 0
+    ? sentences.join(" ")
+    : `Fiche de ${identity.fullName} sur Poligraph : mandats et sources.`;
+}
+
+/** The metadata of a profile, from its identity and what the page reads beside it. */
+export function buildPoliticianMetadata(
+  identity: PoliticianIdentity,
+  slug: string,
+  context: PoliticianSnippetContext = {}
+): Metadata {
+  const title = buildPoliticianTitle(identity, context);
+  const description = buildPoliticianDescription(identity, context);
 
   // Bare profiles (RNE-imported mayors with no content) get noindex,follow (issue #385).
   // The two counters come from the identity read's filtered `_count`, under the same public
@@ -110,7 +224,7 @@ export function buildPoliticianMetadata(identity: PoliticianIdentity, slug: stri
   const sharePhoto = normalizeImageUrl(identity.photoUrl);
 
   return {
-    title: identity.fullName,
+    title,
     description,
     ...robots,
     alternates: { canonical: `/politiques/${slug}` },
