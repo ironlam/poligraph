@@ -16,6 +16,7 @@ import { getScrutinGroupPositionsBatch } from "@/lib/data/groupes";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { themeToSlug } from "@/lib/theme-utils";
 import { themeSeoPhrase } from "@/lib/seo/theme-metadata";
+import { BARE_VOTES_TITLE, isBareVotesView } from "@/lib/seo/votes-listing";
 import { SITE_URL } from "@/config/site";
 import { ROUTES, statsHref } from "@/config/routes";
 import type { VotingResult, Chamber, ThemeCategory, ScrutinType } from "@/types";
@@ -37,6 +38,7 @@ interface ScrutinsListingProps {
     type?: string;
     search?: string;
     filter?: string;
+    sort?: string;
   };
   sort: ScrutinSort;
 }
@@ -112,7 +114,9 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
     ? "Votes expliqués"
     : chamber
       ? `Votes ${chamber === "AN" ? "de l'Assemblée nationale" : "du Sénat"}`
-      : "Votes parlementaires";
+      : isBareVotesView(params)
+        ? BARE_VOTES_TITLE
+        : "Votes parlementaires";
   const pageSubtitle = explainedOnly
     ? "Les votes de l'Assemblée nationale et du Sénat traduits en titres clairs."
     : "Scrutins publics en séance - résultats, thèmes et positions des groupes";
