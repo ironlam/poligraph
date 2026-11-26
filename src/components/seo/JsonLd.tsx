@@ -3,6 +3,8 @@
  * @see https://schema.org
  */
 
+import { buildFactCheckJsonLd, type FactCheckJsonLdInput } from "@/lib/seo/factcheck-jsonld";
+
 /** Safely serialize JSON-LD, escaping </script> to prevent injection. */
 const safeJsonLd = (data: object): string =>
   JSON.stringify(data).replace(/<\/script/gi, "<\\/script");
@@ -471,87 +473,15 @@ export function ArticleJsonLd({
   );
 }
 
-// ─── ClaimReview (Fact-check) ─────────────────────────────────
+// ─── Fact-check page ──────────────────────────────────────────
 
-type FactCheckRatingValue =
-  | "TRUE"
-  | "MOSTLY_TRUE"
-  | "HALF_TRUE"
-  | "MISLEADING"
-  | "OUT_OF_CONTEXT"
-  | "MOSTLY_FALSE"
-  | "FALSE"
-  | "UNVERIFIABLE";
-
-const VERDICT_RATING_VALUE: Record<FactCheckRatingValue, number> = {
-  FALSE: 1,
-  MOSTLY_FALSE: 2,
-  MISLEADING: 2,
-  OUT_OF_CONTEXT: 3,
-  HALF_TRUE: 3,
-  MOSTLY_TRUE: 4,
-  TRUE: 5,
-  UNVERIFIABLE: 3,
-};
-
-interface ClaimReviewJsonLdProps {
-  url: string;
-  claimText: string;
-  claimant?: string | null;
-  verdict: string;
-  verdictRating: FactCheckRatingValue;
-  reviewDate: string;
-  source: string;
-  sourceUrl: string;
-  /** The politician the claim is attributed to, pointing at their Poligraph profile. */
-  about?: { name: string; url: string } | null;
-}
-
-export function ClaimReviewJsonLd({
-  url,
-  claimText,
-  claimant,
-  verdict,
-  verdictRating,
-  reviewDate,
-  source,
-  sourceUrl,
-  about,
-}: ClaimReviewJsonLdProps) {
-  const ratingValue = VERDICT_RATING_VALUE[verdictRating];
-
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "ClaimReview",
-    url,
-    claimReviewed: claimText,
-    ...(about && { about: { "@type": "Person", name: about.name, url: about.url } }),
-    ...(claimant && {
-      itemReviewed: {
-        "@type": "Claim",
-        author: {
-          "@type": "Person",
-          name: claimant,
-        },
-      },
-    }),
-    reviewRating: {
-      "@type": "Rating",
-      ratingValue,
-      bestRating: 5,
-      worstRating: 1,
-      alternateName: verdict,
-    },
-    datePublished: reviewDate,
-    author: {
-      "@type": "Organization",
-      name: source,
-      url: sourceUrl,
-    },
-  };
-
+/** A WebPage citing the newsroom's article, never a ClaimReview: see buildFactCheckJsonLd. */
+export function FactCheckJsonLd(props: FactCheckJsonLdInput) {
   return (
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: safeJsonLd(buildFactCheckJsonLd(props)) }}
+    />
   );
 }
 
