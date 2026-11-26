@@ -5,6 +5,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import {
+  AboutSection,
   FactCheckList,
   SourceTable,
   VerdictSummary,
@@ -15,6 +16,7 @@ import {
   factCheckPoliticianPath,
   getPoliticianFactCheckLanding,
 } from "@/lib/data/factcheck-politician";
+import { heading, landingDescription } from "./landing-text";
 import { factCheckRobotsMetadata } from "@/lib/seo/factcheck-robots";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
@@ -36,28 +38,21 @@ interface PageProps {
 const buttonClass =
   "inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border text-sm font-medium hover:bg-muted transition-colors";
 
-function heading(fullName: string): string {
-  return `Les déclarations de ${fullName} vérifiées`;
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const landing = await getPoliticianFactCheckLanding(slug);
   if (!landing) return missingEntityMetadata("Fact-checks non trouvés");
 
-  const { author, claimed, bySource } = landing;
-  const description =
-    claimed.length > 0
-      ? `${claimed.length.toLocaleString("fr-FR")} déclaration${claimed.length > 1 ? "s" : ""} de ${author.fullName} vérifiée${claimed.length > 1 ? "s" : ""} par ${bySource.map((s) => s.name).join(", ")} : verdicts, dates et liens vers les articles.`
-      : `Les fact-checks des rédactions suivies par Poligraph qui citent ${author.fullName}.`;
+  const title = heading(landing);
+  const description = landingDescription(landing);
 
   return {
-    title: heading(author.fullName),
+    title,
     description,
     alternates: { canonical: factCheckPoliticianPath(slug) },
     ...factCheckRobotsMetadata(landing.indexable),
     openGraph: openGraph({
-      title: heading(author.fullName),
+      title,
       description,
       type: "website",
       images: SEGMENT_IMAGE_FILE,
@@ -70,7 +65,8 @@ export default async function PoliticianFactChecksPage({ params }: PageProps) {
   const landing = await getPoliticianFactCheckLanding(slug);
   if (!landing) notFound();
 
-  const { author, hasCandidacy, claimed, bySource } = landing;
+  const { author, hasCandidacy, claimed, about, bySource } = landing;
+  const title = heading(landing);
   const url = `${SITE_URL}${factCheckPoliticianPath(author.slug)}`;
   const role =
     author.mandateTitle ??
@@ -88,18 +84,16 @@ export default async function PoliticianFactChecksPage({ params }: PageProps) {
         ]}
       />
       <CollectionPageJsonLd
-        name={heading(author.fullName)}
-        description={`Les fact-checks des déclarations de ${author.fullName}.`}
+        name={title}
+        description={landingDescription(landing)}
         url={url}
-        numberOfItems={claimed.length}
+        numberOfItems={claimed.length + about.length}
         about={{ name: author.fullName, url: `${SITE_URL}/politiques/${author.slug}` }}
         aboutType="Person"
       />
 
       <section className="mb-6 space-y-4">
-        <h1 className="text-2xl font-display font-extrabold tracking-tight">
-          {heading(author.fullName)}
-        </h1>
+        <h1 className="text-2xl font-display font-extrabold tracking-tight">{title}</h1>
         <div className="flex items-center gap-4">
           <PoliticianAvatar
             photoUrl={author.photoUrl}
@@ -143,7 +137,10 @@ export default async function PoliticianFactChecksPage({ params }: PageProps) {
 
       <VerdictSummary landing={landing} />
       <SourceTable landing={landing} />
-      <FactCheckList landing={landing} />
+      {/* A page about someone who made no checked claim opens on what is checked about them,
+          rather than on an empty list. */}
+      {(claimed.length > 0 || about.length === 0) && <FactCheckList landing={landing} />}
+      <AboutSection landing={landing} />
 
       <footer className="mt-8 pt-4 border-t text-xs text-muted-foreground leading-relaxed space-y-2">
         {bySource.length > 0 && (
@@ -154,8 +151,9 @@ export default async function PoliticianFactChecksPage({ params }: PageProps) {
         )}
         <p>
           Le bilan compte les déclarations attribuées à {author.fullName} et rattachées à sa fiche.
-          Une rédaction vérifie surtout ce qui circule : ces chiffres ne mesurent pas la fiabilité d
-          {"'"}une personne. Cette page suit le même format pour chaque personnalité.
+          Les vérifications à son sujet sont comptées à part. Une rédaction vérifie surtout ce qui
+          circule : ces chiffres ne mesurent pas la fiabilité d{"'"}une personne. Cette page suit le
+          même format pour chaque personnalité.
         </p>
         <p className="flex flex-wrap gap-x-4">
           <Link

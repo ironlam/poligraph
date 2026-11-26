@@ -42,14 +42,20 @@ export interface CandidateFactCheckSummary {
   recent: PoliticianFactCheckItem[];
   /** Where "see all" goes: the landing when it is indexable, the filtered list otherwise. */
   href: string;
+  /**
+   * Fact-checks about the candidate on a confirmed mention, as one link to the landing section.
+   * Null when there are none. Only a count and a link: the rumours themselves stay off the fiche.
+   */
+  about: { count: number; href: string } | null;
 }
 
 /**
  * What the fiche shows of a candidate's fact-checks, or null to render nothing.
  *
- * Claims the candidate MADE only. The fact-checks that merely cite them stay off the fiche until
- * single-word mentions are validated by a human: today a first name alone can attach a rumour to
- * the wrong person, and a candidate fiche is the last place to show that.
+ * Claims the candidate MADE only. The fact-checks about them (a rumour, someone else's claim) are
+ * not listed: a candidate fiche is the last place to show a rumour next to a verdict. They appear
+ * as one counted link to the landing section, and only on a confirmed mention (`landing.about`):
+ * a last name alone waiting for review never reaches the fiche.
  *
  * The link follows the landing's own robots rule (`landing.indexable`), so the fiche only passes
  * weight to a page that is in the index, the same contract as the theme and reader-guide links.
@@ -57,7 +63,7 @@ export interface CandidateFactCheckSummary {
  */
 export function selectCandidateFactChecks(
   landing: PoliticianFactCheckLanding | null,
-  paths: { landing: string; filtered: string }
+  paths: { landing: string; filtered: string; about: string }
 ): CandidateFactCheckSummary | null {
   if (!landing || landing.claimed.length === 0) return null;
   return {
@@ -66,5 +72,12 @@ export function selectCandidateFactChecks(
     breakdown: landing.breakdown,
     recent: landing.claimed.slice(0, CANDIDATE_FACTCHECKS_RECENT),
     href: landing.indexable ? paths.landing : paths.filtered,
+    about:
+      landing.about.length > 0
+        ? {
+            count: landing.about.length,
+            href: landing.indexable ? paths.about : paths.filtered,
+          }
+        : null,
   };
 }

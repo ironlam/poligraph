@@ -615,6 +615,19 @@ describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => 
     expect(factChecksShard).toContain('m."isClaimant"');
   });
 
+  // The landing counts the claims plus the fact-checks about the person on a confirmed mention.
+  // The SQL must count the same rows, through the same shared filter as the TS predicate.
+  it("compte les vérifications à son sujet avec le filtre partagé des mentions confirmées", () => {
+    expect(factChecksShard).toContain('(m."isClaimant" OR ${getConfirmedMentionSqlWhere("m")})');
+    const helper = readFileSync(join(process.cwd(), "src/lib/seo/factcheck-robots.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "");
+    expect(helper).toMatch(/claimed \+ aboutConfirmed >= FACTCHECK_POLITICIAN_MIN_CLAIMS/);
+    const data = readFileSync(join(process.cwd(), "src/lib/data/factcheck-politician.ts"), "utf8");
+    expect(data).toContain("!needsMentionReview(m)");
+    expect(data).toContain("aboutConfirmed: about.length");
+  });
+
   // The party sat on 95 % of the pages with a single author: it discriminated nothing.
   it("does not count the current party any more", () => {
     expect(factChecksShard).not.toContain("currentPartyId");

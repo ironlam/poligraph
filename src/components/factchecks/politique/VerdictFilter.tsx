@@ -14,10 +14,13 @@ type Group = "vrai" | "trompeur" | "faux" | "inverifiable";
 export function VerdictFilter({
   counts,
   total,
+  noun = "déclaration",
   children,
 }: {
   counts: { group: Group; count: number }[];
   total: number;
+  /** Feminine noun announced to screen readers ("3 déclarations affichées"). */
+  noun?: "déclaration" | "vérification";
   children: ReactNode;
 }) {
   const [filter, setFilter] = useState<Group | null>(null);
@@ -54,7 +57,7 @@ export function VerdictFilter({
         ))}
       </div>
       <p className="sr-only" aria-live="polite">
-        {shown} déclaration{shown > 1 ? "s" : ""} affichée{shown > 1 ? "s" : ""}
+        {`${shown} ${noun}${shown > 1 ? "s" : ""} affichée${shown > 1 ? "s" : ""}`}
       </p>
       <div
         data-filter={filter ?? "tous"}

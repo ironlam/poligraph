@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { VerdictBreakdownBar } from "@/components/factchecks/politique/PoliticianFactChecks";
 import { FACTCHECK_RATING_COLORS, FACTCHECK_RATING_LABELS } from "@/config/labels";
 import {
+  FACTCHECK_ABOUT_ANCHOR,
   factCheckPoliticianPath,
   getPoliticianFactCheckLanding,
 } from "@/lib/data/factcheck-politician";
@@ -26,7 +27,7 @@ function plural(count: number, one: string, many: string): string {
  * row names it.
  */
 export function CandidateFactChecks({ summary }: { summary: CandidateFactCheckSummary }) {
-  const { total, sourceCount, breakdown, recent, href } = summary;
+  const { total, sourceCount, breakdown, recent, href, about } = summary;
 
   return (
     <section
@@ -66,15 +67,26 @@ export function CandidateFactChecks({ summary }: { summary: CandidateFactCheckSu
       </ul>
       {/* "Toutes" only when there is more to see: with three or fewer, the list above is the whole
           record and the link would promise nothing new. */}
-      <Link
-        href={href}
-        prefetch={false}
-        className="inline-flex min-h-11 items-center text-sm font-bold text-primary hover:underline"
-      >
-        {total > recent.length
-          ? `Voir ses ${total.toLocaleString("fr-FR")} déclarations vérifiées`
-          : "Voir le détail par verdict et par rédaction"}
-      </Link>
+      <div className="flex flex-wrap gap-x-5">
+        <Link
+          href={href}
+          prefetch={false}
+          className="inline-flex min-h-11 items-center text-sm font-bold text-primary hover:underline"
+        >
+          {total > recent.length
+            ? `Voir ses ${total.toLocaleString("fr-FR")} déclarations vérifiées`
+            : "Voir le détail par verdict et par rédaction"}
+        </Link>
+        {about && (
+          <Link
+            href={about.href}
+            prefetch={false}
+            className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
+          >
+            Vérifications à son sujet ({about.count.toLocaleString("fr-FR")})
+          </Link>
+        )}
+      </div>
     </section>
   );
 }
@@ -88,6 +100,7 @@ export async function CandidateFactChecksSection({ slug }: { slug: string }) {
   const summary = selectCandidateFactChecks(await getPoliticianFactCheckLanding(slug), {
     landing: factCheckPoliticianPath(slug),
     filtered: `/factchecks?politician=${encodeURIComponent(slug)}`,
+    about: `${factCheckPoliticianPath(slug)}#${FACTCHECK_ABOUT_ANCHOR}`,
   });
   if (!summary) return null;
   return <CandidateFactChecks summary={summary} />;

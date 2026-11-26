@@ -26,6 +26,11 @@ import {
 } from "@/components/factchecks/factchecks-filter-options";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
+import { filteredPoliticianViewMetadata } from "@/lib/seo/factcheck-robots";
+import {
+  factCheckPoliticianPath,
+  getPoliticianFactCheckLanding,
+} from "@/lib/data/factcheck-politician";
 import type { FactCheckRating } from "@/types";
 import { parsePageParam } from "@/lib/data/query-params";
 
@@ -50,14 +55,12 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   if (params.politician) {
     const name = await getPoliticianNameBySlug(params.politician);
     if (name) {
-      return {
-        title: `Fact-checks de ${name}`,
-        description: `Vérifications des déclarations de ${name}. Fact-checks issus de sources reconnues : AFP Factuel, Les Décodeurs et autres.`,
-        // The bare ?politician= view stays indexable (nominative intent);
-        // extra facets/pagination on top of it are noindex,follow.
-        ...listingRobotsMetadata(hasActiveListingFilter(params, FACTCHECK_FILTER_KEYS)),
-        alternates: { canonical: `/factchecks?politician=${params.politician}` },
-      };
+      // Same cached read as the landing itself: canonical on it only when it exists.
+      const landing = await getPoliticianFactCheckLanding(params.politician);
+      return filteredPoliticianViewMetadata(
+        name,
+        landing ? factCheckPoliticianPath(landing.author.slug) : null
+      );
     }
   }
 

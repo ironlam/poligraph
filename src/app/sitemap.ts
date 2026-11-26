@@ -1260,12 +1260,14 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
   `);
 
   // The landing pages /factchecks/politique/[slug], mirroring isIndexableFactCheckPolitician():
-  // a published politician who is the claimant of at least FACTCHECK_POLITICIAN_MIN_CLAIMS public
-  // fact-checks with a slug, counted as the page counts them.
+  // a published politician with at least FACTCHECK_POLITICIAN_MIN_CLAIMS public fact-checks with a
+  // slug, counted as the page counts them: the claims they made, plus the fact-checks about them on
+  // a confirmed mention (one mention per fact-check and politician, so a fact-check counts once).
   const politicians = await db.$queryRaw<Array<{ slug: string; lastModified: Date }>>(Prisma.sql`
     SELECT p."slug", max(fc."updatedAt") AS "lastModified"
     FROM "Politician" p
-    JOIN "FactCheckMention" m ON m."politicianId" = p."id" AND m."isClaimant"
+    JOIN "FactCheckMention" m ON m."politicianId" = p."id"
+      AND (m."isClaimant" OR ${getConfirmedMentionSqlWhere("m")})
     JOIN "FactCheck" fc ON fc."id" = m."factCheckId"
     WHERE p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
       AND ${getPublicFactCheckSqlWhere("fc")}

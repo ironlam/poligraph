@@ -50,7 +50,11 @@ describe("liens de la fiche candidat", () => {
 });
 
 describe("selectCandidateFactChecks", () => {
-  const paths = { landing: "/factchecks/politique/x", filtered: "/factchecks?politician=x" };
+  const paths = {
+    landing: "/factchecks/politique/x",
+    filtered: "/factchecks?politician=x",
+    about: "/factchecks/politique/x#a-son-sujet",
+  };
   const item = (n: number) => ({
     slug: `fc-${n}`,
     title: `T${n}`,
@@ -59,12 +63,13 @@ describe("selectCandidateFactChecks", () => {
     source: "AFP",
     publishedAt: new Date(Date.UTC(2026, 0, n)),
   });
-  const landing = (claimed: number, indexable: boolean) =>
+  const landing = (claimed: number, indexable: boolean, about = 0) =>
     ({
       author: { id: "p", slug: "x", fullName: "X" },
       hasCandidacy: true,
       claimed: Array.from({ length: claimed }, (_, i) => item(i + 1)),
-      cited: [item(50)],
+      about: Array.from({ length: about }, (_, i) => item(i + 50)),
+      aboutPending: [item(90)],
       breakdown: { vrai: 0, trompeur: 0, faux: claimed, inverifiable: 0 },
       bySource: [
         { name: "AFP", total: claimed, vrai: 0, trompeur: 0, faux: claimed, inverifiable: 0 },
@@ -84,5 +89,16 @@ describe("selectCandidateFactChecks", () => {
     const many = selectCandidateFactChecks(landing(5, true), paths)!;
     expect(many.recent.map((r) => r.slug)).toEqual(["fc-1", "fc-2", "fc-3"]);
     expect(many.href).toBe(paths.landing);
+  });
+
+  it("ajoute un lien compté vers les vérifications à son sujet, sans les lister", () => {
+    expect(selectCandidateFactChecks(landing(2, false), paths)!.about).toBeNull();
+    const withAbout = selectCandidateFactChecks(landing(2, true, 4), paths)!;
+    expect(withAbout.about).toEqual({ count: 4, href: paths.about });
+    expect(withAbout.recent.map((r) => r.slug)).not.toContain("fc-50");
+    expect(selectCandidateFactChecks(landing(1, false, 1), paths)!.about).toEqual({
+      count: 1,
+      href: paths.filtered,
+    });
   });
 });

@@ -27,10 +27,14 @@ function mention(
   isClaimant: boolean,
   verdictRating: string,
   source: string,
-  day: string
+  day: string,
+  matchedName: string | null = "Gabriel Attal",
+  reviewedAt: Date | null = null
 ) {
   return {
     isClaimant,
+    matchedName,
+    reviewedAt,
     factCheck: {
       slug,
       title: `Titre ${slug}`,
@@ -104,23 +108,43 @@ describe("queryPoliticianFactCheckLanding", () => {
   it("sépare les déclarations de la personne des fact-checks qui la citent", async () => {
     const landing = await queryPoliticianFactCheckLanding("gabriel-attal");
     expect(landing?.claimed.map((f) => f.slug)).toEqual(["fc-1", "fc-2", "fc-4"]);
-    expect(landing?.cited.map((f) => f.slug)).toEqual(["fc-3"]);
+    expect(landing?.about.map((f) => f.slug)).toEqual(["fc-3"]);
+    expect(landing?.aboutBreakdown).toEqual({ vrai: 0, trompeur: 0, faux: 1, inverifiable: 0 });
+    expect(landing?.aboutPending).toEqual([]);
     expect(landing?.breakdown).toEqual({ vrai: 1, trompeur: 0, faux: 1, inverifiable: 1 });
     expect(landing?.bySource.map((s) => s.name)).toEqual(["TF1 Info", "AFP Factuel"]);
     expect(landing?.firstYear).toBe(2023);
     expect(landing?.hasCandidacy).toBe(false);
   });
 
-  it("est indexable à partir de trois déclarations attribuées", async () => {
-    expect((await queryPoliticianFactCheckLanding("gabriel-attal"))?.indexable).toBe(true);
+  it("compte les vérifications à son sujet dans le seuil d'indexation", async () => {
     mocks.mentionFindMany.mockResolvedValue([
       mention("fc-1", true, "FALSE", "TF1 Info", "2026-04-09"),
-      mention("fc-2", true, "TRUE", "TF1 Info", "2025-04-09"),
+      mention("fc-2", false, "TRUE", "TF1 Info", "2025-04-09"),
       mention("fc-3", false, "FALSE", "TF1 Info", "2024-04-09"),
-      mention("fc-4", false, "FALSE", "TF1 Info", "2023-04-09"),
     ]);
-    // Being cited does not count toward the threshold.
-    expect((await queryPoliticianFactCheckLanding("gabriel-attal"))?.indexable).toBe(false);
+    expect((await queryPoliticianFactCheckLanding("gabriel-attal"))?.indexable).toBe(true);
+  });
+
+  it("ne compte pas une mention sur le nom de famille seul tant qu'elle n'est pas validée", async () => {
+    mocks.mentionFindMany.mockResolvedValue([
+      mention("fc-1", true, "FALSE", "TF1 Info", "2026-04-09"),
+      mention("fc-2", false, "TRUE", "TF1 Info", "2025-04-09"),
+      mention("fc-3", false, "FALSE", "TF1 Info", "2024-04-09", "Attal"),
+    ]);
+    const pending = await queryPoliticianFactCheckLanding("gabriel-attal");
+    expect(pending?.about.map((f) => f.slug)).toEqual(["fc-2"]);
+    expect(pending?.aboutPending.map((f) => f.slug)).toEqual(["fc-3"]);
+    expect(pending?.indexable).toBe(false);
+
+    mocks.mentionFindMany.mockResolvedValue([
+      mention("fc-1", true, "FALSE", "TF1 Info", "2026-04-09"),
+      mention("fc-2", false, "TRUE", "TF1 Info", "2025-04-09"),
+      mention("fc-3", false, "FALSE", "TF1 Info", "2024-04-09", "Attal", new Date()),
+    ]);
+    const reviewed = await queryPoliticianFactCheckLanding("gabriel-attal");
+    expect(reviewed?.about.map((f) => f.slug)).toEqual(["fc-2", "fc-3"]);
+    expect(reviewed?.indexable).toBe(true);
   });
 
   it("garde une page pour une personne seulement citée, sans bilan", async () => {
@@ -129,6 +153,7 @@ describe("queryPoliticianFactCheckLanding", () => {
     ]);
     const landing = await queryPoliticianFactCheckLanding("gabriel-attal");
     expect(landing?.claimed).toEqual([]);
+    expect(landing?.about.map((f) => f.slug)).toEqual(["fc-3"]);
     expect(landing?.firstYear).toBeNull();
     expect(landing?.indexable).toBe(false);
   });

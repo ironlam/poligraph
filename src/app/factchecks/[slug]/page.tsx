@@ -18,6 +18,8 @@ import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/publ
 import { openGraph, SEGMENT_IMAGE_FILE } from "@/lib/seo/open-graph";
 import { factCheckContextInput, getFactCheckContext } from "@/lib/data/factcheck-context";
 import { factCheckRobotsMetadata } from "@/lib/seo/factcheck-robots";
+import { factCheckPoliticianPath } from "@/lib/data/factcheck-politician";
+import { needsMentionReview } from "@/lib/factchecks/mention-review";
 import { FactCheckPeople, type FactCheckPerson } from "@/components/factchecks/FactCheckPeople";
 import {
   AuthorBlock,
@@ -137,7 +139,13 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
     partyShortName: m.politician.currentParty?.shortName ?? null,
   });
   const claimants = factCheck.mentions.filter((m) => m.isClaimant).map(toPerson);
-  const subjects = factCheck.mentions.filter((m) => !m.isClaimant).map(toPerson);
+  const subjects = factCheck.mentions
+    .filter((m) => !m.isClaimant)
+    .map((m) => ({
+      ...toPerson(m),
+      // Only on a confirmed mention: a last name alone waiting for review links nowhere new.
+      landingHref: needsMentionReview(m) ? null : factCheckPoliticianPath(m.politician.slug),
+    }));
   const contextInput = factCheckContextInput({ ...factCheck, slug });
   const author = claimants.find((c) => c.slug === contextInput.authorSlug) ?? null;
 

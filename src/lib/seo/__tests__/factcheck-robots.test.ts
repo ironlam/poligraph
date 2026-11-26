@@ -6,6 +6,7 @@ import {
   hasAuthorContextBlock,
   hasClaimSpecificBlock,
   isIndexableFactCheck,
+  filteredPoliticianViewMetadata,
   isIndexableFactCheckPolitician,
   type FactCheckIndexSignals,
 } from "../factcheck-robots";
@@ -94,9 +95,38 @@ describe("factCheckRobotsMetadata", () => {
 });
 
 describe("isIndexableFactCheckPolitician", () => {
-  it("indexe la page d'une personnalité à partir de trois déclarations", () => {
-    expect(isIndexableFactCheckPolitician(FACTCHECK_POLITICIAN_MIN_CLAIMS)).toBe(true);
-    expect(isIndexableFactCheckPolitician(FACTCHECK_POLITICIAN_MIN_CLAIMS - 1)).toBe(false);
+  it("indexe la page d'une personnalité à partir de trois fact-checks rassemblés", () => {
     expect(FACTCHECK_POLITICIAN_MIN_CLAIMS).toBe(3);
+    expect(isIndexableFactCheckPolitician({ claimed: 3, aboutConfirmed: 0 })).toBe(true);
+    expect(isIndexableFactCheckPolitician({ claimed: 2, aboutConfirmed: 0 })).toBe(false);
+  });
+
+  it("compte les vérifications à son sujet comme ses déclarations", () => {
+    expect(isIndexableFactCheckPolitician({ claimed: 0, aboutConfirmed: 3 })).toBe(true);
+    expect(isIndexableFactCheckPolitician({ claimed: 1, aboutConfirmed: 2 })).toBe(true);
+    expect(isIndexableFactCheckPolitician({ claimed: 1, aboutConfirmed: 1 })).toBe(false);
+  });
+});
+
+describe("filteredPoliticianViewMetadata", () => {
+  it("sort la vue filtrée de l'index et pointe son canonical vers la landing", () => {
+    const meta = filteredPoliticianViewMetadata(
+      "Jean-Luc Mélenchon",
+      "/factchecks/politique/jean-luc-melenchon"
+    );
+    expect(meta.robots).toEqual({ index: false, follow: true });
+    expect(meta.alternates).toEqual({ canonical: "/factchecks/politique/jean-luc-melenchon" });
+  });
+
+  it("pointe vers la liste nue quand la personne n'a pas de landing", () => {
+    const meta = filteredPoliticianViewMetadata("Camille Rivière", null);
+    expect(meta.robots).toEqual({ index: false, follow: true });
+    expect(meta.alternates).toEqual({ canonical: "/factchecks" });
+  });
+
+  it("ne parle pas seulement de déclarations : la vue liste aussi les rumeurs", () => {
+    const meta = filteredPoliticianViewMetadata("Camille Rivière", null);
+    expect(meta.description).toContain("qui citent Camille Rivière");
+    expect(meta.description).not.toMatch(/^Vérifications des déclarations/);
   });
 });

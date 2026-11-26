@@ -65,11 +65,52 @@ export function factCheckRobotsMetadata(indexable: boolean): Pick<Metadata, "rob
 
 /**
  * The landing page of a politician's fact-checks, /factchecks/politique/[slug], is indexable from
- * this many claims attributed to them. Same threshold for every person and every party. Mirrored
- * in SQL by the fact-check sitemap shard.
+ * this many fact-checks gathered on it: the claims they made, plus the fact-checks about them on a
+ * confirmed mention (full name, or last name validated in the admin, see
+ * src/lib/factchecks/mention-review.ts). A mention still waiting for review counts for nothing, so
+ * a homonym can never bring a page into the index.
+ *
+ * Why both count: the fact-check of a rumour is a short copy of its source and stays noindex, but
+ * the demand goes to the person ("patrimoine mélenchon"). Gathered on the person's page, next to
+ * their own record, those checks are context only Poligraph puts together. Measured on 2026-11-26:
+ * 61 indexable landings on claims alone, 79 with both.
+ *
+ * Same threshold for every person and every party. Mirrored in SQL by the fact-check sitemap shard
+ * (src/app/sitemap.ts, buildFactChecksSitemap): keep both in sync.
  */
 export const FACTCHECK_POLITICIAN_MIN_CLAIMS = 3;
 
-export function isIndexableFactCheckPolitician(claimedCount: number): boolean {
-  return claimedCount >= FACTCHECK_POLITICIAN_MIN_CLAIMS;
+export interface FactCheckPoliticianCounts {
+  /** Public fact-checks where the politician is the claimant. */
+  claimed: number;
+  /** Public fact-checks about the politician, not as claimant, on a confirmed mention. */
+  aboutConfirmed: number;
+}
+
+export function isIndexableFactCheckPolitician({
+  claimed,
+  aboutConfirmed,
+}: FactCheckPoliticianCounts): boolean {
+  return claimed + aboutConfirmed >= FACTCHECK_POLITICIAN_MIN_CLAIMS;
+}
+
+/**
+ * Metadata of the filtered listing /factchecks?politician=X. It lists the same fact-checks as the
+ * person's landing, without its counts or its threshold: indexed, it competed with the landing (242
+ * views on 2026-11-25, 126 of them with a single fact-check). Always noindex,follow, canonical on
+ * the landing, or on the bare listing when the person has no landing (no public fact-check).
+ *
+ * The description says "qui citent": the view lists rumours about the person as well as their own
+ * claims.
+ */
+export function filteredPoliticianViewMetadata(
+  fullName: string,
+  landingPath: string | null
+): Pick<Metadata, "title" | "description" | "robots" | "alternates"> {
+  return {
+    title: `Fact-checks de ${fullName}`,
+    description: `Les fact-checks qui citent ${fullName} : ses déclarations vérifiées et les vérifications à son sujet, par AFP Factuel, Les Décodeurs et d'autres rédactions reconnues.`,
+    robots: NOINDEX_FOLLOW,
+    alternates: { canonical: landingPath ?? "/factchecks" },
+  };
 }
