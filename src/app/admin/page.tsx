@@ -9,10 +9,8 @@ import {
   CheckCircle2,
   CopyCheck,
   FileCheck2,
-  Fingerprint,
   GitPullRequestArrow,
   HeartPulse,
-  Newspaper,
   Plus,
   RefreshCw,
   Scale,
@@ -37,9 +35,13 @@ function relativeTime(value: Date): string {
 }
 
 function QueueGrid({ cards, emptyLabel }: { cards: QueueCard[]; emptyLabel: string }) {
+  const pending = cards.filter((card) => card.count > 0);
+  if (!pending.length) {
+    return <p className="rounded-lg border p-4 text-sm text-muted-foreground">{emptyLabel}</p>;
+  }
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {cards.map((card) => {
+      {pending.map((card) => {
         const Icon = card.icon;
         return (
           <Link key={card.label} href={card.href}>
@@ -113,81 +115,118 @@ async function SecondaryDashboardSections() {
   ];
   return (
     <>
-      <QueueGrid cards={cards} emptyLabel="File vide, aucune action en attente." />
-      <section aria-labelledby="tracking-title" className="space-y-4">
-        <div>
-          <h2 id="tracking-title" className="font-display text-lg font-semibold">
-            Suivi
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Des stocks et des journaux, pas des files : ces compteurs ne se vident pas et n{"'"}
-            attendent aucune action de votre part.
-          </p>
-        </div>
-        <QueueGrid
-          cards={[
-            {
-              label: "Liaisons au registre",
-              count: data.decisionsPending,
-              description: "Stock de rapprochements non revus.",
-              href: "/admin/affair-matching/review?tab=UNDECIDED",
-              icon: Fingerprint,
-            },
-            {
-              label: "Rejets presse (7 j)",
-              count: data.rejectionsPending,
-              description: "Journal des rejets de l'analyse presse, sur les sept derniers jours.",
-              href: "/admin/press/rejections",
-              icon: Newspaper,
-            },
-          ]}
-          emptyLabel="Rien à signaler sur la période."
-        />
-      </section>
-      <section aria-labelledby="activity-title" className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <ActivityList title="Activité récente">
-          <>
-            {data.recentActivity.length ? (
-              data.recentActivity.map((entry) => (
-                <li key={entry.id} className="flex items-center gap-3 px-4 py-3">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
-                  <span className="flex-1 truncate text-sm">
-                    {entry.action} <span className="text-muted-foreground">{entry.entityType}</span>
-                  </span>
-                  <time
-                    className="text-xs text-muted-foreground"
-                    dateTime={entry.createdAt.toISOString()}
-                  >
-                    {relativeTime(entry.createdAt)}
-                  </time>
+      <QueueGrid cards={cards} emptyLabel="Aucun doublon à trancher ni échec signalé." />
+      <details className="rounded-lg border p-4">
+        <summary className="min-h-11 cursor-pointer font-display font-semibold">
+          Chantiers à reprendre par lots
+        </summary>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Choisissez un sujet pour une session dédiée. Ces stocks restent accessibles sans s’ajouter
+          aux décisions du jour. Les articles peuvent inclure des sujets hors périmètre.
+        </p>
+        <ul className="divide-y">
+          {[
+            [
+              "Titres de scrutin à relire ou actualiser",
+              data.policyTitlesPending,
+              "/admin/policy-titles?status=DRAFT&status=NEEDS_REVIEW&status=STALE",
+            ],
+            [
+              "Articles sans liaison retenue",
+              data.articlesPending,
+              "/admin/liaisons/articles-affaires",
+            ],
+            [
+              "Rapprochements indécis",
+              data.decisionsPending,
+              "/admin/affair-matching/review?tab=UNDECIDED",
+            ],
+          ].map(([label, count, href]) => (
+            <li key={String(label)}>
+              <Link
+                href={String(href)}
+                className="flex min-h-11 items-center justify-between gap-4 py-3 text-sm hover:underline"
+              >
+                <span>{String(label)}</span>
+                <span className="tabular-nums text-muted-foreground">{String(count)}</span>
+              </Link>
+            </li>
+          ))}
+          <li>
+            <Link
+              href="/admin/mesures"
+              className="flex min-h-11 items-center py-3 text-sm hover:underline"
+            >
+              Mesures et programmes à enrichir
+            </Link>
+          </li>
+        </ul>
+      </details>
+      <details className="rounded-lg border p-4">
+        <summary className="min-h-11 cursor-pointer font-display font-semibold">
+          Journaux et activité
+        </summary>
+        <p className="mb-4 text-sm text-muted-foreground">
+          <Link href="/admin/press/rejections" className="underline">
+            Rejets de l’analyse presse sur sept jours : {data.rejectionsPending}
+          </Link>
+          . Ce journal ne demande pas une validation de chaque ligne.
+        </p>
+        <section
+          aria-label="Historique des opérations"
+          className="grid grid-cols-1 gap-6 xl:grid-cols-2"
+        >
+          <ActivityList title="Activité récente">
+            <>
+              {data.recentActivity.length ? (
+                data.recentActivity.map((entry) => (
+                  <li key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                    <CheckCircle2
+                      className="h-4 w-4 shrink-0 text-emerald-600"
+                      aria-hidden="true"
+                    />
+                    <span className="flex-1 truncate text-sm">
+                      {entry.action}{" "}
+                      <span className="text-muted-foreground">{entry.entityType}</span>
+                    </span>
+                    <time
+                      className="text-xs text-muted-foreground"
+                      dateTime={entry.createdAt.toISOString()}
+                    >
+                      {relativeTime(entry.createdAt)}
+                    </time>
+                  </li>
+                ))
+              ) : (
+                <li className="p-6 text-center text-sm text-muted-foreground">
+                  Aucune activité récente
+                </li>
+              )}
+            </>
+          </ActivityList>
+          <ActivityList title="Activité et opérations">
+            <Link
+              href="/admin/syncs"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Voir les synchronisations
+            </Link>
+            {data.syncHistory.length ? (
+              data.syncHistory.map((job) => (
+                <li key={job.id} className="flex items-center gap-3 px-4 py-3">
+                  <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="flex-1 truncate font-mono text-xs">{job.script}</span>
+                  <Badge variant="outline">{job.status}</Badge>
                 </li>
               ))
             ) : (
               <li className="p-6 text-center text-sm text-muted-foreground">
-                Aucune activité récente
+                Aucune synchronisation enregistrée
               </li>
             )}
-          </>
-        </ActivityList>
-        <ActivityList title="Activité et opérations">
-          <Link href="/admin/syncs" className="text-sm text-muted-foreground hover:text-foreground">
-            Voir les synchronisations
-          </Link>
-          {data.syncHistory.length ? (
-            data.syncHistory.map((job) => (
-              <li key={job.id} className="flex items-center gap-3 px-4 py-3">
-                <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="flex-1 truncate font-mono text-xs">{job.script}</span>
-                <Badge variant="outline">{job.status}</Badge>
-              </li>
-            ))
-          ) : (
-            <li className="p-6 text-center text-sm text-muted-foreground">
-              Aucune synchronisation enregistrée
-            </li>
-          )}
-        </ActivityList>
-      </section>
+          </ActivityList>
+        </section>
+      </details>
     </>
   );
 }
@@ -209,7 +248,7 @@ export default async function AdminDashboard() {
   const data = await getDashboardCounts();
   const cards: QueueCard[] = [
     {
-      label: "Affaires DRAFT",
+      label: "Affaires à examiner",
       count: data.affairsDraft,
       description: "Vérifier les sources et décider de la publication.",
       href: "/admin/affaires?status=DRAFT",
@@ -237,13 +276,6 @@ export default async function AdminDashboard() {
       icon: FileCheck2,
     },
     {
-      label: "Articles à lier",
-      count: data.queues.articlesPending,
-      description: "Examiner les articles analysés sans liaison d’affaire.",
-      href: "/admin/liaisons/articles-affaires",
-      icon: Newspaper,
-    },
-    {
       label: "Échéances à traiter",
       count: data.queues.monitoringToHandle,
       description: "Délibérés, audiences et échéances atteintes.",
@@ -254,8 +286,8 @@ export default async function AdminDashboard() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        title="À traiter maintenant"
-        description={`${data.totalPoliticians} personnalités politiques, ${data.totalAffairs} affaires`}
+        title="Pilotage éditorial"
+        description="Décisions à examiner, chantiers à reprendre et suivi des données."
         action={
           <Link
             href="/admin/affaires/nouveau"
@@ -273,18 +305,22 @@ export default async function AdminDashboard() {
             À traiter maintenant
           </h2>
           <p className="text-sm text-muted-foreground">
-            Chaque compteur correspond à une file distincte et ouvre son filtre de travail.
+            Les échéances et les décisions éditoriales restent visibles ici. Une même affaire peut
+            figurer dans plusieurs files : ces nombres ne s’additionnent pas.
           </p>
         </div>
-        <QueueGrid cards={cards} emptyLabel="File vide, aucune action en attente." />
+        <QueueGrid cards={cards} emptyLabel="Aucune décision en attente dans ces files." />
       </section>
-      <section aria-labelledby="health-title" className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 id="health-title" className="font-display text-lg font-semibold">
-            Santé des données
-          </h2>
-          <span className="text-sm text-muted-foreground">{data.completeness}% complet</span>
-        </div>
+      <details className="rounded-lg border p-4">
+        <summary className="min-h-11 cursor-pointer font-display font-semibold">
+          Enrichissement et fiches conservées
+        </summary>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {data.totalPoliticians} personnalités et {data.totalAffairs} affaires dans le référentiel.
+          Les brouillons incluent des anciens élus conservés, sans demande de publication. Une photo
+          ou une biographie absente n’est pas une erreur de mandat. Une affaire en cours peut ne pas
+          avoir de décision de justice à rattacher.
+        </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             [
@@ -293,8 +329,16 @@ export default async function AdminDashboard() {
               "/admin/politiques?filter=no-photo",
             ],
             ["Biographies manquantes", data.biographiesMissing, "/admin/politiques?filter=no-bio"],
-            ["Affaires sans décision", data.affairsWithoutEcli, "/admin/affaires?filter=no-ecli"],
-            ["Personnalités DRAFT", data.politiciansDraft, "/admin/politiques?status=DRAFT"],
+            [
+              "Affaires sans décision rattachée",
+              data.affairsWithoutEcli,
+              "/admin/affaires?filter=no-ecli",
+            ],
+            [
+              "Personnalités non publiées (brouillons)",
+              data.politiciansDraft,
+              "/admin/politiques?status=DRAFT",
+            ],
           ].map(([label, count, href]) => (
             <Link key={String(label)} href={String(href)}>
               <Card className="transition-shadow hover:shadow-md">
@@ -306,7 +350,7 @@ export default async function AdminDashboard() {
             </Link>
           ))}
         </div>
-      </section>
+      </details>
       <Suspense fallback={<DashboardSkeleton />}>
         <SecondaryDashboardSections />
       </Suspense>

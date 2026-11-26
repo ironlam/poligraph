@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
   raw: vi.fn(),
   count: vi.fn(),
+  titles: vi.fn(),
   articles: vi.fn(),
   rejections: vi.fn(),
   failedSyncs: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/lib/db", () => ({
     $queryRaw: h.raw,
     affairUpdateProposal: { count: h.count },
     moderationReview: { count: h.count },
+    scrutinPolicyTitle: { count: h.titles },
     affairPoliticianDecision: { count: h.count },
     auditLog: { findMany: h.activity },
     syncJob: { findMany: h.history },
@@ -50,6 +52,7 @@ beforeEach(() => {
     },
   ]);
   h.count.mockResolvedValue(0);
+  h.titles.mockResolvedValue(508);
   h.articles.mockResolvedValue(0);
   h.rejections.mockResolvedValue(0);
   h.failedSyncs.mockResolvedValue(0);
@@ -69,10 +72,22 @@ describe("dashboard data boundaries", () => {
   it("does not run duplicate detection on the critical dashboard path", async () => {
     await getDashboardCounts();
     expect(h.duplicates).not.toHaveBeenCalled();
+    expect(h.articles).not.toHaveBeenCalled();
+    expect(h.titles).not.toHaveBeenCalled();
   });
 
   it("keeps the exact duplicate count in the deferred path", async () => {
     await expect(getDashboardSecondaryData()).resolves.toMatchObject({ duplicates: 2 });
     expect(h.duplicates).toHaveBeenCalledOnce();
+  });
+  it("garde les stocks de presse et de titres accessibles dans le chargement secondaire", async () => {
+    h.articles.mockResolvedValue(2059);
+    await expect(getDashboardSecondaryData()).resolves.toMatchObject({
+      articlesPending: 2059,
+      policyTitlesPending: 508,
+    });
+    expect(h.titles).toHaveBeenCalledWith({
+      where: { status: { in: ["DRAFT", "NEEDS_REVIEW", "STALE"] } },
+    });
   });
 });
