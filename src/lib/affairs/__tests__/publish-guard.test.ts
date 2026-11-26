@@ -387,3 +387,57 @@ describe("checkPublishable — humain contre assistance", () => {
     expect(reason!.message).toMatch(/à valider par un humain/);
   });
 });
+
+describe("checkPublishable — fiche retenue par une décision manuelle (#1460)", () => {
+  const held = (publicationStatus: string, statusOverride: boolean) => ({
+    ...AFFAIR,
+    politician: { publicationStatus, statusOverride },
+  });
+
+  it.each(["DRAFT", "ARCHIVED", "EXCLUDED"])(
+    "refuse quand la fiche est %s et son statut fixé à la main",
+    async (status) => {
+      tx.affair.findUnique.mockResolvedValue(held(status, true));
+      tx.affairPoliticianDecision.findMany.mockResolvedValue([]);
+
+      const reasons = await checkPublishable("aff_1");
+
+      expect(reasons).toEqual([
+        expect.objectContaining({ code: "PROFILE_HELD_BACK", politicianId: "pol_1" }),
+      ]);
+    }
+  );
+
+  it("laisse passer une fiche en brouillon sans statut fixé : la règle automatique la publiera", async () => {
+    // The behaviour before this guard, kept on purpose for every profile created by a sync.
+    tx.affair.findUnique.mockResolvedValue(held("DRAFT", false));
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([]);
+    expect(await checkPublishable("aff_1")).toEqual([]);
+  });
+
+  it("laisse passer une fiche publiée, statut fixé ou non", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([]);
+    for (const override of [true, false]) {
+      tx.affair.findUnique.mockResolvedValue(held("PUBLISHED", override));
+      expect(await checkPublishable("aff_1")).toEqual([]);
+    }
+  });
+
+  it("lit bien le statut de la fiche : sans ce select, la règle serait muette", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([]);
+    await checkPublishable("aff_1");
+    expect(tx.affair.findUnique.mock.calls[0]![0].select.politician).toEqual({
+      select: { publicationStatus: true, statusOverride: true },
+    });
+  });
+
+  it("assertPublishable refuse et n'écrit rien", async () => {
+    tx.affair.findUnique.mockResolvedValue(held("DRAFT", true));
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([]);
+
+    await expect(
+      assertPublishable("aff_1", { verifiedBy: VERIFIED_BY_MODERATION })
+    ).rejects.toBeInstanceOf(PublishGuardError);
+    expect(tx.affair.update).not.toHaveBeenCalled();
+  });
+});

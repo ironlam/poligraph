@@ -43,6 +43,8 @@ export type PublishBlockReason =
       decisionIds: string[];
     }
   | { code: "NO_SOURCE"; message: string }
+  /** The person's profile is hidden by an editorial decision no rule will reverse. */
+  | { code: "PROFILE_HELD_BACK"; message: string; politicianId: string }
   | { code: "MISSING_INVOLVEMENT_NOTE"; message: string }
   | { code: "VERDICT_AFTER_ALL_SOURCES"; message: string }
   | {
@@ -80,6 +82,7 @@ type GuardClient = {
       involvementNote: string | null;
       verdictDate: Date | null;
       sources: { url: string; publishedAt: Date; sourceType: string }[];
+      politician?: { publicationStatus: string; statusOverride: boolean } | null;
     } | null>;
     update: (args: {
       where: Prisma.AffairWhereUniqueInput;
@@ -107,6 +110,8 @@ type GuardClient = {
  * blocage (vide = publiable). Règles :
  *
  * 1. Au moins une Source.
+ * 1ter. La fiche de la personne n'est pas retenue par une décision manuelle (statusOverride posé
+ *    et statut autre que publié) : dans ce cas la règle automatique ne la publiera pas.
  * 1bis. Si une date de verdict est renseignée, au moins une source indépendante
  *    (hors Wikipedia/Wikidata) publiée à cette date ou après.
  * 2. Aucune décision de matching automatique (SAME ou UNDECIDED) non validée
@@ -141,6 +146,7 @@ export async function checkPublishable(
       involvementNote: true,
       verdictDate: true,
       sources: { select: { url: true, publishedAt: true, sourceType: true } },
+      politician: { select: { publicationStatus: true, statusOverride: true } },
     },
   });
 
@@ -154,6 +160,22 @@ export async function checkPublishable(
     reasons.push({
       code: "NO_SOURCE",
       message: "aucune source vérifiable",
+    });
+  }
+
+  // Publishing an affair normally publishes the person's profile (rule 3c of `determineStatus`).
+  // A profile whose status was set by hand is outside that rule: it would stay hidden, and the
+  // affair page would link to a profile the site does not list. The profile is published first,
+  // by its own explicit gesture. A profile without `statusOverride` keeps the usual behaviour.
+  if (
+    affair.politician?.statusOverride &&
+    affair.politician.publicationStatus !== PUBLISHED_STATUS
+  ) {
+    reasons.push({
+      code: "PROFILE_HELD_BACK",
+      message:
+        "la fiche de la personne n'est pas publiée et son statut est fixé à la main : la publier d'abord depuis sa fiche",
+      politicianId: affair.politicianId,
     });
   }
 
