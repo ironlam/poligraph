@@ -56,7 +56,7 @@ export function buildPoliticianSignals(input: SignalsInput): Signal[] {
       iconKey: "vote",
       label: "Votes enregistrés",
       value: String(input.votesTotal),
-      href: tab(slug, "votes"),
+      href: `/politiques/${slug}/votes`,
       tone: "neutral",
       primary: true,
     });

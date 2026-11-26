@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import AssembleePage from "@/app/institutions/assemblee-nationale/page";
+import { ROUTES } from "@/config/routes";
 import type { MetadataRoute } from "next";
 import { OG_IMAGE_DISALLOW_PATHS, SOCIAL_PREVIEW_USER_AGENTS } from "@/lib/seo/og-image-robots";
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
@@ -74,6 +77,20 @@ describe("robots.txt (production)", () => {
 
   beforeEach(async () => {
     robots = await loadRobots("production");
+  });
+
+  it("la page pédagogique de l'Assemblée ne lie aucune facette de votes interdite", () => {
+    const doc = new DOMParser().parseFromString(renderToStaticMarkup(AssembleePage()), "text/html");
+    const links = [...doc.querySelectorAll("a[href]")].map((a) => a.getAttribute("href")!);
+    expect(links).toContain(ROUTES.assembleeNationale);
+    const patterns = asArray(groupFor(robots, "*")!.disallow).filter((p) =>
+      p.startsWith("/parlement/votes?")
+    );
+    expect(patterns).toHaveLength(VOTES_LISTING_FILTER_KEYS.length);
+    for (const href of links) {
+      const url = new URL(href, SITE_URL);
+      expect(patterns.some((p) => matchesRobotsPattern(p, url.pathname + url.search))).toBe(false);
+    }
   });
 
   it("announces every sitemap shard", () => {

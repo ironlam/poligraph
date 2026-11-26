@@ -15,10 +15,11 @@ import {
   MessageCircleQuestion,
 } from "lucide-react";
 import { FAQJsonLd } from "@/components/seo/JsonLd";
+import { ROUTES } from "@/config/routes";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 export const metadata: Metadata = {
-  title: "L'Assemblée nationale — Fonctionnement et votes",
+  title: "Assemblée nationale : fonctionnement et votes",
   description:
     "Comprendre le fonctionnement de l'Assemblée nationale : types de votes, rôle du président de séance, délégation de vote et réalité de l'absentéisme parlementaire.",
   alternates: { canonical: "/institutions/assemblee-nationale" },
@@ -390,10 +391,10 @@ export default function AssembleeNationalePage() {
                   Voir les députés
                 </Link>
                 <Link
-                  href="/parlement/votes?chamber=AN"
+                  href={ROUTES.assembleeNationale}
                   className="inline-flex items-center px-4 py-2 border rounded-md text-sm hover:bg-muted"
                 >
-                  Voir les votes AN
+                  Voir les votes de l&apos;Assemblée
                 </Link>
                 <Link
                   href="/institutions"

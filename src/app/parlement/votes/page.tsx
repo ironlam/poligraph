@@ -5,6 +5,8 @@ import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { normalizeSort } from "@/lib/data/scrutins";
 
+import { BARE_VOTES_TITLE, BARE_VOTES_DESCRIPTION, isBareVotesView } from "@/lib/seo/votes-listing";
+
 export const revalidate = 300;
 
 interface PageProps {
@@ -58,10 +60,16 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
         ? "Votes du Sénat"
         : "Votes parlementaires";
   return {
-    title: isBareExplainedView ? "Votes expliqués" : chamberTitle,
+    title: isBareExplainedView
+      ? "Votes expliqués"
+      : isBareVotesView(params)
+        ? BARE_VOTES_TITLE
+        : chamberTitle,
     description: isBareExplainedView
       ? "Les votes de l'Assemblée nationale et du Sénat traduits en titres clairs et vérifiés."
-      : "Suivez les votes de l'Assemblée nationale et du Sénat. Consultez les scrutins et découvrez comment votent vos représentants.",
+      : isBareVotesView(params)
+        ? BARE_VOTES_DESCRIPTION
+        : "Suivez les votes de l'Assemblée nationale et du Sénat. Consultez les scrutins et découvrez comment votent vos représentants.",
     ...listingRobotsMetadata(noindex),
     alternates: {
       canonical: isBareExplainedView

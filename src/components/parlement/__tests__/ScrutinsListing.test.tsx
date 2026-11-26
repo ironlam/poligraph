@@ -42,3 +42,19 @@ describe("ScrutinsListing thematic landings", () => {
     expect(economyLink).toHaveAttribute("href", "/parlement/votes/themes/economie-budget");
   });
 });
+
+describe("H1 de la liste des votes", () => {
+  it.each([
+    [{}, "Qui vote quoi ? Votes de l'Assemblée et du Sénat"],
+    [{ chamber: "AN" }, "Votes de l'Assemblée nationale"],
+    [{ chamber: "SENAT" }, "Votes du Sénat"],
+    [{ theme: "SANTE" }, "Votes parlementaires"],
+    [{ sort: "recent" }, "Votes parlementaires"],
+    [{ page: "2" }, "Votes parlementaires"],
+    [{ filter: "expliques" }, "Votes expliqués"],
+    [{ filter: "expliques", chamber: "AN" }, "Votes expliqués"],
+  ])("préserve le titre attendu pour %j", async (searchParams, title) => {
+    render(await ScrutinsListing({ searchParams, sort: "recent" }));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(title);
+  });
+});

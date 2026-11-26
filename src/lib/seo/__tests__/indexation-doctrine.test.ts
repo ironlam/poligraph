@@ -469,7 +469,7 @@ describe("doctrine — /parlement/votes sort stays out of the canonical", () => 
     expect(m.alternates?.canonical).toBe("/parlement/votes");
   });
 
-  it("bare listing (no sort param) matches ?sort=recent exactly", async () => {
+  it("bare listing keeps the robots and canonical of ?sort=recent with its own title", async () => {
     const bare = await votesGenerateMetadata({
       searchParams: Promise.resolve({}),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -478,6 +478,9 @@ describe("doctrine — /parlement/votes sort stays out of the canonical", () => 
       searchParams: Promise.resolve({ sort: "recent" }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
+    expect(bare.title).toBe("Qui vote quoi ? Votes de l'Assemblée et du Sénat");
+    expect(bare.description).toContain("votes des députés et sénateurs");
+    expect(recent.title).toBe("Votes parlementaires");
     expect(recent.robots).toEqual(bare.robots);
     expect(recent.alternates?.canonical).toBe(bare.alternates?.canonical);
   });

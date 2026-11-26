@@ -40,6 +40,7 @@ describe("buildPoliticianSignals", () => {
   it("routes each signal to its destination", () => {
     const signals = buildPoliticianSignals(base);
     const byKey = Object.fromEntries(signals.map((s) => [s.key, s]));
+    expect(byKey["votes"]!.href).toBe("/politiques/camille-renard/votes");
     expect(byKey["mandats"]!.href).toBe("/politiques/camille-renard?tab=carriere");
     expect(byKey["condamnations-definitives"]!.href).toBe(
       "/politiques/camille-renard?tab=affaires"
