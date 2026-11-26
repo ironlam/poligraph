@@ -61,8 +61,21 @@ describe("admin navigation registry", () => {
     const politicians = ADMIN_NAVIGATION.find((entry) => entry.id === "affairs-politicians")!;
     expect(articles.href).toBe("/admin/liaisons/articles-affaires");
     expect(politicians.href).toBe("/admin/liaisons/affaires-personnalites");
-    expect(articles.counterKey).toBe("matching.articlesPending");
-    expect(politicians.counterKey).toBe("matching.decisionsPending");
+    expect(articles.counterKey).toBeUndefined();
+    expect(politicians.counterKey).toBeUndefined();
     expect(isAdminNavigationActive("/admin/affair-matching/review", politicians)).toBe(true);
+  });
+  it("ne présente pas les stocks et les journaux comme des notifications", () => {
+    for (const id of [
+      "politicians",
+      "articles-affairs",
+      "affairs-politicians",
+      "press-rejections",
+    ]) {
+      expect(ADMIN_NAVIGATION.find((entry) => entry.id === id)?.counterKey).toBeUndefined();
+    }
+    expect(ADMIN_NAVIGATION.find((entry) => entry.id === "affairs")?.counterKey).toBe(
+      "drafts.affairs"
+    );
   });
 });

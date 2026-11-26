@@ -69,17 +69,17 @@ describe("GET /api/admin/badges", () => {
       params: Promise.resolve({}),
     });
     expect(await response.json()).toEqual({
-      drafts: { affairs: 3, politicians: 4 },
+      drafts: { affairs: 3 },
       moderation: { proposalsPending: 5, proposalsConflict: 2, reviewsPending: 7 },
-      matching: { decisionsPending: 8, articlesPending: 11, duplicatesPending: 2 },
+      matching: { duplicatesPending: 2 },
       candidacies: { publicationPending: 6 },
-      press: { rejectionsPending: 9 },
       operations: { failedPipelines: 2, failedSyncs: 10 },
     });
-    // La route ne doit pas porter de copie locale du prédicat : le tableau de
-    // bord et la navigation afficheraient deux vérités au même écran.
-    expect(h.articlesToLink).toHaveBeenCalled();
-    expect(h.recentRejections).toHaveBeenCalled();
+    // Le polling de la sidebar ne doit plus recalculer les stocks sans badge.
+    expect(h.db.politician.count).not.toHaveBeenCalled();
+    expect(h.db.affairPoliticianDecision.count).not.toHaveBeenCalled();
+    expect(h.articlesToLink).not.toHaveBeenCalled();
+    expect(h.recentRejections).not.toHaveBeenCalled();
     expect(h.recentFailedSyncs).toHaveBeenCalled();
   });
 });

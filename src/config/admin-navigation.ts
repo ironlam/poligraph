@@ -33,15 +33,11 @@ export type AdminNavigationGroupId = "todo" | "content" | "quality" | "operation
 
 export type AdminCounterKey =
   | "drafts.affairs"
-  | "drafts.politicians"
   | "moderation.proposalsPending"
   | "moderation.proposalsConflict"
   | "moderation.reviewsPending"
   | "candidacies.publicationPending"
-  | "matching.decisionsPending"
-  | "matching.articlesPending"
   | "matching.duplicatesPending"
-  | "press.rejectionsPending"
   | "operations.failedPipelines"
   | "operations.failedSyncs";
 
@@ -82,7 +78,6 @@ const entries: readonly AdminNavigationEntry[] = [
     description: "Profils, mandats et données biographiques.",
     group: "content",
     icon: Users,
-    counterKey: "drafts.politicians",
   },
   {
     id: "parties",
@@ -219,19 +214,17 @@ const entries: readonly AdminNavigationEntry[] = [
     id: "articles-affairs",
     href: "/admin/liaisons/articles-affaires",
     label: "Articles ↔ affaires",
-    description: "Articles analysés sans liaison détectée.",
+    description: "Stock d’articles à examiner par lots, sans urgence implicite.",
     group: "quality",
     icon: FileCheck2,
-    counterKey: "matching.articlesPending",
   },
   {
     id: "affairs-politicians",
     href: "/admin/liaisons/affaires-personnalites",
     label: "Affaires ↔ personnalités",
-    description: "Décisions de liaison à confirmer.",
+    description: "Registre des rapprochements à reprendre lors d’une revue ciblée.",
     group: "quality",
     icon: Fingerprint,
-    counterKey: "matching.decisionsPending",
     aliases: ["/admin/affair-matching/review"],
   },
   {
@@ -280,10 +273,9 @@ const entries: readonly AdminNavigationEntry[] = [
     id: "press-rejections",
     href: "/admin/press/rejections",
     label: "Rejets presse",
-    description: "Rejets nécessitant une décision éditoriale.",
+    description: "Journal des rejets de l’analyse presse, sans action systématique.",
     group: "quality",
     icon: ShieldX,
-    counterKey: "press.rejectionsPending",
   },
   {
     id: "matching-dashboard",
