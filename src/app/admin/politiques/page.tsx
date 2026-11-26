@@ -83,14 +83,22 @@ export default async function AdminPoliticiansPage({ searchParams }: PageProps) 
             {filter === "no-bio" && " · Sans biographie"}
           </p>
         </div>
-        {(status || filter) && (
+        <div className="flex items-center gap-4">
+          {(status || filter) && (
+            <Link
+              href="/admin/politiques"
+              className="text-sm text-muted-foreground hover:text-foreground underline"
+            >
+              Réinitialiser les filtres
+            </Link>
+          )}
           <Link
-            href="/admin/politiques"
-            className="text-sm text-muted-foreground hover:text-foreground underline"
+            href="/admin/politiques/nouveau"
+            className="inline-flex min-h-11 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            Réinitialiser les filtres
+            Nouvelle fiche
           </Link>
-        )}
+        </div>
       </div>
 
       <Card>
