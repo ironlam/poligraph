@@ -11,6 +11,10 @@ const NOINDEX_FOLLOW = { index: false, follow: true } as const;
  * Measured on 2026-11-22: the party block counted for 562 of the 591 fact-checks with a single
  * author, and let 283 pages into the index on its own. A signal present nearly everywhere
  * discriminates nothing (AGENTS.md §5), so it no longer counts.
+ *
+ * Published programme measures on the validated theme are specific to the claim: same author,
+ * same theme. Measured on 2026-11-25: 50 pages with author context but no claim-specific block
+ * have such measures. The same rule applies to every person and every party.
  */
 
 /**
@@ -30,11 +34,13 @@ export interface FactCheckIndexSignals {
   hasClaimDayVotes: boolean;
   /** The claim's theme is validated in the admin and the author voted on scrutins of that theme. */
   hasThemeVotes: boolean;
+  /** Published presidential 2027 measures of the same author on the validated claim theme. */
+  hasThemeProgramme: boolean;
 }
 
-/** A block that belongs to this claim: what Parliament voted the day of it, or on its theme. */
+/** A block tied to the claim day or to the same author's activity on its validated theme. */
 export function hasClaimSpecificBlock(signals: FactCheckIndexSignals): boolean {
-  return signals.hasClaimDayVotes || signals.hasThemeVotes;
+  return signals.hasClaimDayVotes || signals.hasThemeVotes || signals.hasThemeProgramme;
 }
 
 /** A block that situates the author: their record with the fact-checkers, or their candidacy. */

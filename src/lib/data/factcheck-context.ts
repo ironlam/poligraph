@@ -14,6 +14,10 @@ import { VERDICT_GROUPS } from "@/config/labels";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { SCRUTIN_THEMES, type ScrutinTheme } from "@/config/scrutin-themes";
 import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
+import {
+  PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+  PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+} from "@/lib/presidentielle/publication";
 import { isIndexableFactCheck } from "@/lib/seo/factcheck-robots";
 import { getPoliticianFactcheckContext } from "./factchecks";
 
@@ -39,6 +43,7 @@ export const RECENT_FACTCHECKS_LIMIT = 5;
 export const CLAIM_DAY_MAX_DOSSIERS = 3;
 export const CLAIM_DAY_SAMPLE_VOTES = 3;
 export const THEME_RECENT_VOTES = 3;
+export const THEME_PROGRAMME_LIMIT = 5;
 
 export type VerdictGroup = keyof typeof VERDICT_GROUPS;
 export type VerdictBreakdown = Record<VerdictGroup, number>;
@@ -138,6 +143,11 @@ export interface ThemeVotes {
   recentExcludesAmendments: boolean;
 }
 
+export interface ThemeProgramme {
+  theme: ScrutinTheme;
+  measures: { slug: string; text: string }[];
+}
+
 export interface PartyRecord {
   slug: string | null;
   name: string;
@@ -154,6 +164,7 @@ export interface FactCheckContext {
   party: PartyRecord | null;
   /** The author's votes on the validated theme of the claim: a block specific to this claim. */
   themeVotes: ThemeVotes | null;
+  themeProgramme: ThemeProgramme | null;
   /** Indexing verdict, computed here once and read by the page metadata. */
   indexable: boolean;
 }
@@ -165,6 +176,7 @@ export const EMPTY_FACTCHECK_CONTEXT: FactCheckContext = {
   claimDay: null,
   party: null,
   themeVotes: null,
+  themeProgramme: null,
   indexable: false,
 };
 
@@ -206,6 +218,7 @@ export function isIndexableFactCheckContext(context: Omit<FactCheckContext, "ind
     hasCandidacy: context.candidacy !== null,
     hasClaimDayVotes: context.claimDay !== null,
     hasThemeVotes: context.themeVotes !== null,
+    hasThemeProgramme: (context.themeProgramme?.measures.length ?? 0) > 0,
   });
 }
 
@@ -513,6 +526,40 @@ async function queryThemeVotes(
   };
 }
 
+/** Stable slug order, independent of edits to the formulation or of the candidate's party.
+ * Only the published formulation is read, never the latest draft or generated context.
+ * Withdrawn measures have no public detail page and cannot be linked from this block.
+ * The full public predicate keeps every link reachable after a fiche or revision depublication.
+ * These gates are mirrored in the sitemap SQL: no invisible indexing signal.
+ */
+async function queryThemeProgramme(
+  politicianId: string,
+  theme: ScrutinTheme
+): Promise<ThemeProgramme | null> {
+  const measures = await db.measure.findMany({
+    where: {
+      ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+      theme,
+      election: { slug: PRESIDENTIELLE_2027_SLUG },
+      candidacy: {
+        is: {
+          ...PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+          politicianId,
+          election: { slug: PRESIDENTIELLE_2027_SLUG },
+        },
+      },
+    },
+    orderBy: { slug: "asc" },
+    take: THEME_PROGRAMME_LIMIT,
+    select: { slug: true, publishedRevision: { select: { text: true } } },
+  });
+  if (measures.length === 0) return null;
+  return {
+    theme,
+    measures: measures.map((m) => ({ slug: m.slug, text: m.publishedRevision!.text })),
+  };
+}
+
 async function queryParty(
   party: NonNullable<AuthorIdentity["party"]>
 ): Promise<PartyRecord | null> {
@@ -548,14 +595,24 @@ export async function queryFactCheckContext(
   const party = author.identity.party ? await queryParty(author.identity.party) : null;
   const themeVotes = input.theme ? await queryThemeVotes(author.id, input.theme) : null;
 
-  const blocks = { author: author.identity, record, candidacy, claimDay, party, themeVotes };
+  const themeProgramme = input.theme ? await queryThemeProgramme(author.id, input.theme) : null;
+
+  const blocks = {
+    author: author.identity,
+    record,
+    candidacy,
+    claimDay,
+    party,
+    themeVotes,
+    themeProgramme,
+  };
   return { ...blocks, indexable: isIndexableFactCheckContext(blocks) };
 }
 
 /**
  * Cached entry point. Tags: the fact-checks themselves, the author's profile, the votes of the
- * claim day, the elections, and the candidacies of the presidential election, keyed on its id like
- * the candidate fiche so that a candidacy edit reaches this page. The id is read inside the cached
+ * claim day, the elections, and the presidential measures and candidacies, keyed on the election
+ * id like the candidate fiche so that a publication or candidacy edit reaches this page. The id is read inside the cached
  * scope rather than through `getPresidentialElectionId`, whose module also reads affairs: this page
  * shows none, and the MCP surface inventory would count it as an Affair surface.
  */
@@ -582,7 +639,9 @@ async function getFactCheckContextCached(
     where: { slug: PRESIDENTIELLE_2027_SLUG },
     select: { id: true },
   });
-  if (election) cacheTag(`election-candidacies:${election.id}`);
+  if (election) {
+    cacheTag(`election-candidacies:${election.id}`, `election-measures:${election.id}`);
+  }
   return queryFactCheckContext({
     factCheckSlug,
     authorSlug,

@@ -10,8 +10,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const h = vi.hoisted(() => {
   const calls: string[] = [];
+  const electionFindUnique = vi.fn(async () => null as { id: string } | null);
   const dbHandler: ProxyHandler<Record<string, unknown>> = {
     get(_t, model: string) {
+      if (model === "election") return { findUnique: electionFindUnique, findMany: async () => [] };
       if (model === "$queryRaw" || model === "$queryRawUnsafe") {
         return async () => {
           calls.push(`db.${model}`);
@@ -33,6 +35,7 @@ const h = vi.hoisted(() => {
   };
   return {
     calls,
+    electionFindUnique,
     connection: vi.fn(async () => {
       calls.push("connection");
     }),
@@ -56,6 +59,7 @@ import { SITEMAP_SHARD_IDS, SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 beforeEach(() => {
   h.calls.length = 0;
   vi.clearAllMocks();
+  h.electionFindUnique.mockResolvedValue(null);
 });
 
 describe("the sitemap route renders per request", () => {
@@ -87,6 +91,12 @@ describe("the sitemap route renders per request", () => {
       expect(h.cacheTag, `shard ${shard}`).toHaveBeenCalledWith(...tags);
       expect(h.cacheLife, `shard ${shard}`).toHaveBeenCalledWith("synced");
     }
+  });
+
+  it("le shard 6 est invalidé avec la publication de la fiche candidat", async () => {
+    h.electionFindUnique.mockResolvedValue({ id: "presidentielle-1" });
+    await sitemap({ id: Promise.resolve("6") });
+    expect(h.cacheTag).toHaveBeenCalledWith("election-candidacies:presidentielle-1");
   });
 
   it("declares the tags before reading, so the read is what gets cached", async () => {

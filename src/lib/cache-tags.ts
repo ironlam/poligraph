@@ -68,6 +68,7 @@ export const NARROW_TAGS = [
   "scrutin-analysis",
   "politician-votes",
   "press",
+  "factcheck-programmes",
 ] as const;
 
 export const POLITICIAN_VOTES_TAG = "politician-votes" satisfies (typeof NARROW_TAGS)[number];

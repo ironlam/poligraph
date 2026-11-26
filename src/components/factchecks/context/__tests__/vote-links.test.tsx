@@ -5,7 +5,7 @@ import type { ReactElement } from "react";
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ db: {} }));
 
-import { ClaimDayBlock, ThemeVotesBlock } from "../FactCheckContextBlocks";
+import { ClaimDayBlock, ThemeVotesBlock, ProgrammeThemeBlock } from "../FactCheckContextBlocks";
 import { EMPTY_FACTCHECK_CONTEXT, type FactCheckContext } from "@/lib/data/factcheck-context";
 
 const author = {
@@ -73,5 +73,34 @@ describe("liens des listes de votes", () => {
     for (const cls of scrutinLinkClasses(await render(ClaimDayBlock), ["jour-1"])) {
       expect(cls.split(" ")).toEqual(expect.arrayContaining(["inline-flex", "min-h-11"]));
     }
+  });
+});
+
+describe("programme du thème", () => {
+  it("rend un h2, le thème, les formulations publiées et la fiche candidat", async () => {
+    const programmeContext: FactCheckContext = {
+      ...context,
+      themeProgramme: {
+        theme: "SANTE",
+        measures: [{ slug: "acces-aux-soins", text: "Faciliter l'accès aux soins" }],
+      },
+    };
+    const element = await ProgrammeThemeBlock({ context: Promise.resolve(programmeContext) });
+    const html = renderToStaticMarkup(element!);
+    expect(html).toContain('<h2 id="fc-theme-programme"');
+    expect(html).toContain("Son programme 2027 sur ce thème");
+    expect(html).toContain("Santé");
+    expect(html).toContain("Faciliter l&#x27;accès aux soins");
+    expect(html).toContain('href="/elections/presidentielle-2027/mesures/acces-aux-soins"');
+    expect(html).toContain('href="/elections/presidentielle-2027/candidats/manuel-bompard"');
+  });
+
+  it("ne rend rien sans données", async () => {
+    expect(await ProgrammeThemeBlock({ context: Promise.resolve(context) })).toBeNull();
+    expect(
+      await ProgrammeThemeBlock({
+        context: Promise.resolve({ ...context, themeProgramme: { theme: "SANTE", measures: [] } }),
+      })
+    ).toBeNull();
   });
 });

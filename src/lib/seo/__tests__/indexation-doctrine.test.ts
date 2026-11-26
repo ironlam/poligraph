@@ -134,6 +134,7 @@ const FACTCHECK_NO_AUTHOR: FactCheckIndexSignals = {
   hasCandidacy: false,
   hasClaimDayVotes: false,
   hasThemeVotes: false,
+  hasThemeProgramme: false,
 };
 const FACTCHECK_AUTHOR_WITH_RECORD: FactCheckIndexSignals = {
   hasPublishedAuthor: true,
@@ -141,6 +142,7 @@ const FACTCHECK_AUTHOR_WITH_RECORD: FactCheckIndexSignals = {
   hasCandidacy: false,
   hasClaimDayVotes: false,
   hasThemeVotes: false,
+  hasThemeProgramme: false,
 };
 
 describe("doctrine — strong surfaces stay indexable", () => {
@@ -604,8 +606,52 @@ describe("doctrine: the fact-check shard mirrors isIndexableFactCheck()", () => 
     expect(factChecksShard).toContain("HAVING count(*) = 1");
   });
 
+  it("joint le programme au même auteur, à la même élection et au même thème", () => {
+    const helper = readFileSync(join(process.cwd(), "src/lib/seo/factcheck-robots.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "");
+    const predicate = helper.match(/function hasClaimSpecificBlock[\s\S]*?\n\}/)?.[0];
+    expect(predicate).toContain("signals.hasThemeProgramme");
+    const start = factChecksShard.indexOf('SELECT 1 FROM "Measure" me');
+    const programme = factChecksShard.slice(start, factChecksShard.indexOf("))", start));
+    expect(programme).toContain('ca."id" = me."candidacyId"');
+    expect(programme).toContain('ce."id" = ca."electionId"');
+    expect(programme).toContain('e."id" = me."electionId"');
+    expect(programme).toContain('ca."politicianId" = c."politicianId"');
+    expect(programme).toContain('ce."slug" = ${PRESIDENTIELLE_2027_SLUG}');
+    expect(programme).toContain('e."slug" = ${PRESIDENTIELLE_2027_SLUG}');
+    expect(programme).toContain("me.\"publicationStatus\" = 'PUBLISHED'");
+    expect(programme).toContain('me."theme" = fc."theme"');
+    expect(programme).toContain('me."withdrawnAt" IS NULL');
+    expect(programme).toContain('mr."id" = me."publishedRevisionId"');
+    for (const alias of ["mr", "pr"]) {
+      expect(programme).toContain(`${alias}."reviewedAt" IS NOT NULL`);
+      expect(programme).toContain(`${alias}."publishedAt" IS NOT NULL`);
+      for (const field of ["supersededAt", "discardedAt", "rejectedAt"]) {
+        expect(programme).toContain(`${alias}."${field}" IS NULL`);
+      }
+    }
+    expect(programme).toContain('ms."measureRevisionId" = mr."id"');
+    expect(programme).toContain('cp."candidacyId" = ca."id"');
+    expect(programme).toContain("cp.\"publicationStatus\" = 'PUBLISHED'");
+    for (const field of ["status", "sourceUrl", "sourceLabel"]) {
+      expect(programme).toContain(`ca."${field}" IS NOT NULL`);
+    }
+    expect(programme).toContain('pm."candidacyId" = ca."id"');
+    expect(programme).toContain("pm.\"publicationStatus\" = 'PUBLISHED'");
+    expect(programme).toContain('pm."withdrawnAt" IS NULL');
+    expect(programme).toContain('pr."id" = pm."publishedRevisionId"');
+    expect(programme).toContain('ps."measureRevisionId" = pr."id"');
+    expect(programme).toContain("ps.\"tier\" = 'PRIMARY'");
+    expect(factChecksShard).toContain("cacheTag(`election-candidacies:${election.id}`)");
+    const page = readFileSync(join(process.cwd(), "src/app/factchecks/[slug]/page.tsx"), "utf8");
+    expect(page).toMatch(
+      /<Suspense fallback=\{null\}>\s*<ProgrammeThemeBlock context=\{context\} \/>\s*<\/Suspense>/
+    );
+  });
+
   // One condition per block counted by isIndexableFactCheck().
-  it.each(['"Candidacy"', '"Vote"', '"themeReviewedAt"', '"FactCheckMention" m2'])(
+  it.each(['"Candidacy"', '"Vote"', '"Measure"', '"themeReviewedAt"', '"FactCheckMention" m2'])(
     "counts the block read from %s",
     (signal) => {
       expect(factChecksShard).toContain(signal);

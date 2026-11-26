@@ -4,16 +4,19 @@ const mocks = vi.hoisted(() => ({
   baseContext: vi.fn(),
   electionFindUnique: vi.fn(),
   cacheTag: vi.fn(),
+  revalidateTags: vi.fn(),
   politicianFindFirst: vi.fn(),
   mentionFindMany: vi.fn(),
   candidacyFindFirst: vi.fn(),
   voteFindMany: vi.fn(),
   voteGroupBy: vi.fn(),
+  measureFindMany: vi.fn(),
   scrutinGroupBy: vi.fn(),
   dossierFindMany: vi.fn(),
   queryRaw: vi.fn(),
 }));
 
+vi.mock("@/lib/cache", () => ({ revalidateTags: mocks.revalidateTags }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ cacheLife: vi.fn(), cacheTag: mocks.cacheTag }));
 vi.mock("@/lib/db", () => ({
@@ -21,6 +24,7 @@ vi.mock("@/lib/db", () => ({
     politician: { findFirst: mocks.politicianFindFirst },
     factCheckMention: { findMany: mocks.mentionFindMany },
     candidacy: { findFirst: mocks.candidacyFindFirst },
+    measure: { findMany: mocks.measureFindMany },
     vote: { findMany: mocks.voteFindMany, groupBy: mocks.voteGroupBy },
     scrutin: { groupBy: mocks.scrutinGroupBy },
     legislativeDossier: { findMany: mocks.dossierFindMany },
@@ -29,6 +33,13 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 vi.mock("../factchecks", () => ({ getPoliticianFactcheckContext: mocks.baseContext }));
+
+import {
+  PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+  PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+} from "@/lib/presidentielle/publication";
+import { invalidateMeasureTags } from "@/lib/measures/cache";
+import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 
 import {
   EMPTY_FACTCHECK_CONTEXT,
@@ -86,6 +97,7 @@ const INPUT = { factCheckSlug: "fc-current", authorSlug: "mathilde-panot", claim
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.measureFindMany.mockResolvedValue([]);
   mocks.baseContext.mockResolvedValue(BASE);
   mocks.electionFindUnique.mockResolvedValue({ id: "election-2027" });
   mocks.politicianFindFirst.mockResolvedValue(politicianRow(PARTY));
@@ -519,3 +531,78 @@ describe("getFactCheckContext", () => {
     );
   });
 });
+
+describe("programme du thème validé", () => {
+  it.each(["parti-a", "parti-b", null])("applique le même filtre au parti %s", async (partyId) => {
+    const row = politicianRow(partyId ? { ...PARTY, id: partyId } : null);
+    row.id = `personne-${partyId ?? "sans-parti"}`;
+    row.mandates = [];
+    mocks.politicianFindFirst.mockResolvedValue(row);
+    mocks.voteFindMany.mockResolvedValue([]);
+    mocks.voteGroupBy.mockResolvedValue([]);
+    mocks.measureFindMany.mockResolvedValue([
+      { slug: "une-mesure", publishedRevision: { text: "Formulation publiée" } },
+    ]);
+    const ctx = await queryFactCheckContext({ ...INPUT, theme: "SANTE" });
+    expect(ctx.themeProgramme).toEqual({
+      theme: "SANTE",
+      measures: [{ slug: "une-mesure", text: "Formulation publiée" }],
+    });
+    expect(ctx.indexable).toBe(true);
+    expect(mocks.measureFindMany).toHaveBeenCalledExactlyOnceWith({
+      where: {
+        ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+        theme: "SANTE",
+        election: { slug: "presidentielle-2027" },
+        candidacy: {
+          is: {
+            ...PUBLIC_PRESIDENTIAL_FICHE_WHERE,
+            politicianId: row.id,
+            election: { slug: "presidentielle-2027" },
+          },
+        },
+      },
+      take: 5,
+      orderBy: { slug: "asc" },
+      select: { slug: true, publishedRevision: { select: { text: true } } },
+    });
+  });
+
+  it("ne lit aucune mesure sans thème validé ou auteur unique", async () => {
+    await queryFactCheckContext(INPUT);
+    await queryFactCheckContext({ ...INPUT, theme: "SANTE", authorSlug: null });
+    expect(mocks.measureFindMany).not.toHaveBeenCalled();
+  });
+
+  it("ne compte pas un programme vide et ne remplace pas le contexte auteur", async () => {
+    mocks.voteFindMany.mockResolvedValue([]);
+    mocks.voteGroupBy.mockResolvedValue([]);
+    const ctx = await queryFactCheckContext({ ...INPUT, theme: "SANTE" });
+    expect(ctx.themeProgramme).toBeNull();
+    expect(ctx.indexable).toBe(false);
+    mocks.mentionFindMany.mockResolvedValue([]);
+    mocks.measureFindMany.mockResolvedValue([
+      { slug: "une-mesure", publishedRevision: { text: "Formulation publiée" } },
+    ]);
+    expect((await queryFactCheckContext({ ...INPUT, theme: "SANTE" })).indexable).toBe(false);
+  });
+
+  it("invalide même un programme vide lors de la première publication", async () => {
+    await getFactCheckContext({ ...INPUT, theme: "SANTE" });
+    expect(mocks.cacheTag.mock.calls.flat()).toContain("election-measures:election-2027");
+  });
+});
+
+it.each([false, true])(
+  "la publication ou le retrait invalide le contexte et le shard 6 (retrait : %s)",
+  async (visibilityReduced) => {
+    await getFactCheckContext({ ...INPUT, theme: "SANTE" });
+    invalidateMeasureTags("mesure-1", "election-2027", { visibilityReduced });
+    const [tags, profile] = mocks.revalidateTags.mock.calls[0]!;
+    expect(tags).toContain("election-measures:election-2027");
+    expect(mocks.cacheTag.mock.calls.flat()).toContain("election-measures:election-2027");
+    expect(tags).toContain("factcheck-programmes");
+    expect(SITEMAP_SHARD_TAGS[6]).toContain("factcheck-programmes");
+    expect(profile).toEqual(visibilityReduced ? { expire: 0 } : undefined);
+  }
+);

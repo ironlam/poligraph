@@ -1135,8 +1135,8 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
 // Sitemap 6: fact-checks that carry Poligraph's own context (priority 0.5). The rule is
 // isIndexableFactCheck() from src/lib/seo/factcheck-robots.ts, fed by getFactCheckContext():
 // exactly one claimant on a published profile, a block specific to the claim (a vote of the author
-// on the UTC day of the claim, or on scrutins of the claim's validated theme) AND a block that
-// situates the author (a record of FACTCHECK_RECORD_MIN_TOTAL public fact-checks or more, or a
+// on the UTC day of the claim, votes or published programme measures on its validated theme)
+// AND a block that situates the author (a record of FACTCHECK_RECORD_MIN_TOTAL public fact-checks or more, or a
 // sourced 2027 candidacy). Keep both in sync. The other fact-checks are noindex,follow on the page
 // and stay out of this list. The shard also lists the indexable landing pages
 // /factchecks/politique/[slug] (priority 0.6).
@@ -1144,6 +1144,13 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache";
   cacheTag(...SITEMAP_SHARD_TAGS[6]);
   cacheLife("synced");
+
+  // A programme also disappears when its candidate fiche is unpublished.
+  const election = await db.election.findUnique({
+    where: { slug: PRESIDENTIELLE_2027_SLUG },
+    select: { id: true },
+  });
+  if (election) cacheTag(`election-candidacies:${election.id}`);
 
   const factChecks = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`
     WITH claimant AS (
@@ -1178,6 +1185,50 @@ async function buildFactChecksSitemap(): Promise<MetadataRoute.Sitemap> {
             WHERE v."politicianId" = c."politicianId"
               AND v."position"::text IN (${Prisma.join([...PARTICIPATION_POSITIONS])})
               AND s."theme" = fc."theme"
+          ))
+        OR (fc."themeReviewedAt" IS NOT NULL
+          AND fc."theme"::text IN (${Prisma.join([...SCRUTIN_THEMES])})
+          AND EXISTS (
+            SELECT 1 FROM "Measure" me
+            JOIN "Candidacy" ca ON ca."id" = me."candidacyId"
+            JOIN "Election" ce ON ce."id" = ca."electionId"
+            JOIN "Election" e ON e."id" = me."electionId"
+            JOIN "MeasureRevision" mr ON mr."id" = me."publishedRevisionId"
+            JOIN "CandidacyPresidential" cp ON cp."candidacyId" = ca."id"
+            WHERE ca."politicianId" = c."politicianId"
+              AND ce."slug" = ${PRESIDENTIELLE_2027_SLUG}
+              AND e."slug" = ${PRESIDENTIELLE_2027_SLUG}
+              AND me."publicationStatus" = 'PUBLISHED'
+              AND me."withdrawnAt" IS NULL
+              AND me."theme" = fc."theme"
+              -- PUBLIC_PRESIDENTIAL_MEASURE_WHERE / PUBLIC_MEASURE_REVISION_WHERE.
+              AND mr."reviewedAt" IS NOT NULL
+              AND mr."publishedAt" IS NOT NULL
+              AND mr."supersededAt" IS NULL
+              AND mr."discardedAt" IS NULL
+              AND mr."rejectedAt" IS NULL
+              AND EXISTS (
+                SELECT 1 FROM "MeasureSource" ms WHERE ms."measureRevisionId" = mr."id"
+              )
+              -- PUBLIC_PRESIDENTIAL_FICHE_WHERE. The claimant join already proves a public person.
+              AND ca."status" IS NOT NULL
+              AND ca."sourceUrl" IS NOT NULL
+              AND ca."sourceLabel" IS NOT NULL
+              AND cp."publicationStatus" = 'PUBLISHED'
+              AND EXISTS (
+                SELECT 1 FROM "Measure" pm
+                JOIN "MeasureRevision" pr ON pr."id" = pm."publishedRevisionId"
+                JOIN "MeasureSource" ps ON ps."measureRevisionId" = pr."id"
+                WHERE pm."candidacyId" = ca."id"
+                  AND pm."publicationStatus" = 'PUBLISHED'
+                  AND pm."withdrawnAt" IS NULL
+                  AND pr."reviewedAt" IS NOT NULL
+                  AND pr."publishedAt" IS NOT NULL
+                  AND pr."supersededAt" IS NULL
+                  AND pr."discardedAt" IS NULL
+                  AND pr."rejectedAt" IS NULL
+                  AND ps."tier" = 'PRIMARY'
+              )
           ))
       )
       -- A block that situates the author.

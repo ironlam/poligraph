@@ -347,6 +347,35 @@ export async function ThemeVotesBlock({ context }: ContextProps) {
   );
 }
 
+export async function ProgrammeThemeBlock({ context }: ContextProps) {
+  const { author, themeProgramme } = await context;
+  if (!author || !themeProgramme?.measures.length) return null;
+
+  return (
+    <Block id="fc-theme-programme" title="Son programme 2027 sur ce thème">
+      <p>
+        Thème de la déclaration : <strong>{THEME_CATEGORY_LABELS[themeProgramme.theme]}</strong>.
+      </p>
+      <ul className="divide-y">
+        {themeProgramme.measures.map((measure) => (
+          <li key={measure.slug}>
+            <Link
+              prefetch={false}
+              href={`/elections/presidentielle-2027/mesures/${measure.slug}`}
+              className={voteLinkClass}
+            >
+              {measure.text}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link href={`/elections/presidentielle-2027/candidats/${author.slug}`} className={linkClass}>
+        Sa fiche de candidature
+      </Link>
+    </Block>
+  );
+}
+
 export async function PartyBlock({ context }: ContextProps) {
   const { author, party } = await context;
   if (!author || !party) return null;

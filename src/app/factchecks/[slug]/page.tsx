@@ -26,6 +26,7 @@ import {
   PartyBlock,
   RecordBlock,
   ThemeVotesBlock,
+  ProgrammeThemeBlock,
 } from "@/components/factchecks/context/FactCheckContextBlocks";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
@@ -251,6 +252,9 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
           </Suspense>
           <Suspense fallback={null}>
             <ThemeVotesBlock context={context} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <ProgrammeThemeBlock context={context} />
           </Suspense>
           <Suspense fallback={null}>
             <PartyBlock context={context} />
