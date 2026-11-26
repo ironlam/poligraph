@@ -170,7 +170,7 @@ probabilité ; les requêtes d'une opération ne sont jamais tirées individuell
 `npm start` imposent `web`. `NEXT_PHASE=phase-production-build`, lorsqu'il est
 présent, est aussi reconnu. Un `NODE_ENV=production` seul n'est jamais une preuve
 d'exécution web. Pour un build lancé directement, utiliser
-`DB_READ_CONTEXT=build npx next build --webpack`.
+`DB_READ_CONTEXT=build npx next build`.
 
 Pour Vercel, configurer `DB_READ_CONTEXT=web` au runtime et conserver la commande
 de build npm qui le remplace par `build`. Pour les jobs distants, renseigner

@@ -5,7 +5,7 @@
   "scripts": {
     "setup": "bash scripts/setup.sh",
     "dev": "DB_READ_CONTEXT=web next dev",
-    "build": "prisma generate && DB_READ_CONTEXT=build next build --webpack",
+    "build": "prisma generate && DB_READ_CONTEXT=build next build",
     "build:net-check": "tsx scripts/check-build-network.mts",
     "measures:audit": "tsx scripts/audit-measures.ts",
     "measures:audit-contexts": "tsx --env-file=.env scripts/audit-measure-contexts.ts",
