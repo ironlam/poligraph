@@ -4,7 +4,7 @@
 -- Ajouts seuls. Les lignes existantes prennent la précision DAY, qui décrit ce qu'elles
 -- affichent déjà ; "epciSiren" reste vide. Une valeur d'énumération ne se retire pas.
 -- Rejouable : chaque instruction porte IF NOT EXISTS.
--- NON APPLIQUÉE. À passer avant le déploiement du code qui lit ces colonnes :
+-- Appliquée en production le 26 novembre 2026, avant le déploiement du code qui lit ces colonnes :
 --   npx prisma db execute --file prisma/migrations/manual/2026-11-26-mandate-date-precision-epci.sql
 -- (utilise DIRECT_URL).
 
