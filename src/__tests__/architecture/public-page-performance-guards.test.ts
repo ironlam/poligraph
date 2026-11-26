@@ -77,6 +77,14 @@ function calledNames(path: string): Set<string> {
   return calls;
 }
 
+/**
+ * Components allowed to bypass the optimizer, each for a source that is already sized for its slot.
+ *
+ * PoliticianAvatar: small avatars load the 192 px WebP thumbnail written next to each Blob photo
+ * (`@/lib/photos/thumbnail`); the original and every non-Blob photo still go through the optimizer.
+ */
+const UNOPTIMIZED_ALLOWED = new Set(["src/components/politicians/PoliticianAvatar.tsx"]);
+
 describe("public page performance contracts", () => {
   it("keeps public images behind the Next optimizer", () => {
     const files = [...tsxFiles("src/app"), ...tsxFiles("src/components")].filter(
@@ -84,7 +92,8 @@ describe("public page performance contracts", () => {
         !path.startsWith("src/app/admin/") &&
         !path.startsWith("src/components/admin/") &&
         !path.includes("opengraph-image") &&
-        !path.includes("__tests__")
+        !path.includes("__tests__") &&
+        !UNOPTIMIZED_ALLOWED.has(path)
     );
     const violations = files.filter((path) =>
       jsxElements(path, "Image").some((element) =>
