@@ -26,3 +26,25 @@ export const updatePoliticianSchema = z.object({
     )
     .optional(),
 });
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Creating a profile by hand. No status, no party, no biography: a new profile is always a
+ * DRAFT, and what is unknown stays unknown.
+ */
+export const createPoliticianSchema = z.object({
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
+  civility: z.enum(["M.", "Mme"]).nullable().optional(),
+  birthDate: z.string().regex(DAY).nullable().optional(),
+  birthPlace: z.string().trim().max(200).nullable().optional(),
+  slug: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+    .max(120)
+    .optional(),
+  /** The namesakes the admin was shown before confirming. Required, even when empty. */
+  acknowledgedHomonymIds: z.array(z.string().min(1).max(64)).max(100),
+});
