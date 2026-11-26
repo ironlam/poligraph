@@ -116,6 +116,56 @@ export function ClaimantToggle({
   );
 }
 
+// -- Mention review ----------------------------------------------------------
+
+/**
+ * Validates a mention matched on a single word. Until then the mention counts for no indexation
+ * signal (src/lib/factchecks/mention-review.ts). To reject it, "Délier" removes it and blocks the
+ * pair for later syncs.
+ */
+export function MentionReviewButton({
+  mentionId,
+  matchedName,
+  politicianName,
+}: {
+  mentionId: string;
+  matchedName: string | null;
+  politicianName: string;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const word = matchedName?.trim() || "un nom inconnu";
+
+  return (
+    <button
+      type="button"
+      disabled={isPending}
+      aria-label={`Valider le lien avec ${politicianName}, trouvé sur « ${word} » seul`}
+      title={`Trouvé sur « ${word} » seul. Valider si le fact-check parle bien de ${politicianName}, sinon délier.`}
+      className={`text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800 hover:bg-orange-200 transition-colors ${
+        isPending ? "opacity-50 cursor-wait" : "cursor-pointer"
+      }`}
+      onClick={() => {
+        startTransition(async () => {
+          const res = await fetch(`/api/admin/factchecks/mentions/${mentionId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reviewed: true }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            alert(data?.error || "Erreur");
+            return;
+          }
+          router.refresh();
+        });
+      }}
+    >
+      « {word} » · valider
+    </button>
+  );
+}
+
 // -- Add mention -------------------------------------------------------------
 
 interface SearchResult {

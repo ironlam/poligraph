@@ -24,9 +24,19 @@ export const addFactcheckMentionSchema = z.object({
   isClaimant: z.boolean().default(false),
 });
 
-export const updateMentionSchema = z.object({
-  isClaimant: z.boolean(),
-});
+/**
+ * Admin edit of one mention: toggle the author flag, or validate a mention matched on a single word.
+ * Validation is one-way: an admin who disagrees removes the mention (DELETE), which also blocks the
+ * pair for later syncs.
+ */
+export const updateMentionSchema = z
+  .object({
+    isClaimant: z.boolean().optional(),
+    reviewed: z.literal(true).optional(),
+  })
+  .refine((body) => body.isClaimant !== undefined || body.reviewed !== undefined, {
+    message: "Aucune modification demandée",
+  });
 
 /** Theme validated in the admin: one of the scrutin themes, or null for "no theme". */
 export const validateFactcheckThemeSchema = z.object({

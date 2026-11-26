@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { DataSource } from "@/generated/prisma";
+import { DataSource, Prisma } from "@/generated/prisma";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { invalidateEntity } from "@/lib/cache";
 import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
@@ -75,6 +75,7 @@ export const PATCH = withAdminAuth(
       select: {
         id: true,
         isClaimant: true,
+        reviewedAt: true,
         politicianId: true,
         politician: { select: { fullName: true, slug: true } },
         factCheck: { select: { title: true } },
@@ -82,13 +83,25 @@ export const PATCH = withAdminAuth(
     });
 
     if (!mention) {
-      return NextResponse.json({ error: "Mention non trouvee" }, { status: 404 });
+      return NextResponse.json({ error: "Mention non trouvée" }, { status: 404 });
     }
 
-    const updated = await db.factCheckMention.update({
-      where: { id },
-      data: { isClaimant: body.isClaimant },
-    });
+    // Validating twice keeps the first date: it records when the link was first confirmed.
+    const validates = body.reviewed === true && mention.reviewedAt === null;
+    const data: { isClaimant?: boolean; reviewedAt?: Date } = {};
+    if (body.isClaimant !== undefined) data.isClaimant = body.isClaimant;
+    if (validates) data.reviewedAt = new Date();
+
+    const updated = await db.factCheckMention.update({ where: { id }, data });
+
+    const changes: Record<string, unknown> = {
+      politician: mention.politician.fullName,
+      factCheck: mention.factCheck.title,
+    };
+    if (body.isClaimant !== undefined) {
+      changes.isClaimant = { from: mention.isClaimant, to: body.isClaimant };
+    }
+    if (validates) changes.reviewed = { from: false, to: true };
 
     const { ip, userAgent } = getRequestMeta(request);
     await db.auditLog.create({
@@ -96,11 +109,7 @@ export const PATCH = withAdminAuth(
         action: "UPDATE",
         entityType: "FactCheckMention",
         entityId: id!,
-        changes: {
-          politician: mention.politician.fullName,
-          factCheck: mention.factCheck.title,
-          isClaimant: { from: mention.isClaimant, to: body.isClaimant },
-        },
+        changes: changes as Prisma.InputJsonObject,
         ipAddress: ip,
         userAgent,
       },
@@ -110,7 +119,7 @@ export const PATCH = withAdminAuth(
     invalidateEntity("politician", mention.politician.slug);
     await requestProfileRefresh(
       { politicianIds: [mention.politicianId] },
-      "admin:mention-fact-check-modifiée"
+      validates ? "admin:mention-fact-check-validée" : "admin:mention-fact-check-modifiée"
     );
 
     return NextResponse.json(updated);

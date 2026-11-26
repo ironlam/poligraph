@@ -9,6 +9,7 @@ import {
 import { PARRAINAGES_FICHES_CANDIDATS } from "@/config/parrainages";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { CONFIRMED_MENTION_WHERE } from "@/lib/factchecks/mention-review";
 import { PUBLIC_EVENT_WHERE } from "@/lib/affairs/events/public";
 import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import {
@@ -142,6 +143,23 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
 
   if (!politician) return null;
 
+  // A mention matched on a last name alone is an indexation signal only once an admin validated it
+  // (mention-review.ts). `_count.factCheckMentions` stays the count of what the page lists, which
+  // the title, description and share card print. The flag is set only on a profile whose every
+  // public mention waits for review, so the stored documents of all other profiles keep their
+  // fingerprint; a document stored before it was read lacks it and keeps the former verdict until
+  // its next rebuild.
+  const factChecksAwaitReview =
+    politician._count.factCheckMentions > 0 &&
+    !(await db.factCheckMention.findFirst({
+      where: {
+        politicianId: politician.id,
+        factCheck: getPublicFactCheckWhere(),
+        ...CONFIRMED_MENTION_WHERE,
+      },
+      select: { id: true },
+    }));
+
   // A party with no public member is not nameable on a public surface.
   // `governmentData` is kept only for a PUBLISHED government. Prisma returns `null` for every other
   // mandate, and a key added to every stored document would change every profile's fingerprint
@@ -177,7 +195,12 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
       },
     ];
   });
-  return { ...politician, mandates, partyHistory };
+  return {
+    ...politician,
+    mandates,
+    partyHistory,
+    ...(factChecksAwaitReview ? { factChecksAwaitReview: true as const } : {}),
+  };
 }
 
 /** Commune of a local mandate, as stored in the profile document. */

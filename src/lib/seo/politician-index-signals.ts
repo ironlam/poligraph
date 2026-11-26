@@ -1,6 +1,8 @@
 import { cache } from "react";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
+import { getPublicFactCheckWhere } from "@/lib/api/public-contract";
+import { CONFIRMED_MENTION_WHERE } from "@/lib/factchecks/mention-review";
 import type { PoliticianIndexSignals } from "./politician-robots";
 
 /**
@@ -37,7 +39,12 @@ export const getPoliticianIndexSignals = cache(async function getPoliticianIndex
         },
       },
       affairs: { where: { publicationStatus: "PUBLISHED" }, select: { id: true }, take: 1 },
-      factCheckMentions: { select: { id: true }, take: 1 },
+      // Same filter as the profile's own count (readPoliticianIdentity), so a tab cannot drift.
+      factCheckMentions: {
+        where: { factCheck: getPublicFactCheckWhere(), ...CONFIRMED_MENTION_WHERE },
+        select: { id: true },
+        take: 1,
+      },
       declarations: { select: { id: true }, take: 1 },
     },
   });

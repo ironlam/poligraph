@@ -62,6 +62,16 @@ describe("updateMentionSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a validation", () => {
+    const result = updateMentionSchema.safeParse({ reviewed: true });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an un-validation: removing the mention is the way back", () => {
+    const result = updateMentionSchema.safeParse({ reviewed: false });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects empty body", () => {
     const result = updateMentionSchema.safeParse({});
     expect(result.success).toBe(false);

@@ -215,7 +215,8 @@ export function buildPoliticianMetadata(
       communePopulation: m.localData?.commune?.population ?? null,
     })),
     publishedAffairsCount: identity._count.affairs,
-    factCheckMentionsCount: identity._count.factCheckMentions,
+    // Mentions matched on a last name alone and not yet validated give no indexation signal.
+    factCheckMentionsCount: identity.factChecksAwaitReview ? 0 : identity._count.factCheckMentions,
     declarationsCount: identity.declarations.length,
     biography: identity.biography,
   });
