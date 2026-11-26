@@ -8,8 +8,16 @@ vi.mock("@vercel/blob", () => ({
   put: (...args: unknown[]) => put(...args),
 }));
 
-const { uploadCroppedPortrait, deleteCroppedPortrait, uploadSourcePhotoCopy } =
+const { uploadCroppedPortrait, deleteCroppedPortrait, uploadSourcePhotoCopy, writeThumbnail } =
   await import("../blob");
+const sharp = (await import("sharp")).default;
+
+/** A real 600x400 JPEG, so the thumbnail goes through sharp for real. */
+async function jpeg(): Promise<Buffer> {
+  return sharp({ create: { width: 600, height: 400, channels: 3, background: "#336699" } })
+    .jpeg()
+    .toBuffer();
+}
 
 const BLOB_HOST = "https://example.public.blob.vercel-storage.com";
 
@@ -25,7 +33,6 @@ describe("uploadCroppedPortrait", () => {
     // key. Overwriting a fixed pathname shipped a corrected framing that nobody saw.
     await uploadCroppedPortrait("abc", Buffer.from("jpeg"));
 
-    expect(put).toHaveBeenCalledTimes(1);
     const options = put.mock.calls[0]![2] as Record<string, unknown>;
     expect(options.addRandomSuffix).toBe(true);
     expect(options.allowOverwrite).toBeUndefined();
@@ -43,6 +50,11 @@ describe("deleteCroppedPortrait", () => {
       deleteCroppedPortrait(`${BLOB_HOST}/politicians/abc-portrait-Xy7.jpg`)
     ).resolves.toBe(true);
     expect(del).toHaveBeenCalledTimes(1);
+    // The avatar thumbnail goes with it.
+    expect(del.mock.calls[0]![0]).toEqual([
+      `${BLOB_HOST}/politicians/abc-portrait-Xy7.jpg`,
+      `${BLOB_HOST}/politicians/abc-portrait-Xy7.jpg.thumb-192.webp`,
+    ]);
   });
 
   it.each([
@@ -84,5 +96,50 @@ describe("uploadSourcePhotoCopy", () => {
       contentType: "image/png",
       addRandomSuffix: true,
     });
+  });
+});
+
+describe("writeThumbnail", () => {
+  it("écrit une miniature WebP carrée à côté de la photo", async () => {
+    const photo = `${BLOB_HOST}/politicians/abc-portrait-Xy7.jpg`;
+    await expect(writeThumbnail(photo, await jpeg())).resolves.toBe(true);
+
+    const [pathname, body, options] = put.mock.calls[0]! as [
+      string,
+      Buffer,
+      Record<string, unknown>,
+    ];
+    expect(pathname).toBe("politicians/abc-portrait-Xy7.jpg.thumb-192.webp");
+    expect(options).toMatchObject({
+      access: "public",
+      contentType: "image/webp",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    });
+    const meta = await sharp(body).metadata();
+    expect(meta).toMatchObject({ format: "webp", width: 192, height: 192 });
+  });
+
+  it("est écrite à chaque envoi de photo", async () => {
+    put.mockResolvedValueOnce({ url: `${BLOB_HOST}/politicians/abc-Zq1` });
+    await uploadSourcePhotoCopy("abc", await jpeg(), "image/jpeg");
+    expect(put.mock.calls.map((call) => call[0])).toEqual([
+      "politicians/abc",
+      "politicians/abc-Zq1.thumb-192.webp",
+    ]);
+  });
+
+  it("n'interrompt pas l'envoi quand l'image est illisible", async () => {
+    await expect(uploadCroppedPortrait("abc", Buffer.from("pas une image"))).resolves.toBe(
+      `${BLOB_HOST}/politicians/abc-portrait-Xy7.jpg`
+    );
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignore une photo qui n'est pas sur Blob", async () => {
+    await expect(writeThumbnail("https://upload.wikimedia.org/x.jpg", await jpeg())).resolves.toBe(
+      false
+    );
+    expect(put).not.toHaveBeenCalled();
   });
 });

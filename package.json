@@ -69,6 +69,7 @@
     "sync:parrainages-fiches": "tsx scripts/sync-parrainages-fiches.ts",
     "sync:hatvp": "tsx scripts/sync-hatvp.ts",
     "sync:photos": "tsx scripts/sync-photos.ts",
+    "photos:backfill-thumbnails": "tsx scripts/backfill-avatar-thumbnails.ts",
     "sync:deceased": "tsx scripts/sync-deceased.ts",
     "sync:birthdates": "tsx scripts/sync-birthdates.ts",
     "sync:birthdates:stats": "tsx scripts/sync-birthdates.ts --stats",

@@ -39,8 +39,51 @@ describe("PoliticianAvatar", () => {
     );
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
-      "https://abc.public.blob.vercel-storage.com/politicians/x-portrait"
+      "https://abc.public.blob.vercel-storage.com/politicians/x-portrait.thumb-192.webp"
     );
+  });
+
+  // Chaque avatar passait par /_next/image (~180k requêtes/jour facturées). La miniature est servie
+  // directement par le CDN Blob ; le grand format garde l'optimiseur.
+  describe("miniature Blob", () => {
+    const BLOB = "https://abc.public.blob.vercel-storage.com/politicians/x-portrait-Ab1.jpg";
+
+    it("sert la miniature, sans optimiseur, pour un petit avatar", () => {
+      render(
+        <PoliticianAvatar photoUrl={null} blobPhotoUrl={BLOB} fullName="Jean Dupont" size="lg" />
+      );
+      expect(screen.getByRole("img")).toHaveAttribute("src", `${BLOB}.thumb-192.webp`);
+    });
+
+    it("garde la photo d'origine pour le grand format", () => {
+      render(
+        <PoliticianAvatar photoUrl={null} blobPhotoUrl={BLOB} fullName="Jean Dupont" size="xl" />
+      );
+      expect(screen.getByRole("img")).toHaveAttribute("src", BLOB);
+    });
+
+    it("revient à la photo d'origine si la miniature manque, puis aux initiales", () => {
+      render(<PoliticianAvatar photoUrl={null} blobPhotoUrl={BLOB} fullName="Jean Dupont" />);
+      fireEvent.error(screen.getByRole("img"));
+      expect(screen.getByRole("img")).toHaveAttribute("src", BLOB);
+      fireEvent.error(screen.getByRole("img"));
+      expect(screen.getByText("JD")).toBeInTheDocument();
+    });
+
+    it("ne cherche pas de miniature pour une photo hors Blob", () => {
+      render(
+        <PoliticianAvatar
+          photoUrl="https://upload.wikimedia.org/source.jpg"
+          blobPhotoUrl={null}
+          fullName="Jean Dupont"
+          size="sm"
+        />
+      );
+      expect(screen.getByRole("img")).toHaveAttribute(
+        "src",
+        "https://upload.wikimedia.org/source.jpg"
+      );
+    });
   });
 
   it("should fall back to the source photo when there is no Blob copy", () => {
