@@ -12,7 +12,8 @@ export async function register() {
       dsn: SENTRY_DSN,
       environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
       release: process.env.VERCEL_GIT_COMMIT_SHA,
-      tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 0,
+      // No tracesSampleRate: tracing is off on the server too. The span quota was exhausted and
+      // every span was rejected (November 2026), so sending them only cost function time.
       sendDefaultPii: false,
       ignoreErrors: [
         // Benign Next.js control-flow errors (redirect, notFound) surface as thrown exceptions
@@ -31,7 +32,6 @@ export async function register() {
       dsn: SENTRY_DSN,
       environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
       release: process.env.VERCEL_GIT_COMMIT_SHA,
-      tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 0,
       sendDefaultPii: false,
       ignoreErrors: ["NEXT_REDIRECT", "NEXT_NOT_FOUND"],
     });
