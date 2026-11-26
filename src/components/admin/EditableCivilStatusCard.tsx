@@ -9,11 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import {
-  PUBLICATION_STATUS_OPTIONS,
-  PUBLICATION_STATUS_STYLES,
-  PUBLICATION_STATUS_LABELS,
-} from "@/config/labels";
+import { PUBLICATION_STATUS_STYLES, PUBLICATION_STATUS_LABELS } from "@/config/labels";
 import { formatDate, formatDateForInput } from "@/lib/utils";
 import type { PublicationStatus } from "@/generated/prisma";
 
@@ -53,7 +49,6 @@ interface FormState {
   deathDate: string;
   birthPlace: string;
   biography: string;
-  publicationStatus: string;
 }
 
 export function EditableCivilStatusCard({ politician }: EditableCivilStatusCardProps) {
@@ -71,7 +66,6 @@ export function EditableCivilStatusCard({ politician }: EditableCivilStatusCardP
     deathDate: formatDateForInput(politician.deathDate),
     birthPlace: politician.birthPlace || "",
     biography: politician.biography || "",
-    publicationStatus: politician.publicationStatus,
   });
 
   function updateField(field: keyof FormState, value: string) {
@@ -87,7 +81,6 @@ export function EditableCivilStatusCard({ politician }: EditableCivilStatusCardP
       deathDate: formatDateForInput(politician.deathDate),
       birthPlace: politician.birthPlace || "",
       biography: politician.biography || "",
-      publicationStatus: politician.publicationStatus,
     });
     setIsEditing(false);
     setStatus("idle");
@@ -119,7 +112,6 @@ export function EditableCivilStatusCard({ politician }: EditableCivilStatusCardP
           birthPlace: form.birthPlace || null,
           deathDate: form.deathDate || null,
           biography: form.biography || null,
-          publicationStatus: form.publicationStatus,
           // Pass through unchanged fields to avoid erasing them
           photoUrl: politician.photoUrl,
           photoSource: politician.photoSource,
@@ -200,21 +192,6 @@ export function EditableCivilStatusCard({ politician }: EditableCivilStatusCardP
                   <option value="">—</option>
                   <option value="M.">M.</option>
                   <option value="Mme">Mme</option>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="edit-publicationStatus">Statut de publication</Label>
-                <Select
-                  id="edit-publicationStatus"
-                  value={form.publicationStatus}
-                  onChange={(e) => updateField("publicationStatus", e.target.value)}
-                >
-                  {PUBLICATION_STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
                 </Select>
               </div>
             </div>

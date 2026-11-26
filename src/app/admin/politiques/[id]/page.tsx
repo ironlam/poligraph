@@ -10,6 +10,7 @@ import { DATA_SOURCE_LABELS, MANDATE_TYPE_LABELS } from "@/config/labels";
 import { MandateUrlEditor } from "@/components/admin/MandateUrlEditor";
 import { LocalMandateForm } from "@/components/admin/LocalMandateForm";
 import { formatMandateDate } from "@/lib/mandates/dates";
+import { ProfilePublicationCard } from "@/components/admin/ProfilePublicationCard";
 import { SyncPanel } from "@/components/admin/SyncPanel";
 import { DuplicateDetector } from "@/components/admin/DuplicateDetector";
 import { EditableCivilStatusCard } from "@/components/admin/EditableCivilStatusCard";
@@ -134,6 +135,15 @@ export default async function AdminPoliticianPage({ params }: PageProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Publication : the only place the status changes */}
+        <ProfilePublicationCard
+          politicianId={politician.id}
+          publicationStatus={politician.publicationStatus}
+          mandateCount={politician.mandates.length}
+          sourcedMandateCount={politician.mandates.filter((m) => m.sourceUrl).length}
+          externalIdCount={politician.externalIds.length}
+        />
+
         {/* Informations générales — éditable */}
         <EditableCivilStatusCard politician={politician} />
 

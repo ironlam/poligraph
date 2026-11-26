@@ -11,7 +11,7 @@ import { syncPresidentialSearchDocumentsForCandidacy } from "@/lib/presidentiell
 import { lockMeasureCandidacy } from "@/lib/measures/lock";
 import { fetchPublicPhoto } from "@/lib/api/fetch-public-photo";
 import { uploadSourcePhotoCopy } from "@/lib/photos/blob";
-import type { DataSource, PublicationStatus } from "@/generated/prisma";
+import type { DataSource } from "@/generated/prisma";
 import type { z } from "zod/v4";
 
 type UpdateBody = z.infer<typeof updatePoliticianSchema>;
@@ -130,8 +130,8 @@ export const PUT = withAdminAuth(
           currentPartyId: body.currentPartyId || null,
           deathDate: body.deathDate ? new Date(body.deathDate) : null,
           biography: body.biography || null,
-          publicationStatus:
-            (body.publicationStatus as PublicationStatus) || existing.publicationStatus,
+          // The publication status is not written here: it changes through
+          // `POST /api/admin/politiques/[id]/publication`, which checks and audits the gesture.
         },
       });
       for (const candidacy of candidacies) {
