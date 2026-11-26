@@ -50,8 +50,11 @@ const nextConfig: NextConfig = {
     // TypeScript 5 compiler API supports the same checks without that subprocess.
     useTypeScriptCli: false,
     useCache: true,
-    webpackMemoryOptimizations: true,
-    webpackBuildWorker: true,
+  },
+  // The CI `typecheck` job runs `tsc --noEmit` on every pull request. Running the same check again
+  // inside `next build` added about 100 s to every Vercel deployment, billed per build CPU minute.
+  typescript: {
+    ignoreBuildErrors: true,
   },
   images: {
     remotePatterns: [
