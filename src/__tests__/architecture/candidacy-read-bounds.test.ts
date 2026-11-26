@@ -66,6 +66,19 @@ const ALLOWED_UNBOUNDED: AllowedUnbounded = new Map([
     ]),
   ],
   [
+    "src/lib/politicians/publication.ts",
+    new Map([
+      [
+        "changeProfilePublication",
+        {
+          count: 1,
+          reason:
+            "verrouillage avant mutation : toutes les candidatures présidentielles du politique doivent être prises",
+        },
+      ],
+    ]),
+  ],
+  [
     "src/lib/data/elections.ts",
     new Map([
       [

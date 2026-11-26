@@ -1,4 +1,8 @@
-export { updatePoliticianSchema, createPoliticianSchema } from "./politician";
+export {
+  updatePoliticianSchema,
+  createPoliticianSchema,
+  profilePublicationSchema,
+} from "./politician";
 export {
   quickUpdateAffairSchema,
   mergeAffairsSchema,
