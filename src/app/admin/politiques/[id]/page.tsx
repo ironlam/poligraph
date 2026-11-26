@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { DATA_SOURCE_LABELS, MANDATE_TYPE_LABELS } from "@/config/labels";
 import { MandateUrlEditor } from "@/components/admin/MandateUrlEditor";
+import { LocalMandateForm } from "@/components/admin/LocalMandateForm";
+import { formatMandateDate } from "@/lib/mandates/dates";
 import { SyncPanel } from "@/components/admin/SyncPanel";
 import { DuplicateDetector } from "@/components/admin/DuplicateDetector";
 import { EditableCivilStatusCard } from "@/components/admin/EditableCivilStatusCard";
@@ -39,6 +41,8 @@ async function getPolitician(id: string) {
           isCurrent: true,
           startDate: true,
           endDate: true,
+          startDatePrecision: true,
+          endDatePrecision: true,
           officialUrl: true,
           sourceUrl: true,
         },
@@ -202,10 +206,13 @@ export default async function AdminPoliticianPage({ params }: PageProps) {
           {politician.mandates.length > 0 ? (
             <div className="space-y-4">
               {politician.mandates.map((mandate) => {
-                const start = new Date(mandate.startDate).toLocaleDateString("fr-FR");
+                const start = formatMandateDate(mandate.startDate, mandate.startDatePrecision);
+                // A closed mandate without an end date is not "en cours": its end is unknown.
                 const end = mandate.endDate
-                  ? new Date(mandate.endDate).toLocaleDateString("fr-FR")
-                  : "en cours";
+                  ? formatMandateDate(mandate.endDate, mandate.endDatePrecision)
+                  : mandate.isCurrent
+                    ? "en cours"
+                    : "fin non connue";
                 return (
                   <div key={mandate.id} className="border p-4 rounded-lg space-y-2">
                     <div className="flex items-center justify-between">
@@ -237,6 +244,14 @@ export default async function AdminPoliticianPage({ params }: PageProps) {
           ) : (
             <p className="text-muted-foreground text-center py-4">Aucun mandat enregistré.</p>
           )}
+          <details className="mt-4 rounded-lg border">
+            <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold">
+              Ajouter un mandat local
+            </summary>
+            <div className="border-t p-4">
+              <LocalMandateForm politicianId={politician.id} />
+            </div>
+          </details>
         </CardContent>
       </Card>
 
