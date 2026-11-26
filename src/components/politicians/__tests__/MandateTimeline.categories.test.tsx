@@ -47,3 +47,12 @@ describe("MandateTimeline : mandats d'arrondissement", () => {
     expect(renderTimeline("MAIRE").textContent).toContain("Mandats locaux");
   });
 });
+
+describe("MandateTimeline : présidence d'intercommunalité", () => {
+  it("affiche son libellé et la classe dans les mandats locaux", () => {
+    const text = renderTimeline("PRESIDENT_INTERCOMMUNALITE").textContent ?? "";
+    expect(text).toContain("Président d'intercommunalité");
+    expect(text).toContain("Mandats locaux");
+    expect(text).not.toContain("Autres mandats");
+  });
+});
