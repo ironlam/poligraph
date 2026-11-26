@@ -31,6 +31,8 @@ export const MANDATE_WEIGHTS: Record<MandateType, number> = {
   // Sous MAIRE : un secteur parisien pèse moins qu'une commune, mais au-dessus
   // d'un adjoint, l'exécutif d'arrondissement étant une fonction propre.
   MAIRE_ARRONDISSEMENT: 90,
+  // Same weight as MAIRE: an intercommunal presidency is an executive office of that rank.
+  PRESIDENT_INTERCOMMUNALITE: 120,
   PRESIDENT_PARTI: 200,
   ADJOINT_MAIRE: 60,
   CONSEILLER_REGIONAL: 50,

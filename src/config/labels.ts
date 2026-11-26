@@ -484,6 +484,7 @@ export const MANDATE_TYPE_LABELS: Record<MandateType, string> = {
   CONSEILLER_DEPARTEMENTAL: "Conseiller départemental",
   CONSEILLER_MUNICIPAL: "Conseiller municipal",
   PRESIDENT_PARTI: "Dirigeant(e) de parti",
+  PRESIDENT_INTERCOMMUNALITE: "Président d'intercommunalité",
   OTHER: "Autre mandat",
 };
 // Feminize institutional roles based on civility
