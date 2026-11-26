@@ -365,14 +365,19 @@ model Mandate {
   // code can derive it: see src/config/senatoriales.ts.
   senateSeries   Int?
 
-  startDate       DateTime
-  endDate         DateTime?
-  isCurrent       Boolean   @default(true)
+  startDate          DateTime
+  endDate            DateTime?
+  // How much of each date is known. A mandate known to the year is stored on 1 January with
+  // YEAR, to the month on the 1st with MONTH: the precision is authoritative, never the stored
+  // day. Added by prisma/migrations/manual/2026-11-26-mandate-date-precision-epci.sql.
+  startDatePrecision DatePrecision @default(DAY)
+  endDatePrecision   DatePrecision @default(DAY)
+  isCurrent          Boolean       @default(true)
   // Date à laquelle la source de ce mandat a affirmé pour la dernière fois qu'il était détenu.
   // Pour une API (Assemblée, Sénat), c'est la date du sync : elle répond au présent. Pour un
   // fichier publié comme le RNE, c'est la date de PUBLICATION du fichier et non celle du run :
   // « l'instant où j'ai regardé » n'est pas un fait sur le mandat.
-  lastConfirmedAt DateTime?
+  lastConfirmedAt    DateTime?
 
   // Data origin tracking
   source DataSource?
@@ -426,6 +431,9 @@ model MandateLocal {
   functionStart    DateTime?
   firstElectedDate DateTime?
   regionCode       String?
+  // SIREN of the intercommunal body, for a PRESIDENT_INTERCOMMUNALITE mandate. No foreign key:
+  // a dissolved or transformed body is no longer listed in "Intercommunalite".
+  epciSiren        String?
   rneExternalId    String?
   partyLabel       String?
   // Secteur électoral pour un mandat PLM ("Paris 5Eme Secteur", "Marseille
@@ -759,6 +767,10 @@ enum MandateType {
   CONSEILLER_MUNICIPAL
   PRESIDENT_PARTI
   OTHER
+  // Presidency of an intercommunal body (EPCI). Distinct from MAIRE: its holder does not head a
+  // commune. Last on purpose, PostgreSQL appends an added value. Added by
+  // prisma/migrations/manual/2026-11-26-mandate-date-precision-epci.sql.
+  PRESIDENT_INTERCOMMUNALITE
 }
 
 // ============================================
