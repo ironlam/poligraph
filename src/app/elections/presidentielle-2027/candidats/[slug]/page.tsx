@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Suspense } from "react";
 import { ChevronDown, ExternalLink, UserRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ShareBar } from "@/components/ui/ShareBar";
@@ -30,6 +31,7 @@ import {
 import { CandidacyStatusBadge } from "../../_components/CandidacyStatusBadge";
 import { PartyLogo } from "../../_components/PartyLogo";
 import { CandidacyBackBar } from "./_components/CandidacyBackBar";
+import { CandidateFactChecksSection } from "./_components/CandidateFactChecks";
 import {
   CandidateTransparency,
   CandidateReaderGuides,
@@ -96,7 +98,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   // The root layout's template appends " | Poligraph" to `title`; the share titles are not
   // templated, so they carry the suffix themselves.
-  const title = `${politician.fullName}, candidature à la présidentielle 2027`;
+  // "programme" only when the fiche shows one: searches are "programme <nom> 2027", and promising a
+  // programme on a fiche that states we have not processed it yet would be a false snippet.
+  const hasProgramme =
+    candidacy !== null &&
+    hasPublishedProgramme({
+      verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
+    });
+  const title = hasProgramme
+    ? `${politician.fullName} : programme pour la présidentielle 2027`
+    : `${politician.fullName}, candidature à la présidentielle 2027`;
   const shareTitle = `${title} | Poligraph`;
   const description = `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par thème, avec leurs sources.`;
 
@@ -338,7 +349,18 @@ export default async function CandidateFichePage({ params }: PageProps) {
             <CandidateThemeSpread themes={detail.themes} />
 
             <CandidateRecentVotes votes={detail.recentVotes} politicianSlug={slug} />
+          </>
+        )}
 
+        {/* Outside the programme guard: claims are checked whether or not we have processed a
+            programme. After the votes, so on a phone the record reads "what they voted, then what
+            they said". Its own Suspense boundary so a slow read never holds the header back. */}
+        <Suspense fallback={null}>
+          <CandidateFactChecksSection slug={slug} />
+        </Suspense>
+
+        {hasProgramme && detail && (
+          <>
             <CandidateTransparency
               candidacyStatus={candidacy.status}
               declarationCount={politician.declarations.length}
