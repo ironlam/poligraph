@@ -4,6 +4,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({
   db: {
     politician: { findUnique: vi.fn() },
+    factCheckMention: { findFirst: vi.fn() },
   },
 }));
 
@@ -145,6 +146,34 @@ describe("lectures de fiche, frontières des partis non publics", () => {
       politician: { publicationStatus: "PUBLISHED" },
     });
     expect(query.include._count.select.factCheckMentions.where).toHaveProperty("factCheck");
+  });
+
+  it("signale une fiche dont toutes les mentions publiques attendent une validation", async () => {
+    vi.mocked(db.politician.findUnique).mockResolvedValue({
+      id: "politician-leclerc",
+      slug: "x-leclerc",
+      mandates: [],
+      declarations: [],
+      externalIds: [],
+      partyHistory: [],
+      _count: { affairs: 0, factCheckMentions: 1 },
+    } as never);
+    vi.mocked(db.factCheckMention.findFirst).mockResolvedValueOnce(null);
+
+    const awaiting = await readPoliticianIdentity({ slug: "x-leclerc" });
+    expect(awaiting?.factChecksAwaitReview).toBe(true);
+    expect(awaiting?._count.factCheckMentions).toBe(1);
+    const lookup = vi.mocked(db.factCheckMention.findFirst).mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+    };
+    expect(lookup.where).toMatchObject({ politicianId: "politician-leclerc" });
+    expect(lookup.where).toHaveProperty("factCheck");
+    expect(lookup.where).toHaveProperty("OR");
+
+    vi.mocked(db.factCheckMention.findFirst).mockResolvedValueOnce({ id: "m1" } as never);
+    const confirmed = await readPoliticianIdentity({ slug: "x-leclerc" });
+    // Absent, not false: the stored documents of every other profile keep their fingerprint.
+    expect(confirmed).not.toHaveProperty("factChecksAwaitReview");
   });
 
   it("neutralise le parti d'époque d'une affaire non public (dossier)", async () => {

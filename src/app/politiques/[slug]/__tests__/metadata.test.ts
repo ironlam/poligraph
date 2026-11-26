@@ -75,6 +75,25 @@ describe("/politiques/[slug] metadata", () => {
     expect(m.robots).not.toEqual({ index: false, follow: true });
   });
 
+  it("n'indexe pas une fiche portée par des mentions sur un seul mot non validées, sans changer ce qu'elle annonce", async () => {
+    // Only signal: fact-checks linked on a last name alone ("Leclerc"), not yet validated.
+    readIdentity.mockResolvedValue(
+      identity({
+        biography: null,
+        mandates: [],
+        declarations: [],
+        _count: { affairs: 0, factCheckMentions: 2 },
+        factChecksAwaitReview: true,
+      })
+    );
+
+    const m = await metadataFor("jean-dupont");
+
+    expect(m.robots).toEqual({ index: false, follow: true });
+    // The snippet still counts what the page lists.
+    expect(m.title).toBe("Jean Dupont : fact-checks");
+  });
+
   it("décrit la fiche par ses chiffres", async () => {
     readIdentity.mockResolvedValue(identity());
 

@@ -50,11 +50,7 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
       _count: {
         select: {
           affairs: { where: { ...getPublishedAffairWhere(), politician: PUBLIC_POLITICIAN_WHERE } },
-          // Feeds the robots predicate, the title and the description: a mention matched on a
-          // last name alone counts once an admin validated it (mention-review.ts).
-          factCheckMentions: {
-            where: { factCheck: getPublicFactCheckWhere(), ...CONFIRMED_MENTION_WHERE },
-          },
+          factCheckMentions: { where: { factCheck: getPublicFactCheckWhere() } },
         },
       },
       mandates: {
@@ -147,6 +143,23 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
 
   if (!politician) return null;
 
+  // A mention matched on a last name alone is an indexation signal only once an admin validated it
+  // (mention-review.ts). `_count.factCheckMentions` stays the count of what the page lists, which
+  // the title, description and share card print. The flag is set only on a profile whose every
+  // public mention waits for review, so the stored documents of all other profiles keep their
+  // fingerprint; a document stored before it was read lacks it and keeps the former verdict until
+  // its next rebuild.
+  const factChecksAwaitReview =
+    politician._count.factCheckMentions > 0 &&
+    !(await db.factCheckMention.findFirst({
+      where: {
+        politicianId: politician.id,
+        factCheck: getPublicFactCheckWhere(),
+        ...CONFIRMED_MENTION_WHERE,
+      },
+      select: { id: true },
+    }));
+
   // A party with no public member is not nameable on a public surface.
   // `governmentData` is kept only for a PUBLISHED government. Prisma returns `null` for every other
   // mandate, and a key added to every stored document would change every profile's fingerprint
@@ -182,7 +195,12 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
       },
     ];
   });
-  return { ...politician, mandates, partyHistory };
+  return {
+    ...politician,
+    mandates,
+    partyHistory,
+    ...(factChecksAwaitReview ? { factChecksAwaitReview: true as const } : {}),
+  };
 }
 
 /** Commune of a local mandate, as stored in the profile document. */
