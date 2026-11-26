@@ -9,8 +9,8 @@
  * again after an interruption. A photo that cannot be read is counted and left alone.
  *
  * Usage:
- *   npx dotenv -e .env.prod -- npx tsx scripts/backfill-avatar-thumbnails.ts --dry-run
- *   npx dotenv -e .env.prod -- npx tsx scripts/backfill-avatar-thumbnails.ts
+ *   npx tsx --env-file=.env.prod scripts/backfill-avatar-thumbnails.ts --dry-run
+ *   npx tsx --env-file=.env.prod scripts/backfill-avatar-thumbnails.ts
  */
 import { db } from "@/lib/db";
 import { writeThumbnail } from "@/lib/photos/blob";
