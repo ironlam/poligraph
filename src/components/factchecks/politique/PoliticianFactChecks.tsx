@@ -72,24 +72,40 @@ export function VerdictSummary({ landing }: { landing: PoliticianFactCheckLandin
           </div>
         )}
       </dl>
-      <div className="space-y-3">
-        <ProportionBar breakdown={breakdown} />
-        <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
-          {VERDICT_GROUP_KEYS.filter((g) => breakdown[g] > 0).map((group) => (
-            <li key={group} className="flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="h-2 w-2 rounded-full shrink-0"
-                style={{ backgroundColor: VERDICT_GROUP_COLORS[group] }}
-              />
-              <span className="text-muted-foreground">{VERDICT_GROUP_LABELS[group]}</span>
-              <span className="font-bold tabular-nums">{breakdown[group]}</span>
-              <span className="text-muted-foreground">({percent(breakdown[group], total)})</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <VerdictBreakdownBar breakdown={breakdown} total={total} />
     </section>
+  );
+}
+
+/**
+ * The proportion bar and its legend, shared by the landing's summary and the candidate fiche, so
+ * the two pages can never show the same record in two shapes.
+ */
+export function VerdictBreakdownBar({
+  breakdown,
+  total,
+}: {
+  breakdown: PoliticianFactCheckLanding["breakdown"];
+  total: number;
+}) {
+  return (
+    <div className="space-y-3">
+      <ProportionBar breakdown={breakdown} />
+      <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
+        {VERDICT_GROUP_KEYS.filter((g) => breakdown[g] > 0).map((group) => (
+          <li key={group} className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="h-2 w-2 rounded-full shrink-0"
+              style={{ backgroundColor: VERDICT_GROUP_COLORS[group] }}
+            />
+            <span className="text-muted-foreground">{VERDICT_GROUP_LABELS[group]}</span>
+            <span className="font-bold tabular-nums">{breakdown[group]}</span>
+            <span className="text-muted-foreground">({percent(breakdown[group], total)})</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

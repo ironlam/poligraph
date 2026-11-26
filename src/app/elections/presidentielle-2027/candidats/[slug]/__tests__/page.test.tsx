@@ -33,6 +33,16 @@ vi.mock("@/lib/data/presidential-reader-guides", () => ({
   getPresidentialReaderGuideIndex: (electionSlug: string) => mockGetReaderGuideIndex(electionSlug),
 }));
 
+// The block reads its own data behind a Suspense boundary; an async server component cannot be
+// rendered by the DOM renderer, so the page tests stub it and its own tests cover the data.
+vi.mock("../_components/CandidateFactChecks", () => ({
+  CandidateFactChecksSection: ({ slug }: { slug: string }) => (
+    <section data-testid="fact-checks" data-slug={slug}>
+      <h2>Ses déclarations vérifiées</h2>
+    </section>
+  ),
+}));
+
 const candidacy = (overrides: Record<string, unknown> = {}) => ({
   candidacyId: "cand-1",
   electionSlug: "presidentielle-2027",
@@ -84,6 +94,44 @@ describe("page présidentielle d'une personne", () => {
     });
     mockGetThemesIndex.mockResolvedValue(null);
     mockGetReaderGuideIndex.mockResolvedValue([]);
+  });
+
+  describe("bloc des déclarations vérifiées", () => {
+    it("est rendu sur une fiche sans programme publié", async () => {
+      mockGetCandidacy.mockResolvedValue(candidacy());
+      const { default: Page } = await import("../page");
+      render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+      expect(screen.getByTestId("fact-checks")).toHaveAttribute("data-slug", "camille-riviere");
+    });
+
+    it("se place après les derniers votes et avant la probité", async () => {
+      mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
+      mockGetDetail.mockResolvedValue({
+        themes: [],
+        recentVotes: [
+          {
+            id: "v1",
+            position: "POUR",
+            scrutinTitle: "Scrutin test",
+            votingDate: new Date("2026-11-01"),
+          },
+        ],
+        mandateCount: 0,
+        probityConvictionCount: 0,
+        probityNonDefinitiveConvictionCount: 0,
+      });
+      const { default: Page } = await import("../page");
+      render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+      const votes = screen.getByRole("heading", { name: "Ses derniers votes" });
+      const factChecks = screen.getByRole("heading", { name: "Ses déclarations vérifiées" });
+      const probity = screen.getByRole("heading", { name: /Transparence et probité/ });
+      expect(
+        votes.compareDocumentPosition(factChecks) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        factChecks.compareDocumentPosition(probity) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    });
   });
 
   it("rend en 200 une page minimale avec zéro proposition publiée", async () => {
@@ -345,6 +393,27 @@ describe("page présidentielle d'une personne", () => {
     expect(metadata.twitter?.title).toBe(
       "Camille Rivière, candidature à la présidentielle 2027 | Poligraph"
     );
+  });
+
+  it("nomme le programme dans le titre quand la fiche en publie un", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
+    const { generateMetadata } = await import("../page");
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "camille-riviere" }),
+    });
+    expect(metadata.title).toBe("Camille Rivière : programme pour la présidentielle 2027");
+    expect(metadata.openGraph?.title).toBe(
+      "Camille Rivière : programme pour la présidentielle 2027 | Poligraph"
+    );
+  });
+
+  it("ne promet pas de programme quand un programme est seulement repéré", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy({ programmeIdentified: true }));
+    const { generateMetadata } = await import("../page");
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "camille-riviere" }),
+    });
+    expect(metadata.title).toBe("Camille Rivière, candidature à la présidentielle 2027");
   });
 
   it("décrit la fiche pour les aperçus de partage", async () => {
