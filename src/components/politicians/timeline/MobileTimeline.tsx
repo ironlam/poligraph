@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { MANDATE_TYPE_LABELS, AFFAIR_STATUS_LABELS } from "@/config/labels";
 import { MANDATE_TYPE_COLORS, AFFAIR_STATUS_MARKER_COLORS } from "@/config/timeline";
 import { formatDate } from "@/lib/utils";
+import { formatMandateDate } from "@/lib/mandates/dates";
 import type { CareerTimelineProps, TimelineAffair, MobileEvent, TimelineMandate } from "./types";
 import { mandateAffiliation } from "./utils";
 import { TimelineLegend } from "./TimelineLegend";
@@ -97,7 +98,9 @@ function MobileEventCard({ event }: { event: MobileEvent }) {
             {event.mandate.constituency && (
               <p className="text-xs text-muted-foreground">{event.mandate.constituency}</p>
             )}
-            <p className="text-xs text-muted-foreground mt-0.5">{formatDate(event.date)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {formatMandateDate(event.date, event.mandate.startDatePrecision ?? "DAY")}
+            </p>
             {event.mandate.isCurrent && (
               <Badge variant="outline" className="text-xs mt-1 border-green-500 text-green-600">
                 En cours
@@ -120,7 +123,9 @@ function MobileEventCard({ event }: { event: MobileEvent }) {
             {event.mandate.constituency && (
               <p className="text-xs text-muted-foreground">{event.mandate.constituency}</p>
             )}
-            <p className="text-xs text-muted-foreground mt-0.5">{formatDate(event.date)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {formatMandateDate(event.date, event.mandate.endDatePrecision ?? "DAY")}
+            </p>
           </div>
         </div>
       );

@@ -58,3 +58,60 @@ export function sameStartWithin(
   }
   return Math.abs(stored.getTime() - other.getTime()) / 86_400_000 < dayTolerance;
 }
+
+/** What the display helpers read of a mandate. Precisions are absent from older profile documents. */
+export type MandatePeriod = {
+  startDate: Date | string;
+  endDate: Date | string | null;
+  isCurrent: boolean;
+  startDatePrecision?: DatePrecision | null;
+  endDatePrecision?: DatePrecision | null;
+};
+
+/** A mandate that is over and whose end date nobody recorded. It did not last until today. */
+export function hasUnknownEnd(mandate: MandatePeriod): boolean {
+  return !mandate.isCurrent && mandate.endDate === null;
+}
+
+/**
+ * Where a mandate stops on a time axis: its end date, `openEnd` while it is held, and its own
+ * start when the end is unknown, so it is drawn as a point rather than stretched to today.
+ */
+export function mandateAxisEnd(mandate: MandatePeriod, openEnd: Date): Date {
+  if (mandate.endDate) return new Date(mandate.endDate);
+  return mandate.isCurrent ? openEnd : new Date(mandate.startDate);
+}
+
+/** "2001", "mars 2001" or "25 mars 2001", then the end the same way. */
+export function formatMandatePeriod(mandate: MandatePeriod, openEndLabel = "Aujourd'hui"): string {
+  const start = formatMandateDate(mandate.startDate, mandate.startDatePrecision ?? "DAY");
+  const end = mandate.endDate
+    ? formatMandateDate(mandate.endDate, mandate.endDatePrecision ?? "DAY")
+    : mandate.isCurrent
+      ? openEndLabel
+      : "fin non connue";
+  return `${start} - ${end}`;
+}
+
+/**
+ * How long a mandate lasted, when that can be said honestly.
+ *
+ * `preciseDuration` is the caller's own month-level formatter: it only runs when both bounds are
+ * known to the day. A bound known to the month or the year gives whole years, counted between
+ * calendar years, and nothing under a year. An unknown end gives nothing at all.
+ */
+export function mandateDuration(
+  mandate: MandatePeriod,
+  preciseDuration: (start: Date, end: Date) => string,
+  now: Date = new Date()
+): string | null {
+  if (hasUnknownEnd(mandate)) return null;
+  const start = new Date(mandate.startDate);
+  const end = mandate.endDate ? new Date(mandate.endDate) : now;
+  const startPrecise = (mandate.startDatePrecision ?? "DAY") === "DAY";
+  const endPrecise = !mandate.endDate || (mandate.endDatePrecision ?? "DAY") === "DAY";
+  if (startPrecise && endPrecise) return preciseDuration(start, end);
+  const years = end.getUTCFullYear() - start.getUTCFullYear();
+  if (years < 1) return null;
+  return `${years} an${years > 1 ? "s" : ""}`;
+}

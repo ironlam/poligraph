@@ -5,6 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { MANDATE_TYPE_LABELS, feminizeRole } from "@/config/labels";
 import type { SerializedMandate, MandateType } from "@/types";
 import type { ProfileMandateGovernment } from "@/lib/data/politician-profile-reads";
+import {
+  hasUnknownEnd,
+  mandateAxisEnd,
+  mandateDuration,
+  type MandatePeriod,
+} from "@/lib/mandates/dates";
 import { mandateGovernmentLink } from "@/components/governments/profile-link";
 import { formatDay } from "@/components/governments/format";
 import {
@@ -162,9 +168,10 @@ function getMandateCategory(type: MandateType): string {
   return "other";
 }
 
-function formatDuration(startDate: Date, endDate?: Date | null): string {
+/** Month-level duration between two dates known to the day. Callers go through `durationOf`. */
+function formatDuration(startDate: Date, endDate: Date): string {
   const start = new Date(startDate);
-  const end = endDate ? new Date(endDate) : new Date();
+  const end = new Date(endDate);
 
   const years = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365));
   const months = Math.floor(
@@ -178,6 +185,18 @@ function formatDuration(startDate: Date, endDate?: Date | null): string {
     return years === 1 ? "1 an" : `${years} ans`;
   }
   return `${years} an${years > 1 ? "s" : ""} ${months} mois`;
+}
+
+/** Null when it cannot be said honestly: unknown end, or under a year between imprecise dates. */
+function durationOf(mandate: MandatePeriod): string | null {
+  return mandateDuration(mandate, formatDuration);
+}
+
+/** "2001 - 2014", "2001 - fin non connue" for a closed mandate whose end nobody recorded. */
+function formatYears(mandate: MandatePeriod): string {
+  const start = formatYear(new Date(mandate.startDate));
+  if (mandate.endDate) return `${start} - ${formatYear(new Date(mandate.endDate))}`;
+  return hasUnknownEnd(mandate) ? `${start} - fin non connue` : start;
 }
 
 function formatYear(date: Date): string {
@@ -197,9 +216,9 @@ export function MandateTimeline({
     mandates.length > 0
       ? (() => {
           const starts = mandates.map((m) => new Date(m.startDate).getTime());
-          const ends = mandates.map((m) =>
-            m.endDate ? new Date(m.endDate).getTime() : Date.now()
-          );
+          // A closed mandate whose end is unknown adds nothing past its start.
+          const now = new Date();
+          const ends = mandates.map((m) => mandateAxisEnd(m, now).getTime());
           const earliest = Math.min(...starts);
           const latest = Math.max(...ends);
           return (latest - earliest) / (1000 * 60 * 60 * 24 * 365);
@@ -289,9 +308,11 @@ export function MandateTimeline({
                         Depuis {formatYear(mandate.startDate)}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {formatDuration(mandate.startDate)} en poste
-                    </p>
+                    {durationOf(mandate) && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {durationOf(mandate)} en poste
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
                       {mandate.officialUrl && (
                         <a
@@ -370,10 +391,7 @@ export function MandateTimeline({
                               return (
                                 <div key={mandate.id}>
                                   <div className="flex items-baseline gap-2 text-xs text-muted-foreground">
-                                    <span className="shrink-0">
-                                      {formatYear(mandate.startDate)}
-                                      {mandate.endDate && ` - ${formatYear(mandate.endDate)}`}
-                                    </span>
+                                    <span className="shrink-0">{formatYears(mandate)}</span>
                                     <span>·</span>
                                     <span>
                                       {group && (
@@ -387,9 +405,7 @@ export function MandateTimeline({
                                         </span>
                                       )}
                                       {group && " · "}
-                                      {detail
-                                        ? `${detail} · ${formatDuration(mandate.startDate, mandate.endDate)}`
-                                        : formatDuration(mandate.startDate, mandate.endDate)}
+                                      {[detail, durationOf(mandate)].filter(Boolean).join(" · ")}
                                     </span>
                                   </div>
                                   <GovernmentLinks mandate={mandate} enabled={governmentsEnabled} />
@@ -419,14 +435,16 @@ export function MandateTimeline({
                     >
                       <div className="absolute -left-[5px] top-2 w-2 h-2 rounded-full bg-muted-foreground/40" />
                       <div className="py-2">
+                        {/* A type no category lists says nothing by itself ("Autre mandat"): the
+                            title and the institution are what the reader needs. */}
                         <p className="font-medium">
-                          {MANDATE_TYPE_LABELS[mandate.type] || mandate.type}
+                          {mandate.title || MANDATE_TYPE_LABELS[mandate.type] || mandate.type}
                         </p>
+                        {mandate.institution && mandate.institution !== mandate.title && (
+                          <p className="text-xs text-muted-foreground">{mandate.institution}</p>
+                        )}
                         <p className="text-xs text-muted-foreground">
-                          {formatYear(mandate.startDate)}
-                          {mandate.endDate && ` - ${formatYear(mandate.endDate)}`}
-                          {" · "}
-                          {formatDuration(mandate.startDate, mandate.endDate)}
+                          {[formatYears(mandate), durationOf(mandate)].filter(Boolean).join(" · ")}
                         </p>
                       </div>
                     </div>
