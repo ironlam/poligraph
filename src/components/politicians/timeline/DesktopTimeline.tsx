@@ -4,6 +4,7 @@ import type { scaleTime } from "d3-scale";
 import { MANDATE_TYPE_LABELS, AFFAIR_STATUS_LABELS } from "@/config/labels";
 import { MANDATE_TYPE_COLORS, AFFAIR_STATUS_MARKER_COLORS } from "@/config/timeline";
 import { formatDate } from "@/lib/utils";
+import { mandateAxisEnd } from "@/lib/mandates/dates";
 import type { CareerTimelineProps, TooltipData, TimelineAffair, TimelineMandate } from "./types";
 import { mandateAffiliation } from "./utils";
 import {
@@ -190,11 +191,9 @@ export function DesktopTimeline({
           {mandateRows.map(({ mandates: rowMandates, overlapOffsets }, rowIndex) =>
             rowMandates.map((mandate) => {
               const startX = xScale(new Date(mandate.startDate));
-              const endDate = mandate.endDate
-                ? new Date(mandate.endDate)
-                : deathDate
-                  ? new Date(deathDate)
-                  : new Date();
+              // A closed mandate whose end is unknown is drawn at its start, at the minimum bar
+              // width: stretching it to today would show an office still held.
+              const endDate = mandateAxisEnd(mandate, deathDate ? new Date(deathDate) : new Date());
               const endX = xScale(endDate);
               const width = Math.max(endX - startX, MIN_BAR_WIDTH);
               const color = MANDATE_TYPE_COLORS[mandate.type];
@@ -218,7 +217,7 @@ export function DesktopTimeline({
                   }}
                   role="button"
                   tabIndex={0}
-                  aria-label={`${MANDATE_TYPE_LABELS[mandate.type]}${affiliation ? `, ${affiliation}` : ""}${mandate.constituency ? `, ${mandate.constituency}` : ""}, ${new Date(mandate.startDate).getFullYear()} - ${mandate.isCurrent ? "présent" : mandate.endDate ? new Date(mandate.endDate).getFullYear() : ""}`}
+                  aria-label={`${MANDATE_TYPE_LABELS[mandate.type]}${affiliation ? `, ${affiliation}` : ""}${mandate.constituency ? `, ${mandate.constituency}` : ""}, ${new Date(mandate.startDate).getFullYear()} - ${mandate.isCurrent ? "présent" : mandate.endDate ? new Date(mandate.endDate).getFullYear() : "fin non connue"}`}
                   onMouseEnter={(e) => onMandateHover(mandate, e)}
                   onMouseLeave={onHideTooltip}
                 >

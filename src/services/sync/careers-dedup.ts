@@ -1,4 +1,5 @@
-import { MandateType, DataSource } from "@/generated/prisma";
+import { MandateType, DataSource, type DatePrecision } from "@/generated/prisma";
+import { sameStartWithin } from "@/lib/mandates/dates";
 
 export const PARLIAMENTARY_MANDATE_TYPES: MandateType[] = [
   MandateType.DEPUTE,
@@ -14,6 +15,8 @@ export interface ExistingMandateForGuard {
   type: MandateType;
   source: DataSource | null;
   startDate: Date | string | null;
+  /** Absent means known to the day, as every synced mandate is. */
+  startDatePrecision?: DatePrecision;
   isCurrent: boolean;
 }
 
@@ -32,7 +35,9 @@ export interface MandateCandidateForGuard {
  * Mandate_current_type partial unique index — so an active candidate duplicates
  * any active same-type mandate regardless of source or start date. Authoritative
  * SENAT/AN data also always wins over Wikidata. Other types fall back to a
- * 30-day start-date tolerance.
+ * 30-day start-date tolerance, widened to the year or the month when the existing mandate's
+ * start is only known that precisely: a mandate entered by hand as "2001" is stored on
+ * 1 January, and Wikidata's 25 March 2001 is the same term, not a second one.
  *
  * NOTE: this guard and the partial unique index Mandate_current_type_uq enforce
  * related but different invariants. The index is the AUTHORITATIVE guarantee: it
@@ -59,9 +64,11 @@ export function isDuplicateMandateCandidate(
     }
 
     if (!m.startDate) return false;
-    const existingStart = new Date(m.startDate);
-    const diffDays =
-      Math.abs(existingStart.getTime() - candidate.startDate.getTime()) / (1000 * 60 * 60 * 24);
-    return diffDays < 30;
+    return sameStartWithin(
+      new Date(m.startDate),
+      m.startDatePrecision ?? "DAY",
+      candidate.startDate,
+      30
+    );
   });
 }

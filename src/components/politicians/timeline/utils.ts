@@ -1,3 +1,4 @@
+import { mandateAxisEnd } from "@/lib/mandates/dates";
 import type { SerializedMandate } from "@/types";
 import { MANDATE_TYPE_LABELS } from "@/config/labels";
 import type { TimelineMandate } from "./types";
@@ -73,7 +74,7 @@ export function computeOverlapOffsets(mandates: SerializedMandate[]): Map<string
     let placed = false;
     for (let i = 0; i < lanes.length; i++) {
       if (start >= lanes[i]!) {
-        lanes[i] = m.endDate ? new Date(m.endDate) : new Date();
+        lanes[i] = mandateAxisEnd(m, new Date());
         offsets.set(m.id, i);
         placed = true;
         break;
@@ -81,7 +82,7 @@ export function computeOverlapOffsets(mandates: SerializedMandate[]): Map<string
     }
     if (!placed) {
       offsets.set(m.id, lanes.length);
-      lanes.push(m.endDate ? new Date(m.endDate) : new Date());
+      lanes.push(mandateAxisEnd(m, new Date()));
     }
   }
   return offsets;

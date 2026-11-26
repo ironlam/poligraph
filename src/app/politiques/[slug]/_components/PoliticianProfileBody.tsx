@@ -249,8 +249,8 @@ export function PoliticianProfileBody({
                     <CardHeader>
                       <h2 className="title-card">Mandats</h2>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Liste des mandats nationaux et européens connus. Les mandats locaux (maire,
-                        conseiller, etc.) peuvent ne pas être listés.
+                        Mandats nationaux, européens et locaux connus de Poligraph. La liste des
+                        mandats locaux (maire, conseiller, etc.) peut être incomplète.
                       </p>
                     </CardHeader>
                     <CardContent>

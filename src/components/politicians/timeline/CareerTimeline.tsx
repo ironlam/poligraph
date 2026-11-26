@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { MANDATE_TYPE_LABELS, AFFAIR_STATUS_LABELS, AFFAIR_CATEGORY_LABELS } from "@/config/labels";
 import { AFFAIR_STATUS_MARKER_COLORS, getMandateRow, MANDATE_ROW_LABELS } from "@/config/timeline";
 import { formatDate } from "@/lib/utils";
+import { formatMandatePeriod, mandateDuration } from "@/lib/mandates/dates";
 import type { CareerTimelineProps, TooltipData, TimelineAffair } from "./types";
 import { LEFT_MARGIN, RIGHT_MARGIN } from "./types";
 import { computeDuration, computeOverlapOffsets, mandateAffiliation } from "./utils";
@@ -181,6 +182,7 @@ export function CareerTimeline({
   const handleMandateHover = useCallback(
     (mandate: (typeof mandates)[number], event: React.MouseEvent) => {
       const affiliation = mandateAffiliation(mandate);
+      const duration = mandateDuration(mandate, computeDuration);
       showTooltip(
         event,
         <div className="text-left">
@@ -189,13 +191,8 @@ export function CareerTimeline({
           {mandate.constituency && (
             <p className="text-xs text-muted-foreground">{mandate.constituency}</p>
           )}
-          <p className="text-xs mt-1">
-            {formatDate(mandate.startDate)} -{" "}
-            {mandate.isCurrent ? "Aujourd'hui" : formatDate(mandate.endDate)}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {computeDuration(mandate.startDate, mandate.endDate)}
-          </p>
+          <p className="text-xs mt-1">{formatMandatePeriod(mandate)}</p>
+          {duration && <p className="text-xs text-muted-foreground mt-0.5">{duration}</p>}
         </div>
       );
     },

@@ -29,7 +29,11 @@ export function ScreenReaderSummary({
               {MANDATE_TYPE_LABELS[m.type]}
               {affiliation && `, ${affiliation}`}
               {m.constituency && `, ${m.constituency}`} : {new Date(m.startDate).getFullYear()} -{" "}
-              {m.isCurrent ? "présent" : m.endDate ? new Date(m.endDate).getFullYear() : ""}
+              {m.isCurrent
+                ? "présent"
+                : m.endDate
+                  ? new Date(m.endDate).getFullYear()
+                  : "fin non connue"}
             </li>
           );
         })}

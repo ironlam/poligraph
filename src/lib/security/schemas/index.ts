@@ -5,7 +5,12 @@ export {
   moderateAffairSchema,
   bulkAffairSchema,
 } from "./affair";
-export { createMandateSchema, updateMandateSchema, patchMandateSchema } from "./mandate";
+export {
+  createMandateSchema,
+  updateMandateSchema,
+  patchMandateSchema,
+  createLocalMandateSchema,
+} from "./mandate";
 export { updatePartySchema, addPartyMembershipSchema, updatePartyMembershipSchema } from "./party";
 export { updateDossierSchema } from "./dossier";
 export { createFeatureFlagSchema, updateFeatureFlagSchema } from "./feature-flag";
