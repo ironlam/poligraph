@@ -38,6 +38,7 @@ import {
   MAIRE_MIN_COMMUNE_POPULATION,
   MIN_BIOGRAPHY_LENGTH,
 } from "@/lib/seo/politician-robots";
+import { getConfirmedMentionSqlWhere } from "@/lib/factchecks/mention-review";
 import {
   isIndexableTerritoireBudget,
   TERRITOIRE_COMMUNE_MIN_POPULATION,
@@ -149,7 +150,13 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
           WHERE a."politicianId" = p."id" AND ${getPublishedAffairSqlWhere()}
         )
         OR EXISTS (
-          SELECT 1 FROM "FactCheckMention" f WHERE f."politicianId" = p."id"
+          -- Same filter as the profile's count: a public fact-check, and a mention matched on a
+          -- full name or validated in the admin (src/lib/factchecks/mention-review.ts).
+          SELECT 1 FROM "FactCheckMention" f
+          JOIN "FactCheck" fc ON fc."id" = f."factCheckId"
+          WHERE f."politicianId" = p."id"
+            AND ${getPublicFactCheckSqlWhere("fc")}
+            AND ${getConfirmedMentionSqlWhere("f")}
         )
         OR EXISTS (
           SELECT 1 FROM "Declaration" d WHERE d."politicianId" = p."id"

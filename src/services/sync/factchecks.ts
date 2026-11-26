@@ -184,21 +184,21 @@ export async function classifyNewFactCheck(
 type MentionMatch = { politicianId: string; matchedName: string };
 
 /**
- * Several published politicians can share a full name (a minister and a village mayor), and a
- * name match cannot tell them apart. Among matches sharing a normalized full name, keep only the
- * politician the search was run for, when it is one of them; otherwise drop the whole group. A
+ * Several published politicians can answer to the same name: two homonyms on a full name (a
+ * minister and a village mayor), or every politician sharing a last name when the match was on the
+ * last name alone (one fact-check naming "Leclerc" used to link all twenty-two published Leclerc).
+ * A name match cannot tell them apart. Among matches sharing a normalized matched name, keep only
+ * the politician the search was run for, when it is one of them; otherwise drop the whole group. A
  * missing link is fixable in the admin; a fact-check attributed to the wrong person is a false
  * statement about them.
  */
 export function keepOneHomonym(
   matches: MentionMatch[],
-  politicians: Pick<PoliticianName, "id" | "normalizedFullName">[],
   preferredId: string
 ): { kept: MentionMatch[]; skipped: number } {
-  const nameById = new Map(politicians.map((p) => [p.id, p.normalizedFullName]));
   const byName = new Map<string, MentionMatch[]>();
   for (const match of matches) {
-    const name = nameById.get(match.politicianId) ?? match.politicianId;
+    const name = normalizeText(match.matchedName);
     byName.set(name, [...(byName.get(name) ?? []), match]);
   }
   const kept: MentionMatch[] = [];
@@ -231,7 +231,7 @@ function computeClaimantIds(
   const matches = findMentions(claimant, allPoliticians, { fullNameOnly: true }).filter(
     (m) => !blocklist.isBlocked(m.matchedName, m.politicianId)
   );
-  const { kept, skipped } = keepOneHomonym(matches, allPoliticians, targetId);
+  const { kept, skipped } = keepOneHomonym(matches, targetId);
   return { ids: new Set(kept.map((m) => m.politicianId)), homonymsSkipped: skipped };
 }
 
@@ -417,11 +417,7 @@ export async function syncFactchecks(
             }
             return true;
           });
-          const { kept: mentions, skipped: mentionHomonyms } = keepOneHomonym(
-            unblocked,
-            allPoliticians,
-            target.id
-          );
+          const { kept: mentions, skipped: mentionHomonyms } = keepOneHomonym(unblocked, target.id);
           stats.homonymsSkipped += mentionHomonyms;
 
           // If no politician matched, at least link to the target

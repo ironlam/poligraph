@@ -2225,6 +2225,9 @@ model FactCheckMention {
   politician   Politician @relation(fields: [politicianId], references: [id])
   matchedName  String?
   isClaimant   Boolean    @default(false)
+  /// Admin validation of a mention matched on a single word (last name alone). Such a mention feeds
+  /// no indexation signal while null: see src/lib/factchecks/mention-review.ts.
+  reviewedAt   DateTime?
 
   @@unique([factCheckId, politicianId])
   @@index([politicianId])

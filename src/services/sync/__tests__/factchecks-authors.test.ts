@@ -13,19 +13,12 @@ import {
   planForcedMentions,
 } from "../factchecks";
 
-const POLITICIANS = [
-  { id: "ministre", normalizedFullName: "philippe baptiste" },
-  { id: "maire", normalizedFullName: "philippe baptiste" },
-  { id: "deputee", normalizedFullName: "mathilde panot" },
-];
-
-const match = (politicianId: string) => ({ politicianId, matchedName: "Nom" });
+const match = (politicianId: string, matchedName: string) => ({ politicianId, matchedName });
 
 describe("keepOneHomonym", () => {
   it("garde la personne recherchée parmi ses homonymes", () => {
     const { kept, skipped } = keepOneHomonym(
-      [match("ministre"), match("maire")],
-      POLITICIANS,
+      [match("ministre", "Philippe Baptiste"), match("maire", "Philippe Baptiste")],
       "ministre"
     );
     expect(kept.map((m) => m.politicianId)).toEqual(["ministre"]);
@@ -34,8 +27,11 @@ describe("keepOneHomonym", () => {
 
   it("n'en garde aucun quand la personne recherchée n'est pas parmi eux", () => {
     const { kept, skipped } = keepOneHomonym(
-      [match("ministre"), match("maire"), match("deputee")],
-      POLITICIANS,
+      [
+        match("ministre", "Philippe Baptiste"),
+        match("maire", "Philippe Baptiste"),
+        match("deputee", "Mathilde Panot"),
+      ],
       "deputee"
     );
     expect(kept.map((m) => m.politicianId)).toEqual(["deputee"]);
@@ -44,12 +40,29 @@ describe("keepOneHomonym", () => {
 
   it("laisse intacts des noms différents", () => {
     const { kept, skipped } = keepOneHomonym(
-      [match("ministre"), match("deputee")],
-      POLITICIANS,
+      [match("ministre", "Philippe Baptiste"), match("deputee", "Mathilde Panot")],
       "autre"
     );
     expect(kept.map((m) => m.politicianId)).toEqual(["ministre", "deputee"]);
     expect(skipped).toBe(0);
+  });
+
+  it("écarte un nom de famille seul porté par plusieurs personnes", () => {
+    // One fact-check naming "Leclerc" used to be linked to every published Leclerc.
+    const { kept, skipped } = keepOneHomonym(
+      [match("c-leclerc", "Leclerc"), match("p-leclerc", "Leclerc"), match("v-leclerc", "Leclerc")],
+      "autre"
+    );
+    expect(kept).toEqual([]);
+    expect(skipped).toBe(3);
+  });
+
+  it("compare les noms sans accent ni casse", () => {
+    const { kept } = keepOneHomonym(
+      [match("a", "Hervé Marseille"), match("b", "herve marseille")],
+      "a"
+    );
+    expect(kept.map((m) => m.politicianId)).toEqual(["a"]);
   });
 });
 

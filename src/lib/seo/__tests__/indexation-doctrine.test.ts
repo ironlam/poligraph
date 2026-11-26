@@ -513,6 +513,24 @@ describe("doctrine — sitemap shares the indexability thresholds (no drift)", (
     expect(src).toContain('from "@/lib/seo/politician-robots"');
   });
 
+  it("counts a fact-check mention under the same filters as the profile", () => {
+    // A mention matched on a last name alone feeds no signal until an admin validates it, and a
+    // mention of a non-public fact-check never does. Comments stripped: the rule must be in code.
+    const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$|--.*$/gm, "");
+    const block = code.slice(code.indexOf('FROM "FactCheckMention" f'));
+    expect(block.slice(0, 400)).toContain('getConfirmedMentionSqlWhere("f")');
+    expect(block.slice(0, 400)).toContain('getPublicFactCheckSqlWhere("fc")');
+    const reads = [
+      "src/lib/data/politician-profile-reads.ts",
+      "src/lib/seo/politician-index-signals.ts",
+    ];
+    for (const file of reads) {
+      expect(readFileSync(join(process.cwd(), file), "utf8"), file).toContain(
+        "...CONFIRMED_MENTION_WHERE"
+      );
+    }
+  });
+
   it.each(["SIGNIFICANT_MANDATE_TYPES", "MAIRE_MIN_COMMUNE_POPULATION", "MIN_BIOGRAPHY_LENGTH"])(
     "uses %s rather than a hardcoded value",
     (name) => {

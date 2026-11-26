@@ -9,6 +9,7 @@ import {
 import { PARRAINAGES_FICHES_CANDIDATS } from "@/config/parrainages";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { CONFIRMED_MENTION_WHERE } from "@/lib/factchecks/mention-review";
 import { PUBLIC_EVENT_WHERE } from "@/lib/affairs/events/public";
 import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import {
@@ -49,7 +50,11 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
       _count: {
         select: {
           affairs: { where: { ...getPublishedAffairWhere(), politician: PUBLIC_POLITICIAN_WHERE } },
-          factCheckMentions: { where: { factCheck: getPublicFactCheckWhere() } },
+          // Feeds the robots predicate, the title and the description: a mention matched on a
+          // last name alone counts once an admin validated it (mention-review.ts).
+          factCheckMentions: {
+            where: { factCheck: getPublicFactCheckWhere(), ...CONFIRMED_MENTION_WHERE },
+          },
         },
       },
       mandates: {

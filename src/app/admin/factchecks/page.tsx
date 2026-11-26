@@ -12,7 +12,9 @@ import {
   VerdictSelect,
   ClaimantToggle,
   AddMentionButton,
+  MentionReviewButton,
 } from "@/components/admin/FactcheckActions";
+import { MENTION_TO_REVIEW_WHERE, needsMentionReview } from "@/lib/factchecks/mention-review";
 import { updateFactcheckStatus } from "./actions";
 import { parsePageParam } from "@/lib/data/query-params";
 
@@ -22,6 +24,7 @@ interface PageProps {
     source?: string;
     rating?: string;
     status?: string;
+    review?: string;
     page?: string;
   }>;
 }
@@ -33,6 +36,7 @@ async function getFactChecks(params: {
   source?: string;
   rating?: FactCheckRating;
   status?: PublicationStatus;
+  toReview: boolean;
   page: number;
 }) {
   const where: Prisma.FactCheckWhereInput = {};
@@ -53,6 +57,10 @@ async function getFactChecks(params: {
     where.publicationStatus = params.status;
   }
 
+  if (params.toReview) {
+    where.mentions = { some: MENTION_TO_REVIEW_WHERE };
+  }
+
   const [factChecks, total] = await Promise.all([
     db.factCheck.findMany({
       where,
@@ -71,6 +79,8 @@ async function getFactChecks(params: {
           select: {
             id: true,
             isClaimant: true,
+            matchedName: true,
+            reviewedAt: true,
             politician: { select: { slug: true, fullName: true } },
           },
         },
@@ -84,9 +94,10 @@ async function getFactChecks(params: {
 }
 
 async function getStats() {
-  const [total, totalMentions, byRating] = await Promise.all([
+  const [total, totalMentions, mentionsToReview, byRating] = await Promise.all([
     db.factCheck.count(),
     db.factCheckMention.count(),
+    db.factCheckMention.count({ where: MENTION_TO_REVIEW_WHERE }),
     db.factCheck.groupBy({
       by: ["verdictRating"],
       _count: true,
@@ -97,6 +108,7 @@ async function getStats() {
   return {
     total,
     totalMentions,
+    mentionsToReview,
     byRating: Object.fromEntries(byRating.map((r) => [r.verdictRating, r._count])) as Record<
       string,
       number
@@ -168,13 +180,26 @@ export default async function AdminFactchecksPage({ searchParams }: PageProps) {
     : undefined;
 
   const [{ factChecks, total, totalPages }, stats, sources, health] = await Promise.all([
-    getFactChecks({ search: params.search, source: params.source, rating, status, page }),
+    getFactChecks({
+      search: params.search,
+      source: params.source,
+      rating,
+      status,
+      toReview: params.review === "1",
+      page,
+    }),
     getStats(),
     getSources(),
     getPipelineHealth(),
   ]);
 
-  const hasFilters = !!(params.search || params.source || params.rating || params.status);
+  const hasFilters = !!(
+    params.search ||
+    params.source ||
+    params.rating ||
+    params.status ||
+    params.review
+  );
 
   return (
     <div className="space-y-6">
@@ -190,6 +215,24 @@ export default async function AdminFactchecksPage({ searchParams }: PageProps) {
         >
           Valider les thèmes proposés
         </Link>
+        {stats.mentionsToReview > 0 && (
+          <Link
+            href={{
+              pathname: "/admin/factchecks",
+              query: {
+                ...params,
+                review: params.review === "1" ? undefined : "1",
+                page: undefined,
+              },
+            }}
+            prefetch={false}
+            className="ml-4 mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
+          >
+            {params.review === "1"
+              ? "Voir tous les fact-checks"
+              : `Valider les mentions sur un seul mot (${stats.mentionsToReview})`}
+          </Link>
+        )}
       </div>
 
       {/* Stats */}
@@ -274,6 +317,7 @@ export default async function AdminFactchecksPage({ searchParams }: PageProps) {
           />
           {params.source && <input type="hidden" name="source" value={params.source} />}
           {params.rating && <input type="hidden" name="rating" value={params.rating} />}
+          {params.review && <input type="hidden" name="review" value={params.review} />}
         </form>
 
         {/* Source filter chips */}
@@ -439,7 +483,11 @@ export default async function AdminFactchecksPage({ searchParams }: PageProps) {
                             {fc.mentions.map((m) => (
                               <span
                                 key={m.id}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-muted rounded-full"
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${
+                                  needsMentionReview(m)
+                                    ? "bg-orange-50 border border-orange-200"
+                                    : "bg-muted"
+                                }`}
                               >
                                 <Link
                                   href={`/politiques/${m.politician.slug}`}
@@ -448,6 +496,13 @@ export default async function AdminFactchecksPage({ searchParams }: PageProps) {
                                 >
                                   {m.politician.fullName}
                                 </Link>
+                                {needsMentionReview(m) && (
+                                  <MentionReviewButton
+                                    mentionId={m.id}
+                                    matchedName={m.matchedName}
+                                    politicianName={m.politician.fullName}
+                                  />
+                                )}
                                 <ClaimantToggle mentionId={m.id} isClaimant={m.isClaimant} />
                                 <AdminDeleteButton
                                   endpoint={`/api/admin/factchecks/mentions/${m.id}`}

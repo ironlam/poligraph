@@ -49,6 +49,8 @@ export const POST = withAdminAuth(
         politicianId: body.politicianId,
         matchedName: politician.fullName,
         isClaimant: body.isClaimant,
+        // An admin picked this person: the link is validated by construction.
+        reviewedAt: new Date(),
       },
     });
 
