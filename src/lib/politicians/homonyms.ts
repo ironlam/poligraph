@@ -29,6 +29,13 @@ export type Homonym = {
   }>;
 };
 
+/**
+ * `translate()` arguments mirroring `normalizeText`: U+2018 and U+2019 to a straight apostrophe,
+ * hyphen, en dash and em dash to a space. Written as escapes so the pairs stay countable.
+ */
+const FOLD_FROM = "\u2018\u2019-\u2013\u2014";
+const FOLD_TO = "''   ";
+
 /** Hard cap on what one name can return: the admin reads this list, it is not a search. */
 export const HOMONYM_LIMIT = 50;
 
@@ -59,16 +66,21 @@ export async function findHomonymIds(
   const { last, first } = homonymKey(firstName, lastName);
   if (!last || !first) return [];
   const full = normalizeText(`${firstName} ${lastName}`);
+  // Same folding as `normalizeText` on the stored side: typographic apostrophes become straight
+  // ones, hyphens and dashes become spaces. Without it "D\u2019Ornano" in the table never
+  // equals the "d'ornano" the parameter holds.
+  const fold = (column: Prisma.Sql) =>
+    Prisma.sql`btrim(lower(unaccent(translate(${column}, ${FOLD_FROM}, ${FOLD_TO}))))`;
   const rows = await client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT p.id
     FROM "Politician" p
     WHERE (
-        btrim(lower(unaccent(replace(p."lastName", '-', ' ')))) = ${last}
-        AND split_part(btrim(lower(unaccent(replace(p."firstName", '-', ' ')))), ' ', 1) = ${first}
+        ${fold(Prisma.sql`p."lastName"`)} = ${last}
+        AND split_part(${fold(Prisma.sql`p."firstName"`)}, ' ', 1) = ${first}
       )
       OR EXISTS (
         SELECT 1 FROM unnest(p.aliases) AS alias
-        WHERE btrim(lower(unaccent(replace(alias, '-', ' ')))) = ${full}
+        WHERE ${fold(Prisma.sql`alias`)} = ${full}
       )
     ORDER BY p."prominenceScore" DESC, p.id ASC
     LIMIT ${HOMONYM_LIMIT}

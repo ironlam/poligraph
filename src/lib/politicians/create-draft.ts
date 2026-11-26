@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { normalizeText } from "@/lib/name-matching";
-import { generateSlug } from "@/lib/utils";
+import { generateSlug, generateUniqueSlug } from "@/lib/utils";
 import type { RequestMeta } from "@/lib/security";
 import { findHomonymIds, findHomonyms, homonymKey, type Homonym } from "./homonyms";
 
@@ -48,7 +48,9 @@ export async function createDraftPolitician(
 
   return db.$transaction(async (tx) => {
     // Released at commit or rollback. Serializes creations of the same name only.
-    await tx.$queryRaw`
+    // $executeRaw, not $queryRaw: the function returns `void`, which the pg adapter cannot
+    // deserialize, and the query then fails before anything is checked.
+    await tx.$executeRaw`
       SELECT pg_advisory_xact_lock(hashtextextended(${`politician-create:${key.last}:${key.first}`}, 0))
     `;
 
@@ -57,12 +59,17 @@ export async function createDraftPolitician(
       return { kind: "unseen-homonyms", homonyms: await findHomonyms(tx, firstName, lastName) };
     }
 
-    const slugOwner = await tx.politician.findUnique({ where: { slug }, select: { id: true } });
-    if (slugOwner) return { kind: "slug-taken", slug };
+    const slugExists = async (candidate: string) =>
+      (await tx.politician.findUnique({ where: { slug: candidate }, select: { id: true } })) !==
+      null;
+    // A slug the admin chose is theirs to fix. The one derived from the name is not: a real
+    // namesake already holds it, and creating that second person is what this flow is for.
+    if (input.slug && (await slugExists(slug))) return { kind: "slug-taken", slug };
+    const freeSlug = input.slug ? slug : await generateUniqueSlug(slug, slugExists);
 
     const politician = await tx.politician.create({
       data: {
-        slug,
+        slug: freeSlug,
         firstName,
         lastName,
         fullName,
@@ -84,7 +91,7 @@ export async function createDraftPolitician(
         entityId: politician.id,
         changes: {
           fullName,
-          slug,
+          slug: freeSlug,
           publicationStatus: "DRAFT",
           statusOverride: true,
           source: "MANUAL",

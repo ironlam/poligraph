@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // what the function refuses, and that nothing is written when it refuses.
 
 const h = vi.hoisted(() => ({
-  queryRaw: vi.fn(),
+  executeRaw: vi.fn(),
   findUnique: vi.fn(),
   create: vi.fn(),
   auditCreate: vi.fn(),
@@ -14,7 +14,9 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/db", () => {
   const tx = {
-    $queryRaw: h.queryRaw,
+    // No $queryRaw on purpose: the lock returns `void`, which the pg adapter cannot deserialize
+    // through it. A lock taken with $queryRaw breaks every test here, as it broke the route.
+    $executeRaw: h.executeRaw,
     politician: { findUnique: h.findUnique, create: h.create },
     auditLog: { create: h.auditCreate },
   };
@@ -38,7 +40,7 @@ const INPUT = { firstName: " Camille ", lastName: "Rivière-Dupont", acknowledge
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.queryRaw.mockResolvedValue([]);
+  h.executeRaw.mockResolvedValue(1);
   h.findHomonymIds.mockResolvedValue([]);
   h.findHomonyms.mockResolvedValue([]);
   h.findUnique.mockResolvedValue(null);
@@ -129,9 +131,9 @@ describe("createDraftPolitician", () => {
 
   it("prend le verrou sur le nom avant de relire les homonymes", async () => {
     const order: string[] = [];
-    h.queryRaw.mockImplementation(async () => {
+    h.executeRaw.mockImplementation(async () => {
       order.push("lock");
-      return [];
+      return 1;
     });
     h.findHomonymIds.mockImplementation(async () => {
       order.push("homonyms");
@@ -147,11 +149,11 @@ describe("createDraftPolitician", () => {
       { ...INPUT, firstName: "CAMILLE", lastName: "riviere dupont" },
       META
     );
-    expect(keyOf(h.queryRaw.mock.calls[1]!)).toBe(keyOf(h.queryRaw.mock.calls[0]!));
-    expect(keyOf(h.queryRaw.mock.calls[0]!)).toBe("politician-create:riviere dupont:camille");
+    expect(keyOf(h.executeRaw.mock.calls[1]!)).toBe(keyOf(h.executeRaw.mock.calls[0]!));
+    expect(keyOf(h.executeRaw.mock.calls[0]!)).toBe("politician-create:riviere dupont:camille");
   });
 
-  it("refuse un slug déjà pris, sans écrire", async () => {
+  it("refuse un slug choisi par l'admin s'il est déjà pris, sans écrire", async () => {
     h.findUnique.mockResolvedValue({ id: "pol_other" });
 
     const result = await createDraftPolitician({ ...INPUT, slug: "camille-riviere" }, META);
@@ -159,6 +161,24 @@ describe("createDraftPolitician", () => {
     expect(result).toEqual({ kind: "slug-taken", slug: "camille-riviere" });
     expect(h.create).not.toHaveBeenCalled();
     expect(h.auditCreate).not.toHaveBeenCalled();
+  });
+
+  it("donne un slug suffixé à un vrai homonyme, dont le slug du nom est déjà pris", async () => {
+    // The namesake was shown and acknowledged: the creation must go through, not stop on the
+    // slug the first person already holds.
+    h.findHomonymIds.mockResolvedValue(["pol_other"]);
+    h.findUnique.mockImplementation(async ({ where }: { where: { slug: string } }) =>
+      where.slug === "camille-riviere-dupont" ? { id: "pol_other" } : null
+    );
+
+    const result = await createDraftPolitician(
+      { ...INPUT, acknowledgedHomonymIds: ["pol_other"] },
+      META
+    );
+
+    expect(result.kind).toBe("created");
+    expect(h.create.mock.calls[0]![0].data.slug).toBe("camille-riviere-dupont-2");
+    expect(h.auditCreate.mock.calls[0]![0].data.changes.slug).toBe("camille-riviere-dupont-2");
   });
 
   it("laisse remonter l'échec de l'audit, pour que la transaction annule la fiche", async () => {
