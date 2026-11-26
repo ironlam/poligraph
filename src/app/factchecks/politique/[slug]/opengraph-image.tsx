@@ -13,7 +13,13 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const landing = await getPoliticianFactCheckLanding(slug);
   if (!landing) notFound();
 
-  const { author, claimed, breakdown, bySource } = landing;
+  const { author, claimed, about, bySource } = landing;
+  // A page about someone with no checked claim of their own shows what is checked about them.
+  const aboutOnly = claimed.length === 0 && about.length > 0;
+  const breakdown = aboutOnly ? landing.aboutBreakdown : landing.breakdown;
+  const line = aboutOnly
+    ? `${about.length} fact-check${about.length > 1 ? "s" : ""} à son sujet`
+    : `${claimed.length} déclaration${claimed.length > 1 ? "s" : ""} vérifiée${claimed.length > 1 ? "s" : ""}, ${bySource.length} rédaction${bySource.length > 1 ? "s" : ""}`;
 
   return new ImageResponse(
     <OgLayout>
@@ -21,9 +27,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
       <div style={{ fontSize: 48, fontWeight: 700, color: "white", marginBottom: 16 }}>
         {truncateOg(author.fullName, 60)}
       </div>
-      <div style={{ fontSize: 30, color: "#cbd5e1", marginBottom: 32 }}>
-        {`${claimed.length} déclaration${claimed.length > 1 ? "s" : ""} vérifiée${claimed.length > 1 ? "s" : ""}, ${bySource.length} rédaction${bySource.length > 1 ? "s" : ""}`}
-      </div>
+      <div style={{ fontSize: 30, color: "#cbd5e1", marginBottom: 32 }}>{line}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
         {VERDICT_GROUP_KEYS.filter((g) => breakdown[g] > 0).map((group) => (
           <div key={group} style={{ display: "flex", alignItems: "center", gap: 10 }}>

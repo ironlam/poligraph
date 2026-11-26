@@ -6,6 +6,11 @@ export interface FactCheckPerson {
   slug: string;
   fullName: string;
   partyShortName: string | null;
+  /**
+   * The person's fact-check landing, set for a subject on a confirmed mention only. A rumour page
+   * stays noindex: this visible link is what carries it to the person's page, where the demand is.
+   */
+  landingHref?: string | null;
 }
 
 interface FactCheckPeopleProps {
@@ -57,6 +62,23 @@ export function FactCheckPeople({ people, variant }: FactCheckPeopleProps) {
           </Link>
         ))}
       </div>
+      {!isClaimant && people.some((person) => person.landingHref) && (
+        <ul className="mt-2">
+          {people
+            .filter((person) => person.landingHref)
+            .map((person) => (
+              <li key={person.slug}>
+                <Link
+                  prefetch={false}
+                  href={person.landingHref!}
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
+                >
+                  Toutes les vérifications sur {person.fullName}
+                </Link>
+              </li>
+            ))}
+        </ul>
+      )}
     </div>
   );
 }

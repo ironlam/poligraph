@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getPublicFactCheckWhere } from "@/lib/api/public-contract";
 import { VERDICT_GROUPS } from "@/config/labels";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { needsMentionReview } from "@/lib/factchecks/mention-review";
 import { isIndexableFactCheckPolitician } from "@/lib/seo/factcheck-robots";
 import {
   queryAuthor,
@@ -17,8 +18,13 @@ import {
 
 /**
  * Landing page of the fact-checks about one politician, /factchecks/politique/[slug]: the claims
- * attributed to them, counted by verdict and by outlet, and the fact-checks that only cite them.
- * Counts and links only, read from the base; no text is generated.
+ * attributed to them ("par"), counted by verdict and by outlet, then the fact-checks about them
+ * ("sur": a rumour or someone else's claim that names them). Counts and links only, read from the
+ * base; no text is generated.
+ *
+ * A reader looking for what was checked about someone looks for the person, not for one rumour
+ * page: those pages are short copies of the outlet and stay out of the index, so the landing is
+ * where the person's checks are gathered and where the index finds them.
  */
 
 export const VERDICT_GROUP_KEYS = Object.keys(VERDICT_GROUPS) as VerdictGroup[];
@@ -43,8 +49,19 @@ export interface PoliticianFactCheckLanding {
   hasCandidacy: boolean;
   /** Fact-checks where the politician is the claimant, most recent first. */
   claimed: PoliticianFactCheckItem[];
-  /** Fact-checks that cite the politician without them being the claimant. */
-  cited: PoliticianFactCheckItem[];
+  /**
+   * Fact-checks about the politician without them being the claimant, on a confirmed mention
+   * (full name, or a last name validated in the admin), most recent first.
+   */
+  about: PoliticianFactCheckItem[];
+  /** Verdicts of `about`, counted apart: they are not the politician's own claims. */
+  aboutBreakdown: VerdictBreakdown;
+  /**
+   * Same, on a last name alone that no admin has validated yet. Still listed (the decision of
+   * 2026-11-26 not to hide them before review), but neither counted nor indexed.
+   */
+  aboutPending: PoliticianFactCheckItem[];
+  /** Verdicts of `claimed`. */
   breakdown: VerdictBreakdown;
   bySource: SourceBreakdown[];
   /** Year of the oldest claimed fact-check, UTC. */
@@ -104,6 +121,8 @@ export async function queryPoliticianFactCheckLanding(
     },
     select: {
       isClaimant: true,
+      matchedName: true,
+      reviewedAt: true,
       factCheck: {
         select: {
           slug: true,
@@ -124,18 +143,25 @@ export async function queryPoliticianFactCheckLanding(
     slug: m.factCheck.slug!,
   });
   const claimed = mentions.filter((m) => m.isClaimant).map(toItem);
-  const cited = mentions.filter((m) => !m.isClaimant).map(toItem);
+  const notClaimant = mentions.filter((m) => !m.isClaimant);
+  const about = notClaimant.filter((m) => !needsMentionReview(m)).map(toItem);
+  const aboutPending = notClaimant.filter((m) => needsMentionReview(m)).map(toItem);
   const candidacy = await queryCandidacy(author.id);
 
   return {
     author: author.identity,
     hasCandidacy: candidacy !== null,
     claimed,
-    cited,
+    about,
+    aboutBreakdown: summarizeVerdicts(about.map((f) => f.verdictRating)),
+    aboutPending,
     breakdown: summarizeVerdicts(claimed.map((f) => f.verdictRating)),
     bySource: summarizeBySource(claimed),
     firstYear: claimed.length ? claimed.at(-1)!.publishedAt.getUTCFullYear() : null,
-    indexable: isIndexableFactCheckPolitician(claimed.length),
+    indexable: isIndexableFactCheckPolitician({
+      claimed: claimed.length,
+      aboutConfirmed: about.length,
+    }),
   };
 }
 
@@ -156,6 +182,9 @@ export async function getPoliticianFactCheckLanding(
   if (election) cacheTag(`election-candidacies:${election.id}`);
   return queryPoliticianFactCheckLanding(slug);
 }
+
+/** Anchor of the "Vérifications à son sujet" section of the landing. */
+export const FACTCHECK_ABOUT_ANCHOR = "a-son-sujet";
 
 export function factCheckPoliticianPath(slug: string): string {
   return `/factchecks/politique/${slug}`;

@@ -9,6 +9,7 @@ import {
 } from "@/config/labels";
 import type { VerdictGroup } from "@/lib/data/factcheck-context";
 import {
+  FACTCHECK_ABOUT_ANCHOR,
   VERDICT_GROUP_KEYS,
   groupByYear,
   verdictGroupOf,
@@ -19,6 +20,9 @@ import { formatDate } from "@/lib/utils";
 import { VerdictFilter } from "./VerdictFilter";
 
 /** Server components of /factchecks/politique/[slug]. Counts and links only. */
+
+/** Rows of "à son sujet" shown before the fold: enough to read the page on a phone. */
+export const ABOUT_PREVIEW_COUNT = 5;
 
 /** Column headers of the outlet table: the full labels do not fit a phone-width table. */
 const SHORT_VERDICT_LABELS: Record<VerdictGroup, string> = {
@@ -158,9 +162,12 @@ export function SourceTable({ landing }: { landing: PoliticianFactCheckLanding }
 function FactCheckRow({
   item,
   verdict,
+  compact = false,
 }: {
   item: PoliticianFactCheckItem;
   verdict?: VerdictGroup | null;
+  /** Title only: a rumour's title already states it, the quote would double the row on a phone. */
+  compact?: boolean;
 }) {
   return (
     <li data-verdict={verdict ?? undefined}>
@@ -177,16 +184,18 @@ function FactCheckRow({
           <span>{formatDate(item.publishedAt)}</span>
         </span>
         <span className="font-medium group-hover:underline">{item.title}</span>
-        <span className="text-sm text-muted-foreground italic">
-          &laquo;&nbsp;{item.claimText}&nbsp;&raquo;
-        </span>
+        {!compact && (
+          <span className="text-sm text-muted-foreground italic">
+            &laquo;&nbsp;{item.claimText}&nbsp;&raquo;
+          </span>
+        )}
       </Link>
     </li>
   );
 }
 
 export function FactCheckList({ landing }: { landing: PoliticianFactCheckLanding }) {
-  const { author, claimed, breakdown, cited } = landing;
+  const { author, claimed, breakdown } = landing;
 
   return (
     <section aria-labelledby="fcp-list" className={cardClass}>
@@ -224,22 +233,134 @@ export function FactCheckList({ landing }: { landing: PoliticianFactCheckLanding
           ))}
         </VerdictFilter>
       )}
-      {cited.length > 0 && (
-        <details className="rounded-lg border p-3">
-          <summary className="cursor-pointer min-h-11 flex items-center font-medium">
-            Cité sans être l{"'"}auteur ({plural(cited.length, "fact-check")})
+    </section>
+  );
+}
+
+/**
+ * Fact-checks about the person that they did not author: rumours, or someone else's claim naming
+ * them. Placed after their own claims, at the bottom of the page, so it never pushes their record
+ * down on a phone. One line of counts, the five most recent rows, the rest folded in a <details>
+ * that also holds the verdict filter. Opening that one (not the pending one) hides the preview (CSS :has), so no row shows
+ * twice; without :has support the preview simply stays above.
+ *
+ * The verdicts are counted apart from the person's record: a rumour about someone says nothing of
+ * their own reliability, and the caveat says so before the list.
+ */
+export function AboutSection({ landing }: { landing: PoliticianFactCheckLanding }) {
+  const { author, about, aboutBreakdown, aboutPending } = landing;
+  if (about.length === 0 && aboutPending.length === 0) return null;
+  const total = about.length;
+  const folded = total > ABOUT_PREVIEW_COUNT;
+  const counts = VERDICT_GROUP_KEYS.filter((g) => aboutBreakdown[g] > 0).map((group) => ({
+    group,
+    count: aboutBreakdown[group],
+  }));
+
+  return (
+    <section
+      id={FACTCHECK_ABOUT_ANCHOR}
+      aria-labelledby="fcp-about"
+      className={`${cardClass} group/about scroll-mt-20`}
+    >
+      <h2 id="fcp-about" className="text-lg font-display font-bold">
+        Vérifications à son sujet
+        {total > 0 && (
+          <span className="font-normal text-muted-foreground tabular-nums"> ({total})</span>
+        )}
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        Des propos tenus par d{"'"}autres au sujet de {author.fullName} : rumeurs, intox,
+        déclarations de tiers. Ils ne comptent pas dans le bilan de ses déclarations.
+      </p>
+      {total > 0 && (
+        <>
+          <VerdictCountLine counts={counts} />
+          {folded ? (
+            <>
+              <ul className="divide-y group-has-[[data-about-all][open]]/about:hidden">
+                {about.slice(0, ABOUT_PREVIEW_COUNT).map((item) => (
+                  <FactCheckRow key={item.slug} item={item} compact />
+                ))}
+              </ul>
+              {/* data-about-all scopes the preview hiding to this disclosure: opening the pending
+                  one below must leave the preview visible. */}
+              <details data-about-all className="rounded-lg border p-3">
+                <summary className="cursor-pointer min-h-11 flex items-center font-medium">
+                  Voir les {plural(total, "vérification")} et filtrer par verdict
+                </summary>
+                <div className="mt-3">
+                  <VerdictFilter total={total} counts={counts} noun="vérification">
+                    <AboutByYear items={about} />
+                  </VerdictFilter>
+                </div>
+              </details>
+            </>
+          ) : (
+            <ul className="divide-y">
+              {about.map((item) => (
+                <FactCheckRow key={item.slug} item={item} compact />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {aboutPending.length > 0 && (
+        <details className="rounded-lg border border-dashed p-3">
+          <summary className="cursor-pointer min-h-11 flex items-center text-sm font-medium">
+            Rattachement à confirmer ({plural(aboutPending.length, "fact-check")})
           </summary>
           <p className="text-sm text-muted-foreground mt-2">
-            Ces vérifications citent {author.fullName}, mais la déclaration vérifiée est celle d
-            {"'"}une autre personne. Elles ne comptent pas dans le bilan.
+            Ces vérifications citent le nom de famille seul. Tant que l{"'"}équipe n{"'"}a pas
+            confirmé qu{"'"}il s{"'"}agit bien de {author.fullName}, elles ne sont pas comptées.
           </p>
           <ul className="divide-y">
-            {cited.map((item) => (
-              <FactCheckRow key={item.slug} item={item} />
+            {aboutPending.map((item) => (
+              <FactCheckRow key={item.slug} item={item} compact />
             ))}
           </ul>
         </details>
       )}
     </section>
   );
+}
+
+/** Verdict counts on one line: short labels, the total sits in the heading, so four groups hold on a 390 px screen. */
+function VerdictCountLine({ counts }: { counts: { group: VerdictGroup; count: number }[] }) {
+  return (
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      {counts.map(({ group, count }) => (
+        <span key={group} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 rounded-full shrink-0"
+            style={{ backgroundColor: VERDICT_GROUP_COLORS[group] }}
+          />
+          <span className="text-muted-foreground">
+            <span aria-hidden="true">{SHORT_VERDICT_LABELS[group]}</span>
+            <span className="sr-only">{VERDICT_GROUP_LABELS[group]}</span>
+          </span>
+          <b className="tabular-nums">{count}</b>
+        </span>
+      ))}
+    </p>
+  );
+}
+
+function AboutByYear({ items }: { items: PoliticianFactCheckItem[] }) {
+  return groupByYear(items).map(({ year, items: rows }) => (
+    <div key={year} data-year={year}>
+      <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1 mt-4">{year}</h3>
+      <ul className="divide-y">
+        {rows.map((item) => (
+          <FactCheckRow
+            key={item.slug}
+            item={item}
+            verdict={verdictGroupOf(item.verdictRating)}
+            compact
+          />
+        ))}
+      </ul>
+    </div>
+  ));
 }

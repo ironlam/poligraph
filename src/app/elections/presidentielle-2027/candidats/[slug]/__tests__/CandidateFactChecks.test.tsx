@@ -5,6 +5,7 @@ const mockGetFactCheckLanding = vi.fn();
 vi.mock("@/lib/data/factcheck-politician", () => ({
   getPoliticianFactCheckLanding: (slug: string) => mockGetFactCheckLanding(slug),
   factCheckPoliticianPath: (slug: string) => `/factchecks/politique/${slug}`,
+  FACTCHECK_ABOUT_ANCHOR: "a-son-sujet",
   // Read by the shared verdict bar.
   VERDICT_GROUP_KEYS: ["vrai", "trompeur", "faux", "inverifiable"],
   groupByYear: vi.fn(),
@@ -20,13 +21,14 @@ const factCheck = (n: number) => ({
   publishedAt: new Date(Date.UTC(2026, 10, 20 - n)),
 });
 
-const landing = (claimedCount: number, indexable: boolean) => {
+const landing = (claimedCount: number, indexable: boolean, aboutCount = 0) => {
   const claimed = Array.from({ length: claimedCount }, (_, i) => factCheck(i + 1));
   return {
     author: { id: "p1", slug: "camille-riviere", fullName: "Camille Rivière" },
     hasCandidacy: true,
     claimed,
-    cited: [factCheck(99)],
+    about: Array.from({ length: aboutCount }, (_, i) => factCheck(i + 99)),
+    aboutPending: [factCheck(98)],
     breakdown: { vrai: 0, trompeur: 0, faux: claimedCount, inverifiable: 0 },
     bySource: [...new Set(claimed.map((c) => c.source))].map((name) => ({ name })),
     firstYear: claimedCount ? 2026 : null,
@@ -85,5 +87,22 @@ describe("CandidateFactChecksSection", () => {
       "href",
       "/factchecks/politique/camille-riviere"
     );
+  });
+
+  it("renvoie aux vérifications à son sujet par un lien compté, sans les lister", async () => {
+    mockGetFactCheckLanding.mockResolvedValue(landing(3, true, 2));
+    await renderSection();
+    expect(screen.getByRole("link", { name: "Vérifications à son sujet (2)" })).toHaveAttribute(
+      "href",
+      "/factchecks/politique/camille-riviere#a-son-sujet"
+    );
+    expect(screen.queryByText("Vérification 99")).not.toBeInTheDocument();
+    expect(screen.queryByText("Vérification 98")).not.toBeInTheDocument();
+  });
+
+  it("n'affiche pas ce lien sans vérification confirmée à son sujet", async () => {
+    mockGetFactCheckLanding.mockResolvedValue(landing(3, true));
+    await renderSection();
+    expect(screen.queryByRole("link", { name: /à son sujet/ })).not.toBeInTheDocument();
   });
 });
