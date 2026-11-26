@@ -66,26 +66,48 @@ function isInjectedScriptError(event: Sentry.ErrorEvent): boolean {
   );
 }
 
+// Default integrations dropped on every page.
+//
+// BrowserSession is release health: it sends one envelope per page load and per navigation, each
+// one a request through the /monitoring tunnel that Vercel bills as a CDN request.
+// Crash-free session rates are not something this project reads, errors are.
+const DROPPED_DEFAULT_INTEGRATIONS = new Set(["BrowserSession"]);
+
+// `Integration` lives in @sentry/core, which is not a direct dependency: derive it from init().
+type SentryIntegration = Extract<
+  NonNullable<NonNullable<Parameters<typeof Sentry.init>[0]>["integrations"]>,
+  unknown[]
+>[number];
+
+function buildIntegrations(defaults: SentryIntegration[]): SentryIntegration[] {
+  const kept = defaults.filter(
+    (integration) => !DROPPED_DEFAULT_INTEGRATIONS.has(integration.name)
+  );
+  if (IS_ADMIN_ROUTE) return kept;
+  return [
+    ...kept,
+    Sentry.replayIntegration({
+      maskAllText: false,
+      blockAllMedia: true,
+      // The production CSP intentionally forbids blob workers. Replay falls back to its
+      // in-thread buffer, avoiding a blocked worker and keeping the security boundary intact.
+      useCompression: false,
+    }),
+  ];
+}
+
 if (SENTRY_ENABLED) {
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV,
     release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA,
-    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 0,
+    // No tracesSampleRate: tracing is off. The organisation's span quota was exhausted, so every
+    // span was rejected on arrival (about 250k a day in November 2026) while each sampled page load
+    // still cost a request through the /monitoring tunnel. Errors and their replays are unaffected.
     replaysOnErrorSampleRate: 1.0,
     replaysSessionSampleRate: 0,
     sendDefaultPii: false,
-    integrations: IS_ADMIN_ROUTE
-      ? []
-      : [
-          Sentry.replayIntegration({
-            maskAllText: false,
-            blockAllMedia: true,
-            // The production CSP intentionally forbids blob workers. Replay falls back to its
-            // in-thread buffer, avoiding a blocked worker and keeping the security boundary intact.
-            useCompression: false,
-          }),
-        ],
+    integrations: buildIntegrations,
     beforeSend(event) {
       if (isReactStreamingScriptError(event)) {
         if (reactStreamingReported) return null;

@@ -44,14 +44,27 @@ async function bootAt(pathname: string) {
   mocks.replayIntegration.mockClear();
   window.history.replaceState(null, "", pathname);
   await import("./instrumentation-client");
-  return (mocks.init.mock.calls[0]?.[0] ?? {}) as {
-    integrations?: unknown[];
-    beforeSend?: (event: SentryEvent) => SentryEvent | null;
-  };
+  return (mocks.init.mock.calls[0]?.[0] ?? {}) as InitOptions;
 }
 
-const hasReplay = (opts: { integrations?: unknown[] }) =>
-  (opts.integrations ?? []).some((i) => (i as { name?: string })?.name === "Replay");
+type InitOptions = {
+  integrations?: unknown[] | ((defaults: { name: string }[]) => { name?: string }[]);
+  tracesSampleRate?: number;
+  beforeSend?: (event: SentryEvent) => SentryEvent | null;
+};
+
+/** The default integrations the SDK hands to an `integrations` function. */
+const DEFAULTS = [{ name: "BrowserTracing" }, { name: "BrowserSession" }, { name: "Dedupe" }];
+
+/** The integrations the SDK ends up running, whichever form the options use. */
+function resolvedIntegrations(opts: InitOptions): { name?: string }[] {
+  const { integrations } = opts;
+  if (typeof integrations === "function") return integrations(DEFAULTS);
+  return (integrations ?? []) as { name?: string }[];
+}
+
+const hasReplay = (opts: InitOptions) =>
+  resolvedIntegrations(opts).some((i) => i?.name === "Replay");
 
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@o1.ingest.de.sentry.io/1");
@@ -85,6 +98,23 @@ describe("Session replay : périmètre d'enregistrement", () => {
 
   it("ne coupe pas une route publique dont le nom commence par admin", async () => {
     expect(hasReplay(await bootAt("/administration-publique"))).toBe(true);
+  });
+});
+
+// Le tunnel /monitoring est facturé par Vercel à la requête. Le quota de spans étant épuisé, les
+// traces partaient pour être rejetées, et les sessions envoyaient un appel par page vue.
+describe("Volume envoyé par le navigateur", () => {
+  it("n'active pas le tracing", async () => {
+    const opts = await bootAt("/");
+    expect(opts.tracesSampleRate).toBeUndefined();
+  });
+
+  it("retire les sessions navigateur, sur le site public comme dans l'admin", async () => {
+    for (const path of ["/", "/admin/affaires"]) {
+      const names = resolvedIntegrations(await bootAt(path)).map((i) => i?.name);
+      expect(names).not.toContain("BrowserSession");
+      expect(names).toContain("Dedupe");
+    }
   });
 });
 
