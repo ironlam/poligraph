@@ -338,7 +338,7 @@ export function LocalMandateForm({ politicianId }: { politicianId: string }) {
         </div>
       </div>
 
-      <Button type="submit" disabled={busy}>
+      <Button type="submit" disabled={busy} className="min-h-11">
         Ajouter le mandat
       </Button>
     </form>

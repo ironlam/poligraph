@@ -206,7 +206,7 @@ export function PoliticianCreateForm() {
               Laissez vide ce qui n&apos;est pas établi. La fiche est créée en brouillon, sans parti
               ni biographie.
             </p>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy} className="min-h-11">
               Rechercher les fiches du même nom
             </Button>
           </CardContent>
@@ -280,7 +280,7 @@ export function PoliticianCreateForm() {
                 </ul>
               </>
             )}
-            <Button type="button" onClick={create} disabled={busy}>
+            <Button type="button" onClick={create} disabled={busy} className="min-h-11">
               {homonyms.length === 0
                 ? "Créer la fiche en brouillon"
                 : "Aucune de ces personnes : créer une nouvelle fiche en brouillon"}

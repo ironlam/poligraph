@@ -36,7 +36,10 @@ import { changeProfilePublication } from "../publication";
 const META = { ip: "203.0.113.1", userAgent: "test-agent" };
 
 function profileIs(publicationStatus: string) {
-  h.queryRaw.mockResolvedValue([{ id: "pol_1", slug: "camille-riviere", publicationStatus }]);
+  h.queryRaw.mockImplementation(async () => {
+    h.order.push("lock-profile");
+    return [{ id: "pol_1", slug: "camille-riviere", publicationStatus }];
+  });
 }
 
 beforeEach(() => {
@@ -157,7 +160,7 @@ describe("changeProfilePublication", () => {
     });
   });
 
-  it("verrouille les candidatures présidentielles avant d'écrire, puis resynchronise leur recherche", async () => {
+  it("verrouille les candidatures présidentielles puis la fiche avant d'écrire, et resynchronise la recherche", async () => {
     profileIs("PUBLISHED");
     h.candidacyFindMany.mockResolvedValue([
       { id: "cand_1", electionId: "el_2027" },
@@ -166,9 +169,12 @@ describe("changeProfilePublication", () => {
 
     const result = await changeProfilePublication("pol_1", "draft", META);
 
+    // Candidacies before the profile: the order the edit route takes them in. The reverse
+    // order deadlocks a civil-status save against a publication gesture.
     expect(h.order).toEqual([
       "lock-candidacy",
       "lock-candidacy",
+      "lock-profile",
       "update",
       "sync-search",
       "sync-search",
@@ -177,7 +183,7 @@ describe("changeProfilePublication", () => {
   });
 
   it("répond « introuvable » pour une fiche qui n'existe pas", async () => {
-    h.queryRaw.mockResolvedValue([]);
+    h.queryRaw.mockImplementation(async () => []);
     expect(await changeProfilePublication("pol_x", "publish", META)).toEqual({ kind: "not-found" });
   });
 

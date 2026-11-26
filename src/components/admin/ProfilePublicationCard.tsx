@@ -105,6 +105,7 @@ export function ProfilePublicationCard({
               key={g.action}
               type="button"
               variant={g.action === "publish" ? "default" : "outline"}
+              className="min-h-11"
               disabled={busy || (g.action === "publish" && !hasSource)}
               onClick={() => run(g.action)}
             >

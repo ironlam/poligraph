@@ -273,6 +273,15 @@ export async function assertPublishable(
   { verifiedBy }: { verifiedBy: string }
 ): Promise<void> {
   await db.$transaction(async (tx) => {
+    // Same lock as `changeProfilePublication`. Without it, a profile withdrawal and this
+    // publication could each pass their check on the other's old state, and leave a published
+    // affair on a profile hidden by hand.
+    await tx.$queryRaw`
+      SELECT p.id FROM "Politician" p
+      JOIN "Affair" a ON a."politicianId" = p.id
+      WHERE a.id = ${affairId}
+      FOR UPDATE OF p
+    `;
     const reasons = await checkPublishable(affairId, tx as unknown as GuardClient);
     if (reasons.length > 0) {
       throw new PublishGuardError(affairId, reasons);

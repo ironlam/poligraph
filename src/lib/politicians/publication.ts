@@ -42,8 +42,9 @@ export type ChangePublicationResult =
  * without it, so a decision taken here would be undone by the next pass.
  *
  * The status, the presidential search documents that depend on it and the audit row are written
- * in one transaction, under a lock on the profile. The profile document and the caches are the
- * caller's job, after commit.
+ * in one transaction, under a lock on the profile. `assertPublishable` takes the same lock before
+ * it reads the profile, so an affair cannot be published while its profile is being withdrawn.
+ * The profile document and the caches are the caller's job, after commit.
  */
 export async function changeProfilePublication(
   politicianId: string,
@@ -53,6 +54,22 @@ export async function changeProfilePublication(
   const target = TARGET[action];
 
   return db.$transaction(async (tx) => {
+    // Candidacies first, then the profile: the order `PUT /api/admin/politiques/[id]` takes
+    // them in. The reverse order here let a civil-status save and a publication gesture each
+    // hold the row the other was waiting for.
+    //
+    // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): every
+    // presidential candidacy of this politician must be locked before the mutation, and a take
+    // would leave some unlocked.
+    const candidacies = await tx.candidacy.findMany({
+      where: { politicianId, election: { type: "PRESIDENTIELLE" } },
+      select: { id: true, electionId: true },
+      orderBy: { id: "asc" },
+    });
+    for (const candidacy of candidacies) {
+      await lockMeasureCandidacy(tx, candidacy.id);
+    }
+
     const locked = await tx.$queryRaw<
       Array<{ id: string; slug: string; publicationStatus: PublicationStatus }>
     >`
@@ -76,18 +93,6 @@ export async function changeProfilePublication(
         where: { politicianId, publicationStatus: PUBLISHED_STATUS },
       });
       if (count > 0) return { kind: "has-published-affair", count };
-    }
-
-    // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): every
-    // presidential candidacy of this politician must be locked before the mutation, and a take
-    // would leave some unlocked.
-    const candidacies = await tx.candidacy.findMany({
-      where: { politicianId, election: { type: "PRESIDENTIELLE" } },
-      select: { id: true, electionId: true },
-      orderBy: { id: "asc" },
-    });
-    for (const candidacy of candidacies) {
-      await lockMeasureCandidacy(tx, candidacy.id);
     }
 
     const politician = await tx.politician.update({

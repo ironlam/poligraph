@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/db", () => {
   const tx = {
+    $queryRaw: vi.fn(),
     affair: { findUnique: vi.fn(), update: vi.fn() },
     affairPoliticianDecision: { findMany: vi.fn() },
   };
@@ -26,6 +27,7 @@ import {
 } from "@/lib/affairs/publish-guard";
 
 type MockTx = {
+  $queryRaw: ReturnType<typeof vi.fn>;
   affair: { findUnique: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   affairPoliticianDecision: { findMany: ReturnType<typeof vi.fn> };
 };
@@ -439,5 +441,22 @@ describe("checkPublishable — fiche retenue par une décision manuelle (#1460)"
       assertPublishable("aff_1", { verifiedBy: VERIFIED_BY_MODERATION })
     ).rejects.toBeInstanceOf(PublishGuardError);
     expect(tx.affair.update).not.toHaveBeenCalled();
+  });
+
+  it("assertPublishable verrouille la fiche avant de la lire", async () => {
+    // A profile withdrawal holds the same lock. Read first, and both transactions pass their
+    // check on the other's old state.
+    const order: string[] = [];
+    tx.$queryRaw.mockImplementation(async () => void order.push("lock-profile"));
+    tx.affair.findUnique.mockImplementation(async () => {
+      order.push("read-affair");
+      return held("PUBLISHED", true);
+    });
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([]);
+
+    await assertPublishable("aff_1", { verifiedBy: VERIFIED_BY_MODERATION });
+
+    expect(order).toEqual(["lock-profile", "read-affair"]);
+    expect(tx.affair.update).toHaveBeenCalledTimes(1);
   });
 });
