@@ -70,9 +70,10 @@ describe("AffairContextBand — photo", () => {
         blobPhotoUrl="https://abc.public.blob.vercel-storage.com/politicians/x"
       />
     );
+    // Petit avatar : la miniature de la copie Blob, servie sans l'optimiseur.
     expect(screen.getByAltText("Jean Dupont")).toHaveAttribute(
       "src",
-      "https://abc.public.blob.vercel-storage.com/politicians/x"
+      "https://abc.public.blob.vercel-storage.com/politicians/x.thumb-192.webp"
     );
   });
 });
