@@ -7,6 +7,7 @@ import { OG_IMAGE_DISALLOW_PATHS, SOCIAL_PREVIEW_USER_AGENTS } from "@/lib/seo/o
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { SITEMAP_SHARD_IDS } from "@/lib/seo/sitemap-tags";
 import { SITE_URL } from "@/config/site";
+import { BLOCKED_USER_AGENTS } from "@/lib/seo/blocked-crawlers";
 
 const ORIGINAL_VERCEL_ENV = process.env.VERCEL_ENV;
 
@@ -180,6 +181,30 @@ describe("robots.txt (production)", () => {
     it("leaves every other crawler without a delay", () => {
       expect(groupFor(robots, "*")!.crawlDelay).toBeUndefined();
       expect(groupFor(robots, SOCIAL_PREVIEW_USER_AGENTS[0])!.crawlDelay).toBeUndefined();
+    });
+  });
+
+  describe("crawlers blocked from the whole site", () => {
+    it.each(BLOCKED_USER_AGENTS)("blocks %s at the root", (agent) => {
+      const group = groupFor(robots, agent)!;
+      expect(asArray(group.disallow)).toEqual(["/"]);
+      expect(asArray(group.allow)).toEqual([]);
+    });
+
+    // These bring search traffic or citations: a block here would cost readers.
+    it.each(["Googlebot", "Bingbot", "PerplexityBot", "OAI-SearchBot", "GPTBot", "ClaudeBot"])(
+      "never blocks %s",
+      (agent) => {
+        expect(BLOCKED_USER_AGENTS as readonly string[]).not.toContain(agent);
+        const group = groupFor(robots, agent) ?? groupFor(robots, "*")!;
+        expect(asArray(group.disallow)).not.toContain("/");
+      }
+    );
+
+    it("keeps social preview bots out of the blocked group", () => {
+      for (const agent of SOCIAL_PREVIEW_USER_AGENTS) {
+        expect(BLOCKED_USER_AGENTS as readonly string[]).not.toContain(agent);
+      }
     });
   });
 
