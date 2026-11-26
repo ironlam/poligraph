@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import { FACTCHECK_RATING_LABELS, FACTCHECK_RATING_COLORS } from "@/config/labels";
-import { ClaimReviewJsonLd } from "@/components/seo/JsonLd";
+import { FactCheckJsonLd } from "@/components/seo/JsonLd";
+import { SourceVerdict } from "@/components/factchecks/SourceVerdict";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
@@ -72,6 +73,19 @@ async function getFactCheck(slug: string) {
   });
 }
 
+/** One description for the meta tag and the JSON-LD, so both say the same thing. */
+function factCheckDescription(factCheck: {
+  verdictRating: keyof typeof FACTCHECK_RATING_LABELS;
+  claimant: string | null;
+  claimText: string;
+}): string {
+  const ratingLabel = FACTCHECK_RATING_LABELS[factCheck.verdictRating];
+  if (factCheck.claimant) {
+    return `${ratingLabel}. ${factCheck.claimant} : « ${factCheck.claimText.slice(0, 120)} »`;
+  }
+  return `${ratingLabel}. « ${factCheck.claimText.slice(0, 140)} »`;
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const factCheck = await getFactCheck(slug);
@@ -84,9 +98,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const context = await getFactCheckContext(factCheckContextInput({ ...factCheck, slug }));
 
   const ratingLabel = FACTCHECK_RATING_LABELS[factCheck.verdictRating];
-  const description = factCheck.claimant
-    ? `${ratingLabel}. ${factCheck.claimant} : « ${factCheck.claimText.slice(0, 120)} »`
-    : `${ratingLabel}. « ${factCheck.claimText.slice(0, 140)} »`;
+  const description = factCheckDescription(factCheck);
 
   return {
     title: factCheck.title,
@@ -143,18 +155,16 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
             { label: factCheck.title, href: `/factchecks/${factCheck.slug}` },
           ]}
         />
-        <ClaimReviewJsonLd
-          url={`${SITE_URL}/factchecks/${factCheck.slug}`}
-          claimText={factCheck.claimText}
-          claimant={factCheck.claimant}
-          verdict={factCheck.verdict}
-          verdictRating={factCheck.verdictRating}
-          reviewDate={factCheck.publishedAt.toISOString().split("T")[0]!}
+        <FactCheckJsonLd
+          slug={slug}
+          title={factCheck.title}
+          description={factCheckDescription(factCheck)}
+          publishedAt={factCheck.publishedAt}
+          createdAt={factCheck.createdAt}
           source={factCheck.source}
           sourceUrl={factCheck.sourceUrl}
-          about={
-            author ? { name: author.fullName, url: `${SITE_URL}/politiques/${author.slug}` } : null
-          }
+          author={author}
+          people={[...claimants, ...subjects]}
         />
 
         {/* Source */}
@@ -211,6 +221,7 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
           </CardHeader>
           <CardContent>
             <Badge className={`text-base px-4 py-1.5 ${ratingColor}`}>{ratingLabel}</Badge>
+            <SourceVerdict source={factCheck.source} verdict={factCheck.verdict} />
           </CardContent>
         </Card>
 
