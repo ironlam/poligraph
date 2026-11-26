@@ -22,9 +22,9 @@ import {
  * ("sur": a rumour or someone else's claim that names them). Counts and links only, read from the
  * base; no text is generated.
  *
- * Search demand on fact-checks goes to the person ("patrimoine mélenchon"), not to one rumour page:
- * those pages are short copies of the outlet and stay out of the index, so the landing is where the
- * person's checks are gathered and where the index finds them.
+ * A reader looking for what was checked about someone looks for the person, not for one rumour
+ * page: those pages are short copies of the outlet and stay out of the index, so the landing is
+ * where the person's checks are gathered and where the index finds them.
  */
 
 export const VERDICT_GROUP_KEYS = Object.keys(VERDICT_GROUPS) as VerdictGroup[];

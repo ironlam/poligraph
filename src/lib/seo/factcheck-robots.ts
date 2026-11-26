@@ -71,7 +71,7 @@ export function factCheckRobotsMetadata(indexable: boolean): Pick<Metadata, "rob
  * a homonym can never bring a page into the index.
  *
  * Why both count: the fact-check of a rumour is a short copy of its source and stays noindex, but
- * the demand goes to the person ("patrimoine mélenchon"). Gathered on the person's page, next to
+ * readers look for the person, not for one rumour. Gathered on the person's page, next to
  * their own record, those checks are context only Poligraph puts together. Measured on 2026-11-26:
  * 61 indexable landings on claims alone, 79 with both.
  *
@@ -96,8 +96,8 @@ export function isIndexableFactCheckPolitician({
 
 /**
  * Metadata of the filtered listing /factchecks?politician=X. It lists the same fact-checks as the
- * person's landing, without its counts or its threshold: indexed, it competed with the landing (242
- * views on 2026-11-25, 126 of them with a single fact-check). Always noindex,follow, canonical on
+ * person's landing, without its counts or its threshold: indexed, it competed with the landing, one
+ * view per person with a public fact-check, most of them with a single one. Always noindex,follow, canonical on
  * the landing, or on the bare listing when the person has no landing (no public fact-check).
  *
  * The description says "qui citent": the view lists rumours about the person as well as their own

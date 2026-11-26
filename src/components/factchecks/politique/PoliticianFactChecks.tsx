@@ -241,7 +241,7 @@ export function FactCheckList({ landing }: { landing: PoliticianFactCheckLanding
  * Fact-checks about the person that they did not author: rumours, or someone else's claim naming
  * them. Placed after their own claims, at the bottom of the page, so it never pushes their record
  * down on a phone. One line of counts, the five most recent rows, the rest folded in a <details>
- * that also holds the verdict filter. Opening it hides the preview (CSS :has), so no row shows
+ * that also holds the verdict filter. Opening that one (not the pending one) hides the preview (CSS :has), so no row shows
  * twice; without :has support the preview simply stays above.
  *
  * The verdicts are counted apart from the person's record: a rumour about someone says nothing of
@@ -278,12 +278,14 @@ export function AboutSection({ landing }: { landing: PoliticianFactCheckLanding 
           <VerdictCountLine counts={counts} />
           {folded ? (
             <>
-              <ul className="divide-y group-has-[details[open]]/about:hidden">
+              <ul className="divide-y group-has-[[data-about-all][open]]/about:hidden">
                 {about.slice(0, ABOUT_PREVIEW_COUNT).map((item) => (
                   <FactCheckRow key={item.slug} item={item} compact />
                 ))}
               </ul>
-              <details className="rounded-lg border p-3">
+              {/* data-about-all scopes the preview hiding to this disclosure: opening the pending
+                  one below must leave the preview visible. */}
+              <details data-about-all className="rounded-lg border p-3">
                 <summary className="cursor-pointer min-h-11 flex items-center font-medium">
                   Voir les {plural(total, "vérification")} et filtrer par verdict
                 </summary>

@@ -61,7 +61,7 @@ describe("AboutSection", () => {
   it("replie au-delà de cinq vérifications, filtre par verdict dans le repli", () => {
     render(<AboutSection landing={landing(8)} />);
     const section = screen.getByRole("region", { name: /^Vérifications à son sujet/ });
-    const details = section.querySelector("details")!;
+    const details = section.querySelector<HTMLElement>("details[data-about-all]")!;
     expect(details).not.toBeNull();
     expect(
       within(details).getByText("Voir les 8 vérifications et filtrer par verdict")
@@ -69,6 +69,8 @@ describe("AboutSection", () => {
     const preview = section.querySelector(":scope > ul")!;
     expect(within(preview as HTMLElement).getAllByRole("link")).toHaveLength(ABOUT_PREVIEW_COUNT);
     expect(within(details).getByRole("group", { name: "Filtrer par verdict" })).toBeTruthy();
+    // Only the full-list disclosure hides the preview: the pending one must not.
+    expect(preview.className).toContain("group-has-[[data-about-all][open]]/about:hidden");
   });
 
   it("garde à part, sans les compter, les mentions sur le nom seul en attente", () => {
