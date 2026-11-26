@@ -103,4 +103,32 @@ describe("isDuplicateMandateCandidate", () => {
       })
     ).toBe(false);
   });
+
+  it("treats a mandate entered to the year as the same term anywhere in that year", () => {
+    // A mandate typed in the admin as "2001" is stored on 1 January with YEAR precision. With the
+    // 30-day tolerance alone, Wikidata's real start date created a second mandate.
+    const existing = [
+      {
+        type: MandateType.MAIRE,
+        source: DataSource.MANUAL,
+        startDate: "2001-01-01",
+        startDatePrecision: "YEAR" as const,
+        isCurrent: false,
+      },
+    ];
+    const candidate = (date: string) => ({
+      type: MandateType.MAIRE,
+      startDate: new Date(date),
+      isCurrent: false,
+    });
+    expect(isDuplicateMandateCandidate(existing, candidate("2001-03-25"))).toBe(true);
+    expect(isDuplicateMandateCandidate(existing, candidate("2008-03-21"))).toBe(false);
+    // Same stored date known to the day: the 30-day rule still applies.
+    expect(
+      isDuplicateMandateCandidate(
+        [{ ...existing[0]!, startDatePrecision: "DAY" as const }],
+        candidate("2001-03-25")
+      )
+    ).toBe(false);
+  });
 });
