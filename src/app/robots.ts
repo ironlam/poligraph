@@ -3,6 +3,7 @@ import { SITE_URL } from "@/config/site";
 import { OG_IMAGE_DISALLOW_PATHS, SOCIAL_PREVIEW_USER_AGENTS } from "@/lib/seo/og-image-robots";
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { SITEMAP_SHARD_IDS } from "@/lib/seo/sitemap-tags";
+import { BLOCKED_USER_AGENTS } from "@/lib/seo/blocked-crawlers";
 
 const isProduction =
   process.env.VERCEL_ENV === "production" ||
@@ -107,6 +108,10 @@ export default function robots(): MetadataRoute.Robots {
       },
       // A crawler obeys only the most specific group that names it: each of these restates
       // every rule of the generic group, plus its delay.
+      {
+        userAgent: [...BLOCKED_USER_AGENTS],
+        disallow: "/",
+      },
       ...Object.entries(CRAWL_DELAYS).map(([userAgent, crawlDelay]) => ({
         userAgent,
         allow: "/",
