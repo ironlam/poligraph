@@ -38,21 +38,13 @@ export async function getDashboardCounts() {
   const published = Number(c.published_politicians);
   const withoutPhoto = Number(c.without_photo);
   const withoutBio = Number(c.without_bio);
-  const [
-    proposalsPending,
-    proposalsConflict,
-    reviewsPending,
-    decisionsPending,
-    articlesPending,
-    monitoringToHandle,
-  ] = await Promise.all([
-    db.affairUpdateProposal.count({ where: { status: "PENDING" } }),
-    db.affairUpdateProposal.count({ where: { status: "CONFLICT" } }),
-    db.moderationReview.count({ where: { appliedAt: null } }),
-    db.affairPoliticianDecision.count({ where: { judgment: "UNDECIDED", reviewedAt: null } }),
-    countArticlesToLink(),
-    countMonitoringToHandle(),
-  ]);
+  const [proposalsPending, proposalsConflict, reviewsPending, monitoringToHandle] =
+    await Promise.all([
+      db.affairUpdateProposal.count({ where: { status: "PENDING" } }),
+      db.affairUpdateProposal.count({ where: { status: "CONFLICT" } }),
+      db.moderationReview.count({ where: { appliedAt: null } }),
+      countMonitoringToHandle(),
+    ]);
   return {
     totalPoliticians: Number(c.total_politicians),
     totalAffairs: Number(c.total_affairs),
@@ -68,8 +60,6 @@ export async function getDashboardCounts() {
       proposalsPending,
       proposalsConflict,
       reviewsPending,
-      decisionsPending,
-      articlesPending,
       monitoringToHandle,
     },
   };
@@ -80,6 +70,8 @@ export async function getDashboardSecondaryData() {
     duplicates,
     pipelines,
     decisionsPending,
+    articlesPending,
+    policyTitlesPending,
     rejectionsPending,
     failedSyncs,
     recentActivity,
@@ -88,6 +80,8 @@ export async function getDashboardSecondaryData() {
     getPotentialDuplicateCount(),
     getPipelineHealthAll(),
     db.affairPoliticianDecision.count({ where: { judgment: "UNDECIDED", reviewedAt: null } }),
+    countArticlesToLink(),
+    db.scrutinPolicyTitle.count({ where: { status: { in: ["DRAFT", "NEEDS_REVIEW", "STALE"] } } }),
     countRecentPressRejections(),
     countRecentFailedSyncs(),
     db.auditLog.findMany({ take: 10, orderBy: { createdAt: "desc" } }),
@@ -96,6 +90,8 @@ export async function getDashboardSecondaryData() {
   return {
     duplicates,
     decisionsPending,
+    articlesPending,
+    policyTitlesPending,
     failedPipelines: pipelines.filter((pipeline) => pipeline.status === "critical").length,
     rejectionsPending,
     failedSyncs,

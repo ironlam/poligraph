@@ -14,37 +14,31 @@ import {
 const STORAGE_KEY = "admin-sidebar-collapsed";
 
 type BadgeResponse = {
-  drafts: { affairs: number; politicians: number };
+  drafts: { affairs: number };
   moderation: { proposalsPending: number; proposalsConflict: number; reviewsPending: number };
-  matching: { decisionsPending: number; articlesPending: number; duplicatesPending: number };
+  matching: { duplicatesPending: number };
   // Optionnel : pendant un déploiement progressif, l'API peut encore être la version qui ne
   // renvoie pas ce compteur, et la barre latérale ne doit pas casser pour un badge.
   candidacies?: { publicationPending: number };
-  press: { rejectionsPending: number };
   operations: { failedPipelines: number; failedSyncs: number };
 };
 
 const EMPTY_BADGES: BadgeResponse = {
-  drafts: { affairs: 0, politicians: 0 },
+  drafts: { affairs: 0 },
   moderation: { proposalsPending: 0, proposalsConflict: 0, reviewsPending: 0 },
-  matching: { decisionsPending: 0, articlesPending: 0, duplicatesPending: 0 },
+  matching: { duplicatesPending: 0 },
   candidacies: { publicationPending: 0 },
-  press: { rejectionsPending: 0 },
   operations: { failedPipelines: 0, failedSyncs: 0 },
 };
 
 function flattenBadges(badges: BadgeResponse): Record<string, number> {
   return {
     "drafts.affairs": badges.drafts.affairs,
-    "drafts.politicians": badges.drafts.politicians,
     "moderation.proposalsPending": badges.moderation.proposalsPending,
     "moderation.proposalsConflict": badges.moderation.proposalsConflict,
     "moderation.reviewsPending": badges.moderation.reviewsPending,
-    "matching.decisionsPending": badges.matching.decisionsPending,
-    "matching.articlesPending": badges.matching.articlesPending,
     "matching.duplicatesPending": badges.matching.duplicatesPending,
     "candidacies.publicationPending": badges.candidacies?.publicationPending ?? 0,
-    "press.rejectionsPending": badges.press.rejectionsPending,
     "operations.failedPipelines": badges.operations.failedPipelines,
     "operations.failedSyncs": badges.operations.failedSyncs,
   };
