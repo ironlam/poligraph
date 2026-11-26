@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { cn, normalizeImageUrl } from "@/lib/utils";
+import { THUMBNAIL_MAX_DISPLAY_PX, thumbnailUrlFor } from "@/lib/photos/thumbnail";
 
 interface PoliticianAvatarProps {
   photoUrl: string | null;
@@ -54,6 +55,7 @@ export function PoliticianAvatar({
   fixedPx,
 }: PoliticianAvatarProps) {
   const [imageError, setImageError] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
   // Derive names - support both firstName/lastName and fullName
@@ -66,6 +68,13 @@ export function PoliticianAvatar({
   // The Blob copy wins when there is one: it is the cropped portrait, and it is
   // served from our own CDN rather than from the upstream source.
   const imageSrc = normalizeImageUrl(blobPhotoUrl ?? photoUrl);
+  const displayPx = fixedPx ?? SIZE_PX[size];
+
+  // Small avatars of a Blob photo are served from its pre-built thumbnail, straight from the Blob
+  // CDN, instead of a /_next/image request each (see `@/lib/photos/thumbnail`). A photo whose
+  // thumbnail is missing answers 404 once, and the avatar falls back to the optimized original.
+  const thumbnailSrc =
+    displayPx <= THUMBNAIL_MAX_DISPLAY_PX && !thumbnailError ? thumbnailUrlFor(imageSrc) : null;
 
   // Fallback to initials if no photo or image fails to load
   if (!imageSrc || imageError) {
@@ -91,15 +100,20 @@ export function PoliticianAvatar({
       {/* Skeleton placeholder while image loads */}
       {!imageLoaded && <div className="absolute inset-0 animate-pulse rounded-full bg-muted" />}
       <Image
-        src={imageSrc}
+        key={thumbnailSrc ?? imageSrc}
+        src={thumbnailSrc ?? imageSrc}
+        unoptimized={thumbnailSrc !== null}
         alt={displayName}
-        width={fixedPx ?? SIZE_PX[size]}
-        height={fixedPx ?? SIZE_PX[size]}
+        width={displayPx}
+        height={displayPx}
         className={cn(
           "h-full w-full object-cover transition-opacity duration-200",
           imageLoaded ? "opacity-100" : "opacity-0"
         )}
-        onError={() => setImageError(true)}
+        onError={() => {
+          if (thumbnailSrc) setThumbnailError(true);
+          else setImageError(true);
+        }}
         onLoad={() => setImageLoaded(true)}
         loading={priority ? "eager" : "lazy"}
         priority={priority}

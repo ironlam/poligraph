@@ -1,4 +1,9 @@
 import { put, del } from "@vercel/blob";
+import sharp from "sharp";
+import { THUMBNAIL_SIZE, thumbnailPathnameFor, thumbnailUrlFor } from "./thumbnail";
+
+/** WebP quality of the avatar thumbnail: invisible loss at 40 to 96 CSS pixels. */
+const THUMBNAIL_QUALITY = 75;
 
 /**
  * Store a cropped portrait on Vercel Blob, at a URL that has never been served
@@ -27,6 +32,7 @@ export async function uploadCroppedPortrait(politicianId: string, buffer: Buffer
     contentType: "image/jpeg",
     addRandomSuffix: true,
   });
+  await writeThumbnail(url, buffer);
   return url;
 }
 
@@ -48,7 +54,39 @@ export async function uploadSourcePhotoCopy(
     contentType,
     addRandomSuffix: true,
   });
+  await writeThumbnail(url, buffer);
   return url;
+}
+
+/**
+ * Write the avatar thumbnail of a photo already stored on Blob (see `./thumbnail`).
+ *
+ * Best effort: the photo is what matters, and an avatar whose thumbnail is missing falls back to
+ * the optimized original. A failure is therefore reported as `false`, never thrown, so it cannot
+ * abort an upload, a sync run or the backfill.
+ *
+ * The pathname is fixed (derived from the photo URL), so overwriting is allowed: the backfill may
+ * run again over a thumbnail that already exists, and the bytes would be the same.
+ */
+export async function writeThumbnail(photoUrl: string, source: Buffer): Promise<boolean> {
+  const pathname = thumbnailPathnameFor(photoUrl);
+  if (!pathname) return false;
+  try {
+    const thumbnail = await sharp(source)
+      .rotate()
+      .resize({ width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE, fit: "cover" })
+      .webp({ quality: THUMBNAIL_QUALITY })
+      .toBuffer();
+    await put(pathname, thumbnail, {
+      access: "public",
+      contentType: "image/webp",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -61,8 +99,9 @@ export async function uploadSourcePhotoCopy(
  */
 export async function deleteCroppedPortrait(url: string | null | undefined): Promise<boolean> {
   if (!url || !url.includes("-portrait")) return false;
+  const thumbnailUrl = thumbnailUrlFor(url);
   try {
-    await del(url);
+    await del(thumbnailUrl ? [url, thumbnailUrl] : url);
     return true;
   } catch {
     return false;
