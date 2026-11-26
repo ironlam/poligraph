@@ -106,12 +106,13 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         disallow: SHARED_DISALLOW,
       },
-      // A crawler obeys only the most specific group that names it: each of these restates
-      // every rule of the generic group, plus its delay.
+      // Crawlers with no reader or citation to bring: the whole site is closed to them.
       {
         userAgent: [...BLOCKED_USER_AGENTS],
         disallow: "/",
       },
+      // A crawler obeys only the most specific group that names it: each of these restates
+      // every rule of the generic group, plus its delay.
       ...Object.entries(CRAWL_DELAYS).map(([userAgent, crawlDelay]) => ({
         userAgent,
         allow: "/",
