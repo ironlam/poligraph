@@ -211,7 +211,7 @@ export async function checkPublishable(
                 affairId: null,
                 chosenPoliticianId: affair.politicianId,
                 sourceRef: { in: sourceUrls },
-              },
+              } satisfies Prisma.AffairPoliticianDecisionWhereInput,
             ]
           : []),
       ],
