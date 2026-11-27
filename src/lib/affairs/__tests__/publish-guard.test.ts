@@ -448,15 +448,18 @@ describe("checkPublishable — fiche retenue par une décision manuelle (#1460)"
     // check on the other's old state.
     const order: string[] = [];
     tx.$queryRaw.mockImplementation(async () => void order.push("lock-profile"));
-    tx.affair.findUnique.mockImplementation(async () => {
-      order.push("read-affair");
-      return held("PUBLISHED", true);
-    });
+    tx.affair.findUnique.mockImplementation(
+      async ({ select }: { select: Record<string, unknown> }) => {
+        // The owner lookup selects `politicianId` alone; the guard's read selects the profile.
+        order.push(select.politician ? "read-profile-status" : "read-owner");
+        return held("PUBLISHED", true);
+      }
+    );
     tx.affairPoliticianDecision.findMany.mockResolvedValue([]);
 
     await assertPublishable("aff_1", { verifiedBy: VERIFIED_BY_MODERATION });
 
-    expect(order).toEqual(["lock-profile", "read-affair"]);
+    expect(order).toEqual(["read-owner", "lock-profile", "read-profile-status"]);
     expect(tx.affair.update).toHaveBeenCalledTimes(1);
   });
 });
