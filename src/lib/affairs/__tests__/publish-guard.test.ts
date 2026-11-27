@@ -93,6 +93,45 @@ describe("checkPublishable — invariant I2 (RGPD art. 10)", () => {
     expect(reasons.map((r) => r.code)).toContain("UNREVIEWED_MATCHING_DECISION");
   });
 
+  it("bloque un NO_MATCH lié sans destination et sans revue, même si les sources existent", async () => {
+    const decision = {
+      ...VALID_DECISION,
+      judgment: "NO_MATCH",
+      chosenPoliticianId: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      reviewAction: null,
+    };
+    // Reproduit le filtre de jugement SQL : un mock qui renvoie toujours la ligne
+    // masquerait la régression, car l'ancienne requête ne chargeait pas NO_MATCH.
+    tx.affairPoliticianDecision.findMany.mockImplementation(async ({ where }) =>
+      where.judgment && !where.judgment.in.includes(decision.judgment) ? [] : [decision]
+    );
+
+    await expect(
+      assertPublishable("aff_1", { verifiedBy: VERIFIED_BY_MODERATION })
+    ).rejects.toMatchObject({
+      reasons: [{ code: "UNREVIEWED_MATCHING_DECISION", decisionIds: [decision.id] }],
+    });
+    expect(tx.affair.update).not.toHaveBeenCalled();
+  });
+
+  it("accepte le rattachement initialement NO_MATCH après confirmation humaine", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([
+      { ...VALID_DECISION, judgment: "NO_MATCH" },
+    ]);
+    expect(await checkPublishable("aff_1")).toEqual([]);
+  });
+
+  it("une confirmation assistée ne débloque pas un NO_MATCH lié", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([
+      { ...VALID_DECISION, judgment: "NO_MATCH", reviewedBy: "auto-triage" },
+    ]);
+    expect(await checkPublishable("aff_1")).toEqual([
+      expect.objectContaining({ code: "ASSISTED_MATCHING_DECISION" }),
+    ]);
+  });
+
   it("reviewedAt seul sans reviewedBy ne vaut pas validation", async () => {
     tx.affairPoliticianDecision.findMany.mockResolvedValue([
       { ...VALID_DECISION, reviewedBy: null },
@@ -138,6 +177,13 @@ describe("checkPublishable — invariant I2 (RGPD art. 10)", () => {
     // Le where doit couvrir les deux chemins : affairId direct OU orphelines par sourceRef
     expect(JSON.stringify(where)).toContain("aff_1");
     expect(JSON.stringify(where)).toContain("https://presse.example/article");
+    // Un NO_MATCH orphelin ne prouve pas de lien avec cette affaire : le filtre
+    // historique reste limité aux décisions qui ont effectivement choisi la personne.
+    expect(where.OR[1]).toMatchObject({
+      affairId: null,
+      chosenPoliticianId: AFFAIR.politicianId,
+      judgment: { in: ["SAME", "UNDECIDED"] },
+    });
   });
 
   it("affaire introuvable → erreur explicite", async () => {

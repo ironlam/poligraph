@@ -114,7 +114,7 @@ type GuardClient = {
  *    et statut autre que publié) : dans ce cas la règle automatique ne la publiera pas.
  * 1bis. Si une date de verdict est renseignée, au moins une source indépendante
  *    (hors Wikipedia/Wikidata) publiée à cette date ou après.
- * 2. Aucune décision de matching automatique (SAME ou UNDECIDED) non validée
+ * 2. Aucune décision de matching liée à l'affaire, y compris NO_MATCH, non validée
  *    par un humain. Une décision est validée si et seulement si :
  *    reviewedAt non null, reviewAction confirmant (CONFIRMED, REASSIGNED,
  *    CREATED_POLITICIAN), chosenPoliticianId égal au politicien de l'affaire,
@@ -202,16 +202,16 @@ export async function checkPublishable(
 
   const decisions = await client.affairPoliticianDecision.findMany({
     where: {
-      judgment: { in: ["SAME", "UNDECIDED"] },
       OR: [
         { affairId: affair.id },
         ...(sourceUrls.length > 0
           ? [
               {
+                judgment: { in: ["SAME", "UNDECIDED"] },
                 affairId: null,
                 chosenPoliticianId: affair.politicianId,
                 sourceRef: { in: sourceUrls },
-              },
+              } satisfies Prisma.AffairPoliticianDecisionWhereInput,
             ]
           : []),
       ],

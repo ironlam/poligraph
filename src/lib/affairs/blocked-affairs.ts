@@ -57,8 +57,14 @@ export async function loadBlockedAffairs(): Promise<BlockedAffair[]> {
   // could follow. Filtering precisely here would mean copying the guard.
   const decisions = await db.affairPoliticianDecision.findMany({
     where: {
-      judgment: { in: ["SAME", "UNDECIDED"] },
-      OR: [{ affairId: { not: null } }, { chosenPoliticianId: { not: null } }],
+      OR: [
+        { affairId: { not: null } },
+        {
+          affairId: null,
+          judgment: { in: ["SAME", "UNDECIDED"] },
+          chosenPoliticianId: { not: null },
+        },
+      ],
     },
     select: { affairId: true, chosenPoliticianId: true, sourceRef: true },
   });
