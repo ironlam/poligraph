@@ -13,7 +13,6 @@ export const updatePoliticianSchema = z.object({
   biography: z.string().nullable().optional(),
   profession: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
-  publicationStatus: z.enum(["PUBLISHED", "DRAFT", "ARCHIVED", "EXCLUDED", "REJECTED"]).optional(),
   currentPartyId: z.string().nullable().optional(),
   externalIds: z
     .array(
@@ -47,4 +46,9 @@ export const createPoliticianSchema = z.object({
     .optional(),
   /** The namesakes the admin was shown before confirming. Required, even when empty. */
   acknowledgedHomonymIds: z.array(z.string().min(1).max(64)).max(100),
+});
+
+/** An explicit publication gesture on a profile. The status itself is never sent by the client. */
+export const profilePublicationSchema = z.object({
+  action: z.enum(["publish", "draft", "archive", "exclude"]),
 });
