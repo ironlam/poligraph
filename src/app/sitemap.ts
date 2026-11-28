@@ -982,6 +982,8 @@ async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
   const months = await getVoteArchiveMonths();
   const archivePages: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}${ROUTES.voteArchives}`, changeFrequency: "weekly", priority: 0.5 },
+    // Every motion de censure on one page, linked to each motion's scrutin.
+    { url: `${SITE_URL}${ROUTES.motionsDeCensure}`, changeFrequency: "weekly", priority: 0.6 },
     ...months.map((m, i) => ({
       url: `${SITE_URL}${voteArchiveMonthPath(m)}`,
       changeFrequency: i === 0 ? ("daily" as const) : ("yearly" as const),

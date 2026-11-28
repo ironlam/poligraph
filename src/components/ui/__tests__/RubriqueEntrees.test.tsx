@@ -40,6 +40,11 @@ describe("RubriqueEntrees", () => {
     expect(screen.getByRole("list")).toHaveClass("lg:grid-cols-5");
   });
 
+  it("range 6 entrées en deux lignes de trois en desktop", () => {
+    render(<RubriqueEntrees titre="Explorer" titreId="t" entrees={entrees(6)} />);
+    expect(screen.getByRole("list")).toHaveClass("lg:grid-cols-3");
+  });
+
   // Below sm the tiles share one scrolling line, so there is no last row to fill.
   it("étire la dernière tuile à partir de sm quand le nombre est impair", () => {
     render(<RubriqueEntrees titre="Explorer" titreId="t" entrees={entrees(5)} />);

@@ -21,6 +21,7 @@ import { SITE_URL } from "@/config/site";
 import { ROUTES, statsHref } from "@/config/routes";
 import type { VotingResult, Chamber, ThemeCategory, ScrutinType } from "@/types";
 import { parsePageParam, parseIntFilter } from "@/lib/data/query-params";
+import { isCensureSearch } from "@/lib/votes/motions-de-censure";
 
 // Map URL param values to data layer params
 const TYPE_TAB_MAP: Record<string, { type?: ScrutinType; excludeType?: ScrutinType }> = {
@@ -248,6 +249,27 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
           </nav>
         )}
 
+        {/* A search about censure: the reader is looking for the motions, so the page that gathers
+            them comes before the results. Search variants are noindex and crawl-blocked, so this
+            is a reading aid only; the bare listing keeps its link at the bottom. */}
+        {isCensureSearch(search) && (
+          <aside
+            aria-label="Motions de censure"
+            className="mb-4 rounded-lg border bg-muted/40 px-4 py-3 text-sm"
+          >
+            <Link
+              href={ROUTES.motionsDeCensure}
+              prefetch={false}
+              className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+            >
+              Toutes les motions de censure votées à l&apos;Assemblée
+            </Link>
+            <p className="text-muted-foreground">
+              Voix pour, majorité requise, gouvernement visé et résultat, sur une seule page.
+            </p>
+          </aside>
+        )}
+
         {/* Results summary */}
         <div className="flex items-center justify-between mb-4 pb-3 border-b">
           <p className="text-sm text-muted-foreground">
@@ -315,8 +337,20 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
           buildUrl={(p) => buildUrl({ page: String(p) })}
         />
 
+        {/* After the list, not in the header: a fourth button there wrapped on three lines on a
+            phone and pushed "Statistiques" off screen. */}
+        <p className="mt-8 text-center text-sm">
+          <Link
+            href={ROUTES.motionsDeCensure}
+            prefetch={false}
+            className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+          >
+            Toutes les motions de censure votées à l&apos;Assemblée
+          </Link>
+        </p>
+
         {/* Source */}
-        <div className="mt-8 text-center text-sm text-muted-foreground">
+        <div className="mt-4 text-center text-sm text-muted-foreground">
           <p>
             Données issues de{" "}
             <a
