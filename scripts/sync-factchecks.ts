@@ -156,6 +156,7 @@ Environment:
         politiciansSearched: stats.politiciansSearched,
         searchPoolSize: stats.searchPoolSize,
         rotationOffset: stats.rotationOffset,
+        candidatesSearched: stats.candidatesSearched,
         claimsFound: stats.claimsFound,
         factChecksCreated: stats.factChecksCreated,
         factChecksSkipped: stats.factChecksSkipped,
