@@ -1,8 +1,7 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { SourceLine } from "@/components/ui/SourceLine";
+import { requiredMajority } from "@/lib/votes/motions-de-censure";
 import type { OfficialSource } from "@/lib/votes/scrutin-provenance";
-
-const CENSURE_THRESHOLD = 289;
 
 interface ScrutinResultCardProps {
   votesFor: number;
@@ -12,6 +11,12 @@ interface ScrutinResultCardProps {
   source: OfficialSource | null;
   /** Détecté sur le titre officiel du scrutin. */
   isMotionDeCensure: boolean;
+  /**
+   * Sièges pourvus le jour du vote, somme des effectifs du décompte officiel par groupe. La
+   * majorité requise en découle (289 avec 577 députés, moins avec des sièges vacants). `null`
+   * quand le décompte n'est pas lisible : le seuil n'est alors pas affiché.
+   */
+  seatsFilled: number | null;
 }
 
 /**
@@ -24,7 +29,9 @@ export function ScrutinResultCard({
   votesAbstain,
   source,
   isMotionDeCensure,
+  seatsFilled,
 }: ScrutinResultCardProps) {
+  const required = seatsFilled ? requiredMajority([seatsFilled]) : null;
   const total = votesFor + votesAgainst + votesAbstain;
   const forPercent = total > 0 ? (votesFor / total) * 100 : 0;
   const againstPercent = total > 0 ? (votesAgainst / total) * 100 : 0;
@@ -46,17 +53,19 @@ export function ScrutinResultCard({
                 <div
                   className="h-full flex items-center justify-center text-white text-sm font-medium bg-red-700"
                   style={{
-                    width: `${Math.min((votesFor / CENSURE_THRESHOLD) * 100, 100)}%`,
+                    width: required ? `${Math.min((votesFor / required) * 100, 100)}%` : "100%",
                   }}
                 >
                   {votesFor}
                 </div>
               </div>
               {/* Threshold marker */}
-              <div
-                className="absolute top-0 h-8 border-r-2 border-dashed border-foreground/60"
-                style={{ left: "100%" }}
-              />
+              {required && (
+                <div
+                  className="absolute top-0 h-8 border-r-2 border-dashed border-foreground/60"
+                  style={{ left: "100%" }}
+                />
+              )}
             </div>
 
             <div className="flex flex-wrap justify-between text-sm">
@@ -64,14 +73,18 @@ export function ScrutinResultCard({
                 <span className="w-3 h-3 rounded-full bg-red-700" />
                 <span>{votesFor} voix pour la censure</span>
               </div>
-              <span className="text-muted-foreground tabular-nums">
-                {CENSURE_THRESHOLD} nécessaires (majorité absolue)
-              </span>
+              {required && (
+                <span className="text-muted-foreground tabular-nums">
+                  {required} nécessaires (majorité absolue)
+                </span>
+              )}
             </div>
 
             <p className="text-xs text-muted-foreground">
               Une motion de censure n{"'"}est adoptée que si elle recueille la majorité absolue des
-              députés ({CENSURE_THRESHOLD}/577). Seuls les députés favorables à la censure votent.
+              membres composant l{"'"}Assemblée
+              {required ? ` (${required} sur ${seatsFilled} sièges pourvus ce jour-là)` : ""}. Seuls
+              les députés favorables à la censure votent.
             </p>
           </div>
         ) : (

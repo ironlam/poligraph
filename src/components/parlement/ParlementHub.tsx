@@ -32,6 +32,7 @@ import {
   BarChart3,
   Vote,
   FileText,
+  Landmark,
   Users,
 } from "lucide-react";
 import {
@@ -97,6 +98,12 @@ const ENTREES: RubriqueEntree[] = [
     icon: Users,
   },
   {
+    href: ROUTES.motionsDeCensure,
+    title: "Motions de censure",
+    detail: "Voix pour, majorité requise et résultat de chaque motion",
+    icon: Landmark,
+  },
+  {
     href: ROUTES.parcoursLegislatif,
     title: "Parcours d'une loi",
     detail: "Du dépôt à la promulgation, étape par étape",
@@ -139,6 +146,7 @@ export async function ParlementHub() {
     { href: ROUTES.dossiers, label: "Lois en construction" },
     ...(monDeputeEnabled ? [{ href: "/mon-depute", label: "Mes élus" }] : []),
     { href: ROUTES.groupes, label: "Groupes" },
+    { href: ROUTES.motionsDeCensure, label: "Motions de censure" },
     { href: ROUTES.parcoursLegislatif, label: "Parcours d'une loi" },
     { href: ROUTES.glossaire, label: "Glossaire" },
   ];

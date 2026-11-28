@@ -155,3 +155,12 @@ describe("the shard table calls its builders at request time", () => {
     for (const entry of entries) expect(entry).toMatch(/^\d+: \(\) => build\w+\(\),$/);
   });
 });
+
+describe("the scrutins shard", () => {
+  it("announces the motions de censure page, whatever the scrutins returned", async () => {
+    const entries = await sitemap({ id: Promise.resolve("3") });
+    expect(entries.map((e) => e.url)).toContain(
+      "https://poligraph.fr/parlement/motions-de-censure"
+    );
+  });
+});

@@ -2,6 +2,7 @@ import { cache } from "react";
 import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
+import { ROUTES } from "@/config/routes";
 import { db } from "@/lib/db";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -345,6 +346,12 @@ export default async function ScrutinPage({ params }: PageProps) {
   // Motion de censure: special threshold-based display. Detected against the OFFICIAL title
   // (logic, not display).
   const isMotionDeCensure = /motion\s+de\s+censure/i.test(scrutin.title);
+  // Seats filled on the day, from the official count per group: the majority required to censure
+  // is half of them plus one (289 with 577 deputies, 288 for the motion of 4 December 2024).
+  const censureSeatsFilled =
+    isMotionDeCensure && officialGroups?.snapshot.imported
+      ? officialGroups.snapshot.rows.reduce((sum, row) => sum + (row.memberCount ?? 0), 0) || null
+      : null;
   const videoId = getScrutinVideoId(scrutin.slug);
   // The card only sends readers to /mon-depute while that page exists.
   const monDeputeEnabled = await isFeatureEnabled("MON_DEPUTE_SECTION");
@@ -495,7 +502,19 @@ export default async function ScrutinPage({ params }: PageProps) {
             votesAbstain={scrutin.votesAbstain}
             source={source}
             isMotionDeCensure={isMotionDeCensure}
+            seatsFilled={censureSeatsFilled}
           />
+          {isMotionDeCensure && scrutin.chamber === "AN" && (
+            <p className="-mt-4 mb-8 text-sm">
+              <Link
+                href={ROUTES.motionsDeCensure}
+                prefetch={false}
+                className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+              >
+                Toutes les motions de censure votées à l&apos;Assemblée
+              </Link>
+            </p>
+          )}
           <div className="mb-8">
             <VoteShareSheet
               slug={scrutin.slug ?? scrutin.id}

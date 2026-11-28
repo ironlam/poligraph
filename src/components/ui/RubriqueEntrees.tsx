@@ -14,6 +14,8 @@ const COLONNES_LG: Record<number, string> = {
   3: "lg:grid-cols-3",
   4: "lg:grid-cols-4",
   5: "lg:grid-cols-5",
+  // Six on one line leave each tile too narrow for its detail line: two full rows of three.
+  6: "lg:grid-cols-3",
 };
 
 export function RubriqueEntrees({

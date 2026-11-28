@@ -7,6 +7,7 @@ export const ROUTES = {
   votesToday: "/parlement/votes/aujourd-hui",
   voteArchives: "/parlement/votes/archives",
   voteStats: "/parlement/votes/stats",
+  motionsDeCensure: "/parlement/motions-de-censure",
   voteThemes: "/parlement/votes/themes",
   voteTheme: (slug: string) => `/parlement/votes/themes/${slug}`,
   dossiers: "/parlement/dossiers",

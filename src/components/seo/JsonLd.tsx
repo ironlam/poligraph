@@ -309,9 +309,20 @@ interface ItemListJsonLdProps {
     position?: number;
   }>;
   url: string;
+  /**
+   * `person` (default, every list before this prop) wraps each entry in a Person. `page` writes the
+   * plain ListItem form, name and url, for a list of pages that are not people (scrutins).
+   */
+  itemKind?: "person" | "page";
 }
 
-export function ItemListJsonLd({ name, description, items, url }: ItemListJsonLdProps) {
+export function ItemListJsonLd({
+  name,
+  description,
+  items,
+  url,
+  itemKind = "person",
+}: ItemListJsonLdProps) {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -319,16 +330,22 @@ export function ItemListJsonLd({ name, description, items, url }: ItemListJsonLd
     ...(description && { description }),
     url,
     numberOfItems: items.length,
-    itemListElement: items.map((item, index) => ({
-      "@type": "ListItem",
-      position: item.position || index + 1,
-      item: {
-        "@type": "Person",
-        name: item.name,
-        url: item.url,
-        ...(item.image && { image: item.image }),
-      },
-    })),
+    itemListElement: items.map((item, index) => {
+      const position = item.position || index + 1;
+      if (itemKind === "page") {
+        return { "@type": "ListItem", position, name: item.name, url: item.url };
+      }
+      return {
+        "@type": "ListItem",
+        position,
+        item: {
+          "@type": "Person",
+          name: item.name,
+          url: item.url,
+          ...(item.image && { image: item.image }),
+        },
+      };
+    }),
   };
 
   return (

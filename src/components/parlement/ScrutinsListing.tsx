@@ -315,8 +315,20 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
           buildUrl={(p) => buildUrl({ page: String(p) })}
         />
 
+        {/* After the list, not in the header: a fourth button there wrapped on three lines on a
+            phone and pushed "Statistiques" off screen. */}
+        <p className="mt-8 text-center text-sm">
+          <Link
+            href={ROUTES.motionsDeCensure}
+            prefetch={false}
+            className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+          >
+            Toutes les motions de censure votées à l&apos;Assemblée
+          </Link>
+        </p>
+
         {/* Source */}
-        <div className="mt-8 text-center text-sm text-muted-foreground">
+        <div className="mt-4 text-center text-sm text-muted-foreground">
           <p>
             Données issues de{" "}
             <a
