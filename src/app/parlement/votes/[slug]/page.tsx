@@ -2,8 +2,8 @@ import { cache } from "react";
 import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
-import { ROUTES } from "@/config/routes";
 import { seatsFilled } from "@/lib/votes/motions-de-censure";
+import { MotionsDeCensureCallout } from "@/components/votes/MotionsDeCensureCallout";
 import { db } from "@/lib/db";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -506,15 +506,7 @@ export default async function ScrutinPage({ params }: PageProps) {
             seatsFilled={censureSeatsFilled}
           />
           {isMotionDeCensure && scrutin.chamber === "AN" && (
-            <p className="-mt-4 mb-8 text-sm">
-              <Link
-                href={ROUTES.motionsDeCensure}
-                prefetch={false}
-                className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
-              >
-                Toutes les motions de censure votées à l&apos;Assemblée
-              </Link>
-            </p>
+            <MotionsDeCensureCallout className="-mt-4 mb-8" />
           )}
           <div className="mb-8">
             <VoteShareSheet
