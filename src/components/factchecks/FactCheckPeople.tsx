@@ -7,8 +7,8 @@ export interface FactCheckPerson {
   fullName: string;
   partyShortName: string | null;
   /**
-   * The person's fact-check landing, set for a subject on a confirmed mention only. A rumour page
-   * stays noindex: this visible link is what carries it to the person's page, where the demand is.
+   * The person's fact-check landing, set for a subject on a confirmed mention of a page with a
+   * single author. A page without one carries the link in FactCheckSubjectLinks instead.
    */
   landingHref?: string | null;
 }
