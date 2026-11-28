@@ -22,6 +22,11 @@ import { factCheckPoliticianPath } from "@/lib/data/factcheck-politician";
 import { needsMentionReview } from "@/lib/factchecks/mention-review";
 import { FactCheckPeople, type FactCheckPerson } from "@/components/factchecks/FactCheckPeople";
 import {
+  FactCheckSubjectLinks,
+  type FactCheckSubject,
+} from "@/components/factchecks/FactCheckSubjectLinks";
+import { getFactCheckSubjectLinks } from "@/lib/data/factcheck-subject-links";
+import {
   AuthorBlock,
   CandidacyBlock,
   ClaimDayBlock,
@@ -139,15 +144,37 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
     partyShortName: m.politician.currentParty?.shortName ?? null,
   });
   const claimants = factCheck.mentions.filter((m) => m.isClaimant).map(toPerson);
+  const contextInput = factCheckContextInput({ ...factCheck, slug });
+  const author = claimants.find((c) => c.slug === contextInput.authorSlug) ?? null;
+  // Without a single author the page stays noindex: the subject block below sends the reader to
+  // the person instead, so the people card does not repeat the landing link.
+  const hasSingleAuthor = contextInput.authorSlug !== null;
   const subjects = factCheck.mentions
     .filter((m) => !m.isClaimant)
     .map((m) => ({
       ...toPerson(m),
       // Only on a confirmed mention: a last name alone waiting for review links nowhere new.
-      landingHref: needsMentionReview(m) ? null : factCheckPoliticianPath(m.politician.slug),
+      landingHref:
+        hasSingleAuthor && !needsMentionReview(m)
+          ? factCheckPoliticianPath(m.politician.slug)
+          : null,
     }));
-  const contextInput = factCheckContextInput({ ...factCheck, slug });
-  const author = claimants.find((c) => c.slug === contextInput.authorSlug) ?? null;
+
+  // Awaited here rather than streamed: the block sits above the source link, and streaming it in
+  // would push that link down after first paint.
+  const subjectLinks: FactCheckSubject[] = [];
+  if (!hasSingleAuthor) {
+    for (const m of factCheck.mentions) {
+      if (m.isClaimant || needsMentionReview(m)) continue;
+      const links = await getFactCheckSubjectLinks(m.politicianId, m.politician.slug);
+      subjectLinks.push({
+        slug: m.politician.slug,
+        fullName: m.politician.fullName,
+        landingHref: factCheckPoliticianPath(m.politician.slug),
+        ...links,
+      });
+    }
+  }
 
   // Not awaited: each block awaits it inside its own Suspense boundary, so the header streams first.
   const context = getFactCheckContext(contextInput);
@@ -242,6 +269,8 @@ export default async function FactCheckDetailPage({ params }: PageProps) {
             </CardContent>
           </Card>
         )}
+
+        <FactCheckSubjectLinks subjects={subjectLinks} />
 
         {/* Source link */}
         <div className="flex justify-center">
