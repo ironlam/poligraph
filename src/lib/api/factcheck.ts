@@ -46,6 +46,8 @@ export interface SearchClaimsOptions {
   languageCode?: string;
   pageSize?: number;
   maxPages?: number;
+  /** Only reviews published in the last N days. Unset: the whole stock, ranked by relevance. */
+  maxAgeDays?: number;
 }
 
 /**
@@ -79,7 +81,7 @@ export async function searchClaims(
     throw new Error("GOOGLE_FACTCHECK_API_KEY is not set");
   }
 
-  const { languageCode = "fr", pageSize = 100, maxPages = 3 } = options;
+  const { languageCode = "fr", pageSize = 100, maxPages = 3, maxAgeDays } = options;
   const allClaims: FactCheckClaim[] = [];
   let pageToken: string | undefined;
   let pageCount = 0;
@@ -91,6 +93,9 @@ export async function searchClaims(
       pageSize: String(pageSize),
       key: apiKey,
     });
+    if (maxAgeDays !== undefined) {
+      params.set("maxAgeDays", String(maxAgeDays));
+    }
     if (pageToken) {
       params.set("pageToken", pageToken);
     }

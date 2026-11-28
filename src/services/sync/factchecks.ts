@@ -30,6 +30,11 @@ import { loadMentionBlocklist, type MentionBlocklist } from "@/lib/identity/ment
 import { syncMetadata } from "@/lib/sync";
 import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { SITE_HOSTNAME } from "@/config/site";
+import { PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE } from "@/lib/data/presidential-candidacy-policy";
+import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { getElectionIdBySlug } from "@/lib/elections/election-id";
+
+type SearchTarget = { id: string; fullName: string; maxAgeDays?: number };
 
 /**
  * Hosts serving our own pages. The production domain is listed literally
@@ -76,6 +81,49 @@ export function getPublicationStatusForSource(source: string): "PUBLISHED" | "DR
  */
 export const FACTCHECK_SEARCH_POOL_SIZE = 1200;
 
+/**
+ * Declared 2027 candidates are searched on every cron run, on top of the rotation. Most of them
+ * hold no current mandate, so the pool never reaches them, and the ones it does reach come round
+ * once every ten days during a campaign. Their search is limited to recent reviews: the older
+ * stock was picked up long ago, or never will be by this query.
+ */
+export const CANDIDATE_SEARCH_MAX_AGE_DAYS = 30;
+
+/**
+ * Searched politicians, in order: the rotation window first, then each declared candidate it
+ * did not already contain, flagged with the recent-only age limit.
+ */
+export function withDeclaredCandidates(
+  window: Array<{ id: string; fullName: string }>,
+  candidates: Array<{ id: string; fullName: string }>
+): SearchTarget[] {
+  const inWindow = new Set(window.map((t) => t.id));
+  const seen = new Set<string>();
+  const extra: SearchTarget[] = [];
+  for (const c of candidates) {
+    if (inWindow.has(c.id) || seen.has(c.id)) continue;
+    seen.add(c.id);
+    extra.push({ ...c, maxAgeDays: CANDIDATE_SEARCH_MAX_AGE_DAYS });
+  }
+  return [...window, ...extra];
+}
+
+/** Politicians holding a declared or official 2027 candidacy shown on the public hub. */
+async function loadDeclaredCandidates(): Promise<Array<{ id: string; fullName: string }>> {
+  const electionId = await getElectionIdBySlug(PRESIDENTIELLE_2027_SLUG);
+  if (electionId === null) return [];
+  const rows = await db.candidacy.findMany({
+    where: {
+      ...PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE,
+      electionId,
+      status: { in: ["DECLARE", "OFFICIAL"] },
+    },
+    select: { politician: { select: { id: true, fullName: true } } },
+    orderBy: { id: "asc" },
+  });
+  return rows.flatMap((r) => (r.politician ? [r.politician] : []));
+}
+
 /** SyncMetadata row holding where the last run stopped in that pool. */
 const FACTCHECK_ROTATION_KEY = "factchecks:search-rotation";
 
@@ -116,6 +164,8 @@ export interface FactcheckSyncStats {
   searchPoolSize: number;
   /** Offset the run started at inside that pool (0 when not rotating). */
   rotationOffset: number;
+  /** Declared candidates searched on top of the rotation window (cron runs only). */
+  candidatesSearched: number;
   claimsFound: number;
   factChecksCreated: number;
   factChecksSkipped: number;
@@ -301,6 +351,7 @@ export async function syncFactchecks(
     politiciansSearched: 0,
     searchPoolSize: 0,
     rotationOffset: 0,
+    candidatesSearched: 0,
     claimsFound: 0,
     factChecksCreated: 0,
     factChecksSkipped: 0,
@@ -324,7 +375,7 @@ export async function syncFactchecks(
   const blocklist = await loadMentionBlocklist(DataSource.FACTCHECK);
 
   // Determine which politicians to search
-  let searchTargets: Array<{ id: string; fullName: string }>;
+  let searchTargets: SearchTarget[];
   /** Only the default (cron) target list walks the pool across runs. */
   let rotates = false;
   let nextRotationOffset: number | null = null;
@@ -382,11 +433,20 @@ export async function syncFactchecks(
     }
   }
 
+  if (rotates) {
+    const windowSize = searchTargets.length;
+    searchTargets = withDeclaredCandidates(searchTargets, await loadDeclaredCandidates());
+    stats.candidatesSearched = searchTargets.length - windowSize;
+  }
+
   for (const target of searchTargets) {
     stats.politiciansSearched++;
 
     try {
-      const claims = await searchClaims(target.fullName);
+      const claims = await searchClaims(
+        target.fullName,
+        target.maxAgeDays !== undefined ? { maxAgeDays: target.maxAgeDays } : undefined
+      );
       stats.claimsFound += claims.length;
 
       for (const claim of claims) {
