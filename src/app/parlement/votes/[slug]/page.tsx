@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import { ROUTES } from "@/config/routes";
+import { seatsFilled } from "@/lib/votes/motions-de-censure";
 import { db } from "@/lib/db";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -350,7 +351,7 @@ export default async function ScrutinPage({ params }: PageProps) {
   // is half of them plus one (289 with 577 deputies, 288 for the motion of 4 December 2024).
   const censureSeatsFilled =
     isMotionDeCensure && officialGroups?.snapshot.imported
-      ? officialGroups.snapshot.rows.reduce((sum, row) => sum + (row.memberCount ?? 0), 0) || null
+      ? seatsFilled(officialGroups.snapshot.rows.map((row) => row.memberCount))
       : null;
   const videoId = getScrutinVideoId(scrutin.slug);
   // The card only sends readers to /mon-depute while that page exists.

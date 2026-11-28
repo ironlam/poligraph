@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   censureArticle,
+  isCensureSearch,
   governmentAt,
   requiredMajority,
+  seatsFilled,
   type GovernmentPeriod,
 } from "@/lib/votes/motions-de-censure";
 
@@ -18,10 +20,12 @@ describe("requiredMajority", () => {
     expect(requiredMajority([573])).toBe(287);
   });
 
-  it("ignore un groupe sans effectif et renvoie null sans aucun effectif", () => {
-    expect(requiredMajority([576, null])).toBe(289);
+  // Review of #1481: a missing count read as zero published "151 requises" for [300, null].
+  it("renvoie null dès qu'un groupe n'a pas d'effectif, plutôt qu'un seuil trop bas", () => {
+    expect(requiredMajority([300, null])).toBeNull();
+    expect(seatsFilled([300, null])).toBeNull();
     expect(requiredMajority([])).toBeNull();
-    expect(requiredMajority([null, 0])).toBeNull();
+    expect(requiredMajority([0])).toBeNull();
   });
 });
 
@@ -63,5 +67,19 @@ describe("governmentAt", () => {
 
   it("renvoie null avant le premier gouvernement connu", () => {
     expect(governmentAt(d("2023-06-01"), governments)).toBeNull();
+  });
+});
+
+describe("isCensureSearch", () => {
+  it("reconnaît une recherche sur la censure, quelle que soit la casse", () => {
+    expect(isCensureSearch("motion de censure")).toBe(true);
+    expect(isCensureSearch("Censure Barnier")).toBe(true);
+    expect(isCensureSearch("censurer le gouvernement")).toBe(true);
+  });
+
+  it("ignore les autres recherches et l'absence de recherche", () => {
+    expect(isCensureSearch("budget 2026")).toBe(false);
+    expect(isCensureSearch("")).toBe(false);
+    expect(isCensureSearch(undefined)).toBe(false);
   });
 });

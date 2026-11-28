@@ -8,6 +8,19 @@
  * "contre" and no abstention on these scrutins.
  */
 
+/**
+ * True when a search on the votes listing is about censure ("motion de censure", "censure Barnier"):
+ * the listing then points to the page that gathers every motion. Any case, any accent.
+ */
+export function isCensureSearch(search: string | undefined): boolean {
+  if (!search) return false;
+  const normalized = search
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+  return normalized.includes("censur");
+}
+
 /** `Scrutin.codeTypeVote` of a motion de censure in the AN open data, both legislatures. */
 export const MOTION_DE_CENSURE_CODE = "MOC";
 
@@ -20,11 +33,21 @@ export const AN_VOTES_OPEN_DATA_URL =
  * Majority required on the day, from the members of each group counted by the AN for this scrutin
  * (`ScrutinOfficialGroupCount.memberCount`, deputies outside any group included as their own line).
  * Checked on 2026-11-28 against `nbrSuffragesRequis` of the AN open data: equal on all 57 motions of
- * the XVIe and XVIIe legislatures. `null` when the source gave no member count.
+ * the XVIe and XVIIe legislatures.
+ *
+ * `null` unless every group has a member count: a missing one counted as zero would give a majority
+ * computed on part of the Assembly, lower than the real threshold.
  */
 export function requiredMajority(memberCounts: Array<number | null>): number | null {
-  const seats = memberCounts.reduce<number>((sum, n) => sum + (n ?? 0), 0);
-  return seats > 0 ? Math.floor(seats / 2) + 1 : null;
+  const seats = seatsFilled(memberCounts);
+  return seats ? Math.floor(seats / 2) + 1 : null;
+}
+
+/** Seats filled on the day: the sum of the group counts, `null` if any is missing or none is given. */
+export function seatsFilled(memberCounts: Array<number | null>): number | null {
+  if (memberCounts.length === 0 || memberCounts.some((n) => n == null)) return null;
+  const seats = memberCounts.reduce<number>((sum, n) => sum + n!, 0);
+  return seats > 0 ? seats : null;
 }
 
 /**
